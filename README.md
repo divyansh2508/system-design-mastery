@@ -105,12 +105,15 @@ Every module runs the same loop:
 .
 ├─ index.html               # start here — the hub
 ├─ roadmap-dashboard.html   # the 28-module roadmap + progress tracker
-├─ modules/                 # 28 module guides
+├─ modules/                 # 28 module guides (interactive HTML)
+├─ knowledge-base/          # the same 28 lessons as plain Markdown (~110k words)
 ├─ tools/                   # 13 interactive simulators
 └─ sandboxes/               # 8 Docker labs (compose + guides)
 ```
 
 Pure HTML/CSS/JS — no framework, no bundler, works offline.
+
+**Prefer plain text?** [`knowledge-base/`](knowledge-base/) has every lesson as clean Markdown — readable right here on GitHub, or drop it into Obsidian/Notion.
 
 ---
 
