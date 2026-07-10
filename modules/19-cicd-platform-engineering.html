@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CI/CD &amp; Platform Engineering | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#e64980; --hue-soft:rgba(230,73,128,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#e64980;--hue-soft:rgba(230,73,128,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#e64980;--hue-soft:rgba(230,73,128,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#e64980;--hue-soft:rgba(230,73,128,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 5 · Cloud &amp; DevOps</span><span class="sep">·</span><span>Module 19</span><span class="sep">·</span><span>Weeks 9–10 · ~13 hrs</span></p>
+      <h1>CI/CD &amp; Platform Engineering</h1>
+      <p class="sub">Great architecture is worthless if you can't ship it safely a hundred times a day. This module is about the <strong>delivery machine</strong> — the pipelines, deployment strategies, feature flags, and internal platforms that turn a merged pull request into running production traffic without waking anyone up.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#why">From CI/CD to platform engineering</a></li>
+        <li><a href="#pipeline">The CI/CD pipeline</a></li>
+        <li><a href="#deploy">Rolling, blue-green &amp; canary</a></li>
+        <li><a href="#flags">Feature flags &amp; progressive delivery</a></li>
+        <li><a href="#idp">Internal developer platforms</a></li>
+        <li><a href="#dora">DORA metrics</a></li>
+        <li><a href="#uber">Worked example: Design Uber</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="why">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>From CI/CD to platform engineering</h2>
+      <p class="lead">Every system you've designed in this track has to be <strong>built, tested, packaged, and rolled out</strong> — over and over, by dozens of teams, without breaking the thing that's already live. That release path is a system too, and it's exactly what senior and Forward-Deployed interviews probe when they ask "…and how would you deploy that?"</p>
+      <p><strong>CI/CD</strong> is the automation spine. <strong>Continuous Integration (CI)</strong> means every commit is automatically built and tested against the shared mainline, so integration bugs surface in minutes instead of at a painful end-of-sprint merge. <strong>Continuous Delivery (CD)</strong> means every green build is automatically packaged into a deployable, release-ready artifact — a human still clicks "go." <strong>Continuous Deployment</strong> removes even that click: green build → production, automatically. The distinction matters in interviews — say which one you mean.</p>
+      <p><strong>Platform engineering</strong> is the discipline that grew up around all this. Instead of every team reinventing pipelines, dashboards, and on-call runbooks, a central team builds an <strong>internal developer platform (IDP)</strong> — a paved road so a product engineer can go from <code>git push</code> to a monitored production service without becoming a Kubernetes expert. The goal is a phrase you should be able to define: <strong>reducing developer cognitive load</strong> while raising the floor on reliability and security.</p>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>Design isn't done at the architecture diagram. A staff-level answer includes <strong>how the thing ships and how you'd know it's healthy</strong> — pipeline, rollout strategy, kill switch, and the metrics that tell you to roll back. That's the whole point of this module.</p>
+      </div>
+    </section>
+
+    <section id="pipeline">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>The CI/CD pipeline</h2>
+      <p>A modern pipeline is a chain of automated stages triggered by a code event. The canonical cloud-native path — the one worth being able to draw — is <strong>GitHub Actions → Docker → Kubernetes</strong>: source control triggers a workflow, the workflow builds a container image, the image lands in a registry, and a deployment mechanism rolls it out to a cluster.</p>
+      <pre><code>push / pull_request
+   │
+   ▼
+[ CI ]  lint ─▶ unit tests ─▶ build ─▶ integration tests   <span class="cmt">(GitHub Actions runners)</span>
+   │
+   ▼
+[ package ]  docker build ─▶ push image to registry        <span class="cmt">(GHCR / ECR, tagged by git SHA)</span>
+   │
+   ▼
+[ CD ]  deploy to staging ─▶ smoke tests ─▶ deploy to prod  <span class="cmt">(kubectl / Argo CD / Helm)</span>
+   │
+   ▼
+[ observe ]  metrics + logs + traces ─▶ auto-rollback on SLO breach</code></pre>
+      <p>Here's a minimal but realistic GitHub Actions workflow that does the build-and-push half. Notice the <strong>immutable image tag</strong> (the git SHA) — that's what makes a deploy reproducible and a rollback trivial: you just re-point at the previous SHA.</p>
+      <pre><code><span class="cmt"># .github/workflows/deploy.yml</span>
+name: build-and-deploy
+on:
+  push:
+    branches: [ main ]
+jobs:
+  ship:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests
+        run: make test
+      - name: Build image
+        run: docker build -t ghcr.io/acme/api:${{ github.sha }} .
+      - name: Push image
+        run: docker push ghcr.io/acme/api:${{ github.sha }}
+      - name: Deploy to Kubernetes
+        run: kubectl set image deployment/api api=ghcr.io/acme/api:${{ github.sha }}</code></pre>
+      <p>Two ideas do most of the work. <strong>Immutable artifacts:</strong> you build the image <em>once</em> and promote that exact bytes-for-bytes artifact through staging → production, so "works in staging" actually means something. <strong>Declarative deploys:</strong> tools like Argo CD watch a git repo of Kubernetes manifests and continuously reconcile the cluster to match — this is <strong>GitOps</strong>, where the desired state of production is a versioned, reviewable, revertible file.</p>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>When asked "how do you roll back?", the strong answer isn't "redeploy the old code." It's <em>"the previous image is still in the registry and the previous manifest is still in git — I re-point the deployment at the last-known-good SHA, which is a config change, not a rebuild."</em> Immutability is what makes that instant.</p>
+      </div>
+    </section>
+
+    <section id="deploy">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Rolling, blue-green &amp; canary</h2>
+      <p>Once an image is built, <em>how</em> you swap old for new is a first-class design decision — because the naïve "stop all, start all" (a <strong>big-bang</strong> deploy) means downtime and a blast radius of 100%. The three strategies you must be able to compare are <strong>rolling</strong>, <strong>blue-green</strong>, and <strong>canary</strong>.</p>
+      <ul>
+        <li><strong>Rolling:</strong> replace instances a few at a time — new pods come up, old pods drain — until the fleet is fully updated. This is the Kubernetes default. Zero downtime, no extra fleet cost, but old and new run <em>simultaneously</em> mid-roll (so versions must be compatible) and rollback means rolling <em>back</em>, which takes time.</li>
+        <li><strong>Blue-green:</strong> stand up a full second environment (green) running the new version alongside the live one (blue), test it, then flip the load balancer so 100% of traffic cuts over instantly. Rollback is an instant flip back. The cost: you're running <strong>two full fleets</strong> during the switch.</li>
+        <li><strong>Canary:</strong> release to a small slice first — 1%, then 5%, 25%, 100% — watching error rates and latency at each step, and abort automatically if a metric regresses. Lowest blast radius of all, but the most tooling to run (traffic splitting + automated metric analysis).</li>
+      </ul>
+      <pre><code>canary progression (traffic to the NEW version):
+
+   1%  ──▶  5%  ──▶  25%  ──▶  50%  ──▶  100%
+   │        │         │                       ▲
+   └────────┴─────────┴── metrics bad? ──▶ auto-rollback to 0%</code></pre>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Strategy</th><th>Blast radius</th><th>Rollback</th><th>Extra cost</th><th>Best when…</th></tr></thead>
+          <tbody>
+            <tr><td>Big-bang</td><td>100% (with downtime)</td><td>Redeploy old</td><td>None</td><td>Dev / non-critical only</td></tr>
+            <tr><td>Rolling</td><td>Grows as roll proceeds</td><td>Roll back (slow-ish)</td><td>None</td><td>Default; compatible versions</td></tr>
+            <tr><td>Blue-green</td><td>100% at cutover, but pre-tested</td><td>Instant traffic flip</td><td>2× fleet briefly</td><td>Need instant rollback, hard cutover</td></tr>
+            <tr><td>Canary</td><td>Smallest (1–5% first)</td><td>Shift traffic back to 0%</td><td>Traffic-split + analysis tooling</td><td>Risky change, want real-user signal</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Two subtleties that separate senior answers. First, <strong>schema and API compatibility:</strong> rolling and canary run both versions at once, so a database migration must be <em>backward-compatible</em> — you use the <strong>expand/contract</strong> pattern (add the new column, deploy code that writes both, backfill, then drop the old column in a later release). Second, <strong>stateful services:</strong> blue-green is clean for stateless API tiers but painful when the two colors must share a database or in-flight sessions — that's when canary or careful rolling wins.</p>
+      <div class="callout tool">
+        <p class="lbl">Connects to → Module 2</p>
+        <p>Every one of these strategies is ultimately the <strong>load balancer</strong> deciding which pool gets a request. Open the <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer Playground</a> and picture a canary as "route 5% of the weighted pool to the new backend" — the exact knob you'll tune.</p>
+      </div>
+    </section>
+
+    <section id="flags">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>Feature flags &amp; progressive delivery</h2>
+      <p>Deployment strategies control <em>which binary serves traffic</em>. <strong>Feature flags</strong> (a.k.a. feature toggles) decouple that from <em>which features are active</em> — a runtime <code>if</code> that you can flip without shipping new code. This is the key insight of <strong>progressive delivery</strong>: <em>deploy</em> is now separate from <em>release</em>. You can ship dark code to production, then turn it on for 1% of users next Tuesday.</p>
+      <pre><code><span class="cmt"># deploy != release</span>
+if (flags.isEnabled("new_matching_algo", user)) {
+    return newMatcher.match(request);   <span class="cmt">// dark-launched, off by default</span>
+} else {
+    return legacyMatcher.match(request);
+}</code></pre>
+      <p>Flags come in a few flavors, and naming them signals fluency: <strong>release toggles</strong> (hide unfinished work behind trunk-based development), <strong>experiment toggles</strong> (A/B tests — split users and measure), <strong>ops toggles / kill switches</strong> (instantly disable an expensive or misbehaving feature during an incident), and <strong>permission toggles</strong> (gate features to specific plans or beta cohorts). A canary and a percentage-based flag rollout are cousins — the flag just does it at the feature level instead of the binary level.</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Tool</th><th>What it is</th><th>Best fit</th></tr></thead>
+          <tbody>
+            <tr><td>LaunchDarkly</td><td>Managed SaaS flag platform; streaming updates via CDN, targeting rules, experiments, audit log</td><td>Teams wanting rich targeting &amp; fast propagation out of the box</td></tr>
+            <tr><td>AWS AppConfig</td><td>Config + flags in the AWS ecosystem, with validators and monitored, gradual config rollouts + auto-rollback on CloudWatch alarms</td><td>AWS-native shops keeping config in-cloud</td></tr>
+            <tr><td>OpenFeature + self-host</td><td>Vendor-neutral flag API standard (e.g. with Flagsmith/Unleash backends)</td><td>Avoiding lock-in; open-source control</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The one operational danger to mention: flags are <strong>tech debt with a fuse</strong>. A codebase littered with stale toggles becomes an untestable combinatorial mess, so mature teams treat every release toggle as temporary and schedule its removal. And the flag-evaluation path must be <em>fast and fail-open</em> — SDKs cache rules locally and fall back to a default if the flag service is unreachable, so your feature system never becomes a new single point of failure.</p>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>"How do you launch a risky change to a billion users?" is a layered answer: <em>deploy dark behind a flag → canary the binary → ramp the flag 1%→100% while watching metrics → keep the kill switch one click away.</em> Naming all four layers is a senior signal.</p>
+      </div>
+    </section>
+
+    <section id="idp">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Internal developer platforms</h2>
+      <p>At ten services, engineers can hold the whole system in their heads. At a thousand — Uber, Spotify, any large org — nobody can, and every team wiring up its own CI, dashboards, secrets, and on-call becomes crippling duplicated toil. The answer is an <strong>internal developer platform (IDP)</strong>: a self-service layer, built by a platform team, that offers <strong>golden paths</strong> — opinionated, paved routes for the 80% of common needs (spin up a new service, add a database, deploy) — while still allowing escape hatches for the unusual 20%.</p>
+      <p>The two names to know:</p>
+      <ul>
+        <li><strong>Backstage</strong> (open-sourced by Spotify, now a CNCF project): its heart is a <strong>software catalog</strong> — a live, queryable registry of every service, its owner, its docs, its dependencies, and its health, defined in a <code>catalog-info.yaml</code> that lives next to the code. On top sit <strong>software templates</strong> ("scaffolder") that generate a new, fully-wired service from a golden template, and <strong>TechDocs</strong> for docs-as-code. It's highly extensible but you host and build it yourself.</li>
+        <li><strong>Port</strong>: a managed <strong>internal developer portal</strong> built around a flexible <strong>software catalog data model</strong> plus <strong>self-service actions</strong> and <strong>scorecards</strong> (e.g. "does this service have an on-call owner, a runbook, and &gt;80% test coverage?"). Lower setup cost than a self-hosted Backstage; you configure rather than code.</li>
+      </ul>
+      <p>Why an interviewer cares: the catalog is what makes <strong>ownership</strong> and <strong>discoverability</strong> tractable at scale — when a service pages at 3am, the catalog tells you who owns it, what it depends on, and where its runbook is. That's the difference between a scaling org and a scaling mess.</p>
+      <div class="callout">
+        <p class="lbl">One-line definitions to keep</p>
+        <p><strong>Golden path</strong> = the supported, paved way to do a common task. <strong>Software catalog</strong> = the source of truth for what services exist, who owns them, and how they connect. <strong>Self-service</strong> = the product engineer does it without filing a ticket to the platform team.</p>
+      </div>
+    </section>
+
+    <section id="dora">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>DORA metrics</h2>
+      <p>How do you know your delivery machine is actually good? The industry standard is the <strong>DORA metrics</strong> — four measures from Google's <em>DevOps Research and Assessment</em> program that, across years of research, distinguish elite performers from low ones. They're deliberately balanced: two for <strong>speed</strong>, two for <strong>stability</strong>, so you can't game one by wrecking the other.</p>
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>Deployment Frequency <span class="ft">speed</span></b><p>How often you ship to production. Elite teams deploy on-demand, many times per day; low performers, once a month or less.</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>Lead Time for Changes <span class="ft">speed</span></b><p>Time from code committed to code running in production. Measures how quickly the whole pipeline moves an idea to users.</p></div></div>
+        <div class="fstep"><span class="fn">3</span><div><b>Change Failure Rate <span class="ft">stability</span></b><p>Percentage of deploys that cause a production failure needing a fix (rollback, hotfix, patch). Lower is better.</p></div></div>
+        <div class="fstep"><span class="fn">4</span><div><b>Failed-Deployment Recovery Time <span class="ft">stability</span></b><p>How long to restore service after a bad deploy (the metric formerly framed as MTTR). Fast recovery beats never failing.</p></div></div>
+      </div>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Metric</th><th>Elite (roughly)</th><th>Low (roughly)</th></tr></thead>
+          <tbody>
+            <tr><td>Deployment frequency</td><td>On-demand (multiple / day)</td><td>&lt; once per month</td></tr>
+            <tr><td>Lead time for changes</td><td>&lt; one day</td><td>1–6 months</td></tr>
+            <tr><td>Change failure rate</td><td>~5%</td><td>&gt; 40%</td></tr>
+            <tr><td>Recovery time</td><td>&lt; one hour</td><td>&gt; one week</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The exact thresholds shift with each year's report — don't quote them as gospel. What matters is the <strong>insight</strong>: speed and stability are <em>not</em> a trade-off. Elite teams deploy far more often <em>and</em> fail less, because small, frequent, well-tested changes are inherently safer than big rare ones. That single idea justifies canaries, flags, and everything else in this module — and it's a great line to land in an interview.</p>
+      <div class="callout tip">
+        <p class="lbl">Watch the anti-pattern</p>
+        <p>Optimizing one metric alone is a trap: you can hit huge deployment frequency by shipping garbage — the change failure rate exposes it. Always read the four <strong>together</strong>. Tools like Port scorecards or GitLab/Datadog dashboards compute them straight from your CI/CD and incident data.</p>
+      </div>
+    </section>
+
+    <section id="uber">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Worked example: Design Uber</h2>
+      <p>Let's run the 5-step framework on a heavyweight — <em>"Design Uber"</em> (ride-hailing) — and then, in the deep-dive, thread in <em>this module's</em> concepts: how would a company operating thousands of microservices actually <strong>ship and de-risk</strong> a change to the matching engine? Read it once; you'll drive it yourself in the reps.</p>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Functional:</strong> rider requests a ride (pickup + destination); system matches a nearby available driver; both see each other's live location; trip has a lifecycle (requested → matched → en-route → in-trip → completed); fare + payment; surge pricing under high demand.</li>
+        <li><strong>Non-functional:</strong> low-latency matching (a driver offer within seconds), very high availability, massive geospatial write load (drivers ping location constantly), regional scale, <em>eventual</em> consistency fine for location but <em>strong</em> consistency for trip state and payment.</li>
+        <li><strong>Out of scope (say it):</strong> ratings, driver onboarding/KYC, Uber Eats, in-app chat — keep the core tight.</li>
+      </ul>
+
+      <h3>② Estimate</h3>
+      <pre><code>~1M drivers online at peak, each pings location every 4s
+   → 1,000,000 / 4  ≈ 250,000 location writes/sec        <span class="cmt">huge; must NOT hit a SQL DB</span>
+
+~15M rides/day → 15M / 86,400 ≈ 175 matches/sec avg
+   peak ×5      ≈ ~900 matches/sec                       <span class="cmt">modest vs. the location firehose</span>
+
+trip storage: 15M/day × ~1 KB ≈ 15 GB/day of trip rows   <span class="cmt">durable, sharded by region</span>
+live location: transient → in-memory geo store w/ short TTL, not the trip DB</code></pre>
+      <p>Verdict: the <strong>location update firehose dominates</strong> — that's the real design problem, and it says "in-memory geospatial index, not a relational write per ping." Matching QPS is small by comparison; trip data is durable but modest.</p>
+
+      <h3>③ Interface</h3>
+      <pre><code>POST /rides            { pickup:{lat,lng}, dest:{lat,lng} }  → 201 { rideId, status:"MATCHING" }
+GET  /rides/{id}                                            → 200 { status, driverLocation }
+WS   /drivers/{id}/loc  (stream) { lat, lng, ts }          <span class="cmt">driver→server, ~every 4s</span>
+WS   /rides/{id}/live   (stream)                            <span class="cmt">server→rider, driver ETA + position</span></code></pre>
+      <p>The asymmetry is the tell: location is a firehose of tiny writes over persistent connections, while ride creation is comparatively rare. That pushes you toward a dedicated <strong>location-ingest service</strong> separate from the <strong>trip service</strong>.</p>
+
+      <h3>④ High-level design</h3>
+      <pre><code>Rider app ─┐                          ┌─▶ Trip Service ──▶ Trips DB (sharded by city/region)
+           ├─▶ API Gateway ──▶ Matching Service
+Driver app ┘                          └─▶ queries Geo Index (Redis, in-mem)
+                                                     ▲
+Driver location stream ─▶ Location Service ──────────┘   (updates geo cells)
+                                │
+                                └─▶ Kafka (location + trip events) ─▶ analytics, surge, ETA</code></pre>
+      <ul>
+        <li><strong>Location Service</strong> ingests driver pings and updates an in-memory <strong>geospatial index</strong> — no per-ping database write.</li>
+        <li><strong>Matching Service</strong> queries "available drivers near this pickup cell," ranks by ETA, and dispatches an offer.</li>
+        <li><strong>Trip Service</strong> owns the trip <strong>state machine</strong> and persists it durably (strong consistency; the source of truth for billing).</li>
+        <li><strong>Kafka</strong> carries the event firehose to surge pricing, ETA, and analytics consumers.</li>
+      </ul>
+
+      <h3>⑤ Deep-dive &amp; scale</h3>
+      <p><strong>Geospatial indexing</strong> is the heart. You can't scan a million drivers per request, so you bucket the map into cells and only search the relevant ones. The classic options: a <strong>geohash</strong> (recursively subdivided lat/lng string prefix), a <strong>QuadTree</strong> (splits dense areas into finer cells), or Google's <strong>S2</strong> / Uber's own <strong>H3 hexagonal grid</strong>. A pickup maps to a cell; you query that cell plus its neighbors. <strong>Shard by geography</strong> (city/region) — rides are inherently local, so a driver in NYC never needs data from Tokyo, and each region scales independently.</p>
+      <p>Now the part <em>this module</em> adds — <strong>how do you safely ship a change to that matching engine?</strong> This is where DevOps meets architecture:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Concern</th><th>Technique from this module</th></tr></thead>
+          <tbody>
+            <tr><td>Roll out a new matching algorithm</td><td><strong>Feature flag</strong> it (dark launch, off by default), then <strong>canary</strong> the binary + ramp the flag 1%→100% by city, watching match latency &amp; cancel rate</td></tr>
+            <tr><td>Bad algo tanks conversions in one city</td><td><strong>Kill switch</strong> (ops toggle) reverts to the legacy matcher instantly — no redeploy</td></tr>
+            <tr><td>Deploy the stateless API gateway</td><td><strong>Blue-green</strong> for instant cutover + instant rollback; <strong>rolling</strong> for the fleet by default</td></tr>
+            <tr><td>Schema change to the Trips DB</td><td><strong>Expand/contract</strong> migration so old &amp; new versions coexist during the roll</td></tr>
+            <tr><td>Thousands of microservices, who owns what</td><td><strong>Backstage/Port</strong> software catalog for ownership, runbooks, and scorecards</td></tr>
+            <tr><td>Is delivery healthy across all teams?</td><td><strong>DORA metrics</strong> dashboards — deploy frequency, lead time, change failure rate, recovery time</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>That's the senior move: you didn't just draw geospatial boxes, you explained how a real org would <strong>evolve the matcher in production without downtime</strong> — canary + flag to de-risk, kill switch for the fast abort, and DORA to prove the whole pipeline stays healthy. Architecture and delivery are one answer.</p>
+      <div class="callout">
+        <p class="lbl">Why this framing wins</p>
+        <p>Most candidates stop at "shard by geohash." Adding "…and I'd roll the new matcher out behind a flag with a canary and a kill switch, tracked on DORA" is what makes an interviewer write <em>"thinks about operability, not just design."</em></p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Your reps this week</h2>
+      <p>Reading is not learning — reps are. Do these, in order:</p>
+      <ol>
+        <li><strong>Whiteboard Uber yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design it end-to-end with the 5-step framework, out loud, timed to ~40 minutes — <em>before</em> re-reading Section 07. Force yourself to reach the delivery deep-dive: how do you ship a matcher change safely?</li>
+        <li><strong>Draw the three deployment strategies from memory.</strong> Rolling, blue-green, canary — sketch each, then write one sentence on blast radius, rollback speed, and extra cost. If you can't, re-read Section 03.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your design against pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer running a system design interview. Give me the prompt: "Design Uber (ride-hailing)." Then act as the interviewer — let me drive, ask clarifying and probing questions, push back on anything hand-wavy, and keep asking "why?". Make sure you push me on the DELIVERY side too: how would I deploy a change to the matching algorithm safely, what deployment strategy and feature-flag plan I'd use, how I'd roll back, and which DORA metrics I'd watch. Do NOT give me the answer or lead me. After ~40 minutes (or when I say "done"), grade me 1–5 on each of: requirements gathering, capacity estimation, API design, high-level design, deep-dives &amp; trade-offs (including deployment/operability), and communication — with specific feedback and what a strong candidate would have added.</div>
+        <ol start="4">
+        <li><strong>Explain it back.</strong> Teach "deploy vs. release" and why elite teams are both faster and more stable (the DORA insight) to a rubber duck, without notes. Gaps you can't explain are gaps you don't have yet.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>When canary over blue-green? · Name the four DORA metrics. · Difference between a release toggle and a kill switch? · Why must driver-location pings stay out of the primary SQL DB? · What does a Backstage/Port software catalog give you that a wiki doesn't?</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the pipeline and deployment ones <em>before</em> your reps; the hands-on GitHub Actions tutorial is worth doing with your own repo open.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=w6Y19RWawc0" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>The CI/CD Pipeline, Explained</b><div class="ch">Eye on Tech <span class="dur">· ~7 min · CI/CD concept</span></div><p>Fast, clean mental model of CI vs. CD vs. continuous deployment. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=R8_veQiYBjI" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>GitHub Actions Tutorial — Basic Concepts and CI/CD Pipeline with Docker</b><div class="ch">TechWorld with Nana <span class="dur">· ~32 min · hands-on</span></div><p>Build a real GitHub Actions → Docker pipeline step by step. Do it with your own repo.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=H5z70EBtEow" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Deployment Strategies Explained: Blue-Green vs. Canary vs. Rolling</b><div class="ch">CodeLucky <span class="dur">· ~12 min · deployment</span></div><p>The core comparison for Section 03 — blast radius, rollback, and when to pick each.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=0QhUhrWGB9k" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Kubernetes Deployment Strategies with Demos | Canary | Blue Green | Rolling Update</b><div class="ch">Abhishek.Veeramalla <span class="dur">· ~24 min · deployment (hands-on)</span></div><p>See each strategy actually run on a cluster — great after the concept video.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=c8KgKTgyFUE" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Feature Flags Explained in 6 Minutes (Feature Toggles)</b><div class="ch">CoderDave <span class="dur">· ~6 min · feature flags</span></div><p>Tight primer on toggles and "deploy vs. release." Watch before Section 04.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=lqsENcje41w" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>DORA Metrics Explained: The Four Key Measures of DevOps Performance</b><div class="ch">Harness <span class="dur">· ~5 min · DORA</span></div><p>Crisp walkthrough of the four metrics and why speed and stability aren't a trade-off.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA Chapter 4 (encoding &amp; evolution) is the theory behind backward-compatible rollouts and expand/contract migrations — exactly why rolling and canary demand schema care. For breadth, skim the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a>'s sections on availability patterns and CI/CD (free), and Martin Fowler's classic <a href="https://martinfowler.com/articles/feature-toggles.html" target="_blank" rel="noopener">"Feature Toggles"</a> essay.</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/20-serverless-edge-ai.html">Next module →</a>
+    </div>
+
+    <footer>Module 19 of 24 · System Design Mastery · Phase 5 · Cloud &amp; DevOps · Next up: Module 20 — Serverless, Edge &amp; AI Infrastructure.</footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saga Pattern Visualizer — System Design</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b1016; --panel:#121a23; --panel-2:#0e151d;
+    --border:#223140; --border-soft:#1a2530;
+    --text:#cdd9e5; --muted:#7d8fa1; --faint:#54626f;
+    --accent:#34d3e0; --accent-dim:rgba(52,211,224,.14);
+    --ok:#3fb950; --warn:#e3b341; --crit:#f85149;
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1100px 600px at 82% -8%, rgba(52,211,224,.06), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 56px}
+
+  /* topnav */
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(11,16,22,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:30}
+  .topnav .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .topnav .navlinks{display:flex;gap:6px;flex-wrap:wrap}
+  .topnav .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;transition:color .12s,background .12s}
+  .topnav .navlinks a:hover{color:var(--accent);background:var(--accent-dim)}
+
+  /* header */
+  header{margin-bottom:22px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);margin:0 0 10px;display:flex;align-items:center;gap:9px}
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  h1{font-family:var(--mono);font-weight:600;font-size:clamp(26px,4.4vw,40px);letter-spacing:-.01em;margin:0 0 10px;text-wrap:balance}
+  .lede{max-width:70ch;color:var(--muted);font-size:15.5px;margin:0}
+  .lede b{color:var(--text);font-weight:600}
+
+  /* layout */
+  .grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:24px}
+  @media(min-width:920px){.grid{grid-template-columns:1.5fr 1fr}}
+
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);border-radius:14px}
+
+  /* stage / flow */
+  .stage{position:relative;padding:6px 6px 4px}
+  .stagehead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px 4px;flex-wrap:wrap}
+  .stagehead .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0}
+  .stagehead .mode-tag{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--accent);border:1px solid var(--border);border-radius:20px;padding:3px 10px}
+  .flow{position:relative;display:flex;align-items:stretch;gap:0;flex-wrap:nowrap;padding:24px 14px 26px;min-height:190px}
+  .origin{flex:0 0 auto;align-self:center;padding:11px 12px;border:1px dashed var(--accent);border-radius:10px;background:var(--panel-2);text-align:center;min-width:78px}
+  .origin .olabel{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.1em;color:var(--accent);display:block}
+  .origin .osub{font-family:var(--mono);font-size:9px;letter-spacing:.04em;color:var(--faint);display:block;margin-top:3px}
+  .arrow{flex:0 0 22px;display:grid;place-items:center;color:var(--faint);font-family:var(--mono);font-size:14px;user-select:none}
+  .arrow::after{content:'\25B8'}
+
+  .node{flex:1 1 0;min-width:0;background:var(--panel-2);border:1px solid var(--border);border-radius:11px;padding:11px 12px 12px;display:flex;flex-direction:column;gap:4px;transition:border-color .25s,background .25s,box-shadow .25s;position:relative}
+  .ntop{display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .nnum{font-family:var(--mono);font-size:10px;color:var(--faint);border:1px solid var(--border);border-radius:5px;width:18px;height:18px;display:grid;place-items:center;flex-shrink:0;transition:color .25s,border-color .25s}
+  .nglyph{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--faint);line-height:1;transition:color .25s}
+  .nname{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nsvc{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;color:var(--faint);text-transform:uppercase}
+  .nstat{font-family:var(--mono);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;min-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  .node[data-state=committing]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 18px rgba(52,211,224,.25);animation:pulse 1s ease-in-out infinite}
+  .node[data-state=committing] .nglyph,.node[data-state=committing] .nstat{color:var(--accent)}
+  .node[data-state=committed]{border-color:var(--ok);background:linear-gradient(180deg,rgba(63,185,80,.10),var(--panel-2))}
+  .node[data-state=committed] .nglyph,.node[data-state=committed] .nstat{color:var(--ok)}
+  .node[data-state=committed] .nnum{border-color:var(--ok);color:var(--ok)}
+  .node[data-state=failed]{border-color:var(--crit);background:linear-gradient(180deg,rgba(248,81,73,.12),var(--panel-2));box-shadow:0 0 18px rgba(248,81,73,.22)}
+  .node[data-state=failed] .nglyph,.node[data-state=failed] .nstat,.node[data-state=failed] .nname{color:var(--crit)}
+  .node[data-state=failed] .nnum{border-color:var(--crit);color:var(--crit)}
+  .node[data-state=compensating]{border-color:var(--warn);box-shadow:0 0 0 1px var(--warn),0 0 18px rgba(227,179,65,.22);animation:pulse 1s ease-in-out infinite}
+  .node[data-state=compensating] .nglyph,.node[data-state=compensating] .nstat{color:var(--warn)}
+  .node[data-state=compensated]{border-color:rgba(227,179,65,.55);background:linear-gradient(180deg,rgba(227,179,65,.08),var(--panel-2))}
+  .node[data-state=compensated] .nglyph,.node[data-state=compensated] .nstat{color:var(--warn)}
+  .node[data-state=compensated] .nnum{border-color:rgba(227,179,65,.55);color:var(--warn)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}
+
+  .token{position:absolute;left:0;top:0;width:14px;height:14px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent);opacity:0;pointer-events:none;transition:opacity .2s;z-index:5}
+  .token.comp{background:var(--warn);box-shadow:0 0 12px var(--warn)}
+
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.03em;padding:2px 16px 14px}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+
+  @media(max-width:640px){
+    .flow{flex-direction:column;align-items:stretch;gap:0}
+    .arrow{transform:rotate(90deg);padding:3px 0}
+    .node,.origin{width:100%}
+  }
+
+  .side{display:flex;flex-direction:column;gap:16px}
+
+  /* metrics */
+  .metrics{padding:0;display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border-soft);border-radius:14px;overflow:hidden;border:1px solid var(--border-soft)}
+  .metric{background:var(--panel);padding:13px 14px}
+  .metric .k{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin:0 0 4px}
+  .metric .v{font-family:var(--mono);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em;margin:0}
+  .metric .v small{font-size:12px;color:var(--muted);font-weight:400;margin-left:3px}
+  .v.ok{color:var(--ok)} .v.warn{color:var(--warn)} .v.crit{color:var(--crit)} .v.accent{color:var(--accent)}
+
+  /* coaching */
+  .coach{padding:15px 16px;border:1px solid var(--border);border-radius:14px;background:var(--panel);border-left:3px solid var(--accent)}
+  .coach .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+  .coach p{margin:0;font-size:14px;color:var(--text)}
+
+  /* mode explainer */
+  .explain{padding:14px 16px;border:1px solid var(--border-soft);border-radius:14px;background:var(--panel-2)}
+  .explain .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 6px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .explain .lbl b{color:var(--accent);font-weight:600}
+  .explain p{margin:0;font-size:13px;color:var(--muted)}
+  .explain p b{color:var(--text);font-weight:600}
+
+  /* events */
+  .events{padding:13px 16px;border:1px solid var(--border-soft);border-radius:14px;background:var(--panel-2)}
+  .events .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+  .events ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:224px;overflow-y:auto}
+  .events li{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;gap:9px;line-height:1.45;animation:slideIn .3s ease}
+  .events li .ts{color:var(--faint);flex-shrink:0}
+  .events li b{color:var(--text);font-weight:600}
+  .events li b.crit{color:var(--crit)} .events li b.warn{color:var(--warn)} .events li b.ok{color:var(--ok)}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+  /* controls */
+  .controls{grid-column:1/-1;padding:18px;display:flex;flex-wrap:wrap;gap:22px;align-items:flex-end}
+  .ctrl{display:flex;flex-direction:column;gap:8px}
+  .ctrl>label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+  .seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px}
+  .seg button{font-family:var(--mono);font-size:12px;color:var(--muted);background:transparent;border:0;padding:7px 11px;border-radius:6px;cursor:pointer;transition:background .12s,color .12s;white-space:nowrap}
+  .seg button:hover{color:var(--text)}
+  .seg button[aria-pressed="true"]{background:var(--accent-dim);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(52,211,224,.35)}
+
+  .run{font-family:var(--mono);font-size:13px;font-weight:600;color:#04252a;background:var(--accent);border:1px solid var(--accent);border-radius:9px;padding:10px 22px;cursor:pointer;transition:filter .12s,transform .05s;letter-spacing:.02em}
+  .run:hover{filter:brightness(1.08)}
+  .run:active{transform:translateY(1px)}
+  .run:disabled{opacity:.5;cursor:default}
+
+  .ghost{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:9px 14px;cursor:pointer;transition:color .12s,border-color .12s}
+  .ghost:hover{color:var(--accent);border-color:var(--accent)}
+
+  /* experiments */
+  .labcard{grid-column:1/-1;padding:20px 22px;border:1px solid var(--border);border-radius:14px;background:linear-gradient(180deg,rgba(52,211,224,.03),transparent),var(--panel)}
+  .labcard h2{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  .labs{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:640px){.labs{grid-template-columns:1fr 1fr}}
+  .lab{display:flex;gap:12px;align-items:flex-start}
+  .lab .n{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(52,211,224,.3);width:24px;height:24px;border-radius:6px;display:grid;place-items:center;flex-shrink:0}
+  .lab p{margin:0;font-size:13.5px;color:var(--muted)}
+  .lab p b{color:var(--text);font-weight:600}
+
+  footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.03em}
+  footer b{color:var(--muted);font-weight:600}
+
+  button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+  }
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <a class="brand" href="../index.html">&#9671; SD Mastery</a>
+  <div class="navlinks">
+    <a href="../index.html">Home</a>
+    <a href="../roadmap-dashboard.html">Roadmap</a>
+    <a href="../modules/08-event-driven-cqrs.html">Module 8 notes</a>
+    <a href="load-balancer-simulator.html">Load Balancer</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow"><span class="dot"></span>System Design &middot; Module 8 — Event-Driven Architecture</p>
+    <h1>Saga Pattern Visualizer</h1>
+    <p class="lede">One order has to touch four services — <b>Order &rarr; Payment &rarr; Inventory &rarr; Shipping</b> — but there's no distributed transaction to wrap them. Run the saga and watch each service make its own <b>local commit</b>. Then <b>make a step fail</b> and watch the saga unwind everything already committed by firing <b>compensating transactions in reverse</b>. Flip between choreography and orchestration to see who drives the sequence.</p>
+  </header>
+
+  <div class="grid">
+    <!-- stage -->
+    <div class="panel stage" aria-label="Live diagram: an order saga flowing through four services with a moving token; boxes change colour as each step commits, fails, or is compensated. The event log and coaching text below are the live text description.">
+      <div class="stagehead">
+        <p class="lbl">Distributed transaction &middot; order saga</p>
+        <span class="mode-tag" id="mode-tag">orchestration</span>
+      </div>
+      <div class="flow" id="flow">
+        <div class="origin" id="origin"><span class="olabel" id="origin-label">ORCHESTRATOR</span><span class="osub" id="origin-sub">central coordinator</span></div>
+        <div class="arrow" aria-hidden="true"></div>
+        <div class="node" id="node-0" data-state="pending" role="group" aria-label="Step 1, Order Service">
+          <div class="ntop"><span class="nnum">1</span><span class="nglyph" id="glyph-0"></span></div>
+          <div class="nname">Order</div>
+          <div class="nsvc">Order Svc</div>
+          <div class="nstat" id="stat-0">awaiting</div>
+        </div>
+        <div class="arrow" aria-hidden="true"></div>
+        <div class="node" id="node-1" data-state="pending" role="group" aria-label="Step 2, Payment Service">
+          <div class="ntop"><span class="nnum">2</span><span class="nglyph" id="glyph-1"></span></div>
+          <div class="nname">Payment</div>
+          <div class="nsvc">Payment Svc</div>
+          <div class="nstat" id="stat-1">awaiting</div>
+        </div>
+        <div class="arrow" aria-hidden="true"></div>
+        <div class="node" id="node-2" data-state="pending" role="group" aria-label="Step 3, Inventory Service">
+          <div class="ntop"><span class="nnum">3</span><span class="nglyph" id="glyph-2"></span></div>
+          <div class="nname">Inventory</div>
+          <div class="nsvc">Inventory Svc</div>
+          <div class="nstat" id="stat-2">awaiting</div>
+        </div>
+        <div class="arrow" aria-hidden="true"></div>
+        <div class="node" id="node-3" data-state="pending" role="group" aria-label="Step 4, Shipping Service">
+          <div class="ntop"><span class="nnum">4</span><span class="nglyph" id="glyph-3"></span></div>
+          <div class="nname">Shipping</div>
+          <div class="nsvc">Shipping Svc</div>
+          <div class="nstat" id="stat-3">awaiting</div>
+        </div>
+        <div class="token" id="token" aria-hidden="true"></div>
+      </div>
+      <div class="legend" aria-hidden="true">
+        <span><i style="background:#34d3e0"></i>committing</span>
+        <span><i style="background:#3fb950"></i>committed</span>
+        <span><i style="background:#f85149"></i>failed &middot; rolled back</span>
+        <span><i style="background:#e3b341"></i>compensating &middot; undone</span>
+      </div>
+    </div>
+
+    <!-- side -->
+    <div class="side">
+      <div class="metrics" role="group" aria-label="Live saga metrics">
+        <div class="metric"><p class="k">Committed steps</p><p class="v ok" id="m-committed">0<small>/4</small></p></div>
+        <div class="metric"><p class="k">Compensations</p><p class="v" id="m-comp">0</p></div>
+        <div class="metric"><p class="k">Distributed locks</p><p class="v ok" id="m-locks">0<small> held</small></p></div>
+        <div class="metric"><p class="k">Outcome</p><p class="v" id="m-outcome">&mdash;</p></div>
+      </div>
+
+      <div class="coach">
+        <p class="lbl">What's happening</p>
+        <p id="coach" aria-live="polite">Press &#9655; Run saga to push one distributed transaction through four services. Each performs a local commit with no global lock — so every forward step must define an inverse (its compensation) for the saga to undo it if a later step fails.</p>
+      </div>
+
+      <div class="explain">
+        <p class="lbl">Coordination model &mdash; <b id="mode-name">Orchestration</b></p>
+        <p id="mode-explain">A central <b>orchestrator</b> tells each service what to do next and issues the compensations on failure. Easy to monitor and reason about — but the orchestrator holds all the workflow logic and can become a coordination bottleneck.</p>
+      </div>
+
+      <div class="events">
+        <p class="lbl">Saga event log</p>
+        <ul id="events" aria-live="polite"><li><span class="ts">00</span><span>Ready &middot; press &#9655; Run saga</span></li></ul>
+      </div>
+    </div>
+
+    <!-- controls -->
+    <div class="panel controls">
+      <div class="ctrl">
+        <label>&nbsp;</label>
+        <button class="run" id="run">&#9655; Run saga</button>
+      </div>
+
+      <div class="ctrl">
+        <label id="fail-lbl">Fail at step</label>
+        <div class="seg" role="group" aria-labelledby="fail-lbl" id="fail">
+          <button data-fail="none" aria-pressed="true">None</button>
+          <button data-fail="payment" aria-pressed="false">Payment</button>
+          <button data-fail="inventory" aria-pressed="false">Inventory</button>
+          <button data-fail="shipping" aria-pressed="false">Shipping</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label id="mode-lbl">Coordination</label>
+        <div class="seg" role="group" aria-labelledby="mode-lbl" id="mode">
+          <button data-mode="orch" aria-pressed="true">Orchestration</button>
+          <button data-mode="chor" aria-pressed="false">Choreography</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>&nbsp;</label>
+        <button class="ghost" id="reset">&#8635; Reset</button>
+      </div>
+    </div>
+
+    <!-- experiments -->
+    <div class="labcard">
+      <h2>&#9670; Run these experiments</h2>
+      <div class="labs">
+        <div class="lab"><span class="n">1</span><p><b>Watch a happy path.</b> Leave Fail at <b>None</b> and run. All four commit left-to-right and go green — the saga ends <b>COMMITTED</b> with <b>0 distributed locks held</b>. That's the whole promise: cross-service consistency without 2PC.</p></div>
+        <div class="lab"><span class="n">2</span><p><b>Fail at Shipping.</b> Order, Payment, and Inventory commit — then Shipping fails. Watch three compensations run in <b>reverse</b>: Restore Inventory &rarr; Refund Payment &rarr; Cancel Order. Note the failed step is <b>not</b> compensated — its own local transaction already rolled back.</p></div>
+        <div class="lab"><span class="n">3</span><p><b>Fail at Payment vs Inventory.</b> Fail early (Payment) and only <b>Cancel Order</b> runs; fail later (Inventory) and two compensations run. The further the saga gets, the more there is to unwind — so put risky, hard-to-undo steps <b>last</b>.</p></div>
+        <div class="lab"><span class="n">4</span><p><b>Toggle Orchestration vs Choreography</b> and re-run the same failure. The steps and compensations are identical — but read the log: an <b>orchestrator commanding</b> each service versus services <b>reacting to each other's events</b>. Same saga, different control flow.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <footer><b>interactive simulator</b> &middot; pairs with Module 8 notes</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---- step data ----
+  var STEPS=[
+    {name:"Order",     event:"OrderCreated",      cmd:"create order",      commit:"order created",       comp:"Cancel Order",      compDone:"order cancelled"},
+    {name:"Payment",   event:"PaymentCharged",    cmd:"charge card",       commit:"payment charged",     comp:"Refund Payment",    compDone:"payment refunded"},
+    {name:"Inventory", event:"InventoryReserved", cmd:"reserve stock",     commit:"stock reserved",      comp:"Restore Inventory", compDone:"stock released"},
+    {name:"Shipping",  event:"ShipmentScheduled", cmd:"schedule shipment", commit:"shipment scheduled",  comp:"Cancel Shipment",   compDone:"shipment cancelled"}
+  ];
+  var FAILMAP={none:null, payment:1, inventory:2, shipping:3};
+
+  // ---- timing ----
+  var TRAVEL = reduceMotion ? 0.06 : 0.52;   // seconds token spends moving between nodes
+  var HOLD   = reduceMotion ? 0.34 : 0.58;   // seconds to rest after a commit/compensation resolves
+
+  // ---- state ----
+  var mode="orch", failKey="none";
+  var committedCount=0, compCount=0, outcome="—", logN=0;
+  var sim={active:false, seq:[], legIndex:0, sub:"travel", legClock:0, fail:null,
+           tokenFromEl:null, tokenToEl:null, lastNodeEl:null};
+
+  var el=function(id){ return document.getElementById(id); };
+  var flow=el("flow"), token=el("token"), events=el("events"), runBtn=el("run");
+
+  // ---- node rendering ----
+  function setState(i, state){
+    var n=el("node-"+i); if(!n) return;
+    n.setAttribute("data-state", state);
+    var g=el("glyph-"+i), st=el("stat-"+i), s=STEPS[i];
+    if(state==="pending"){ g.textContent=""; st.textContent="awaiting"; }
+    else if(state==="committing"){ g.textContent="◌"; st.textContent="committing…"; }
+    else if(state==="committed"){ g.textContent="✓"; st.textContent=s.commit; }
+    else if(state==="failed"){ g.textContent="✕"; st.textContent="failed · rolled back"; }
+    else if(state==="compensating"){ g.textContent="↺"; st.textContent="compensating…"; }
+    else if(state==="compensated"){ g.textContent="↺"; st.textContent=s.compDone; }
+  }
+
+  // ---- event log ----
+  function pushEvent(html){
+    logN++;
+    var li=document.createElement("li");
+    li.innerHTML='<span class="ts">'+(logN<10?"0":"")+logN+'</span><span>'+html+'</span>';
+    events.appendChild(li);
+    events.scrollTop=events.scrollHeight;
+  }
+  function logForward(i){
+    var s=STEPS[i], prev=i>0?STEPS[i-1]:null, msg;
+    if(mode==="orch"){
+      msg='<b>Orchestrator → '+s.name+'</b>: '+s.cmd+' — committed <b class="ok">'+s.commit+'</b>';
+    } else if(i===0){
+      msg='<b>Client</b> starts saga → '+s.name+' committed <b class="ok">'+s.commit+'</b>, emits <b>'+s.event+'</b>';
+    } else {
+      msg='<b>'+prev.event+'</b> → '+s.name+' reacts, committed <b class="ok">'+s.commit+'</b>, emits <b>'+s.event+'</b>';
+    }
+    pushEvent(msg);
+  }
+  function logFail(i){
+    var s=STEPS[i], prev=i>0?STEPS[i-1]:null, msg;
+    if(mode==="orch"){
+      msg='<b>Orchestrator → '+s.name+'</b>: '+s.cmd+' — <b class="crit">FAILED</b>, rolled back locally ↩ begin compensation';
+    } else {
+      msg='<b>'+(prev?prev.event:"Client")+'</b> → '+s.name+' <b class="crit">FAILED</b>, rolled back, emits <b>'+s.name+'Failed</b> ↩ begin compensation';
+    }
+    pushEvent(msg);
+  }
+  function logComp(i){
+    var s=STEPS[i], msg;
+    if(mode==="orch"){
+      msg='<b>Orchestrator → '+s.name+'</b>: compensate — <b class="warn">'+s.comp+'</b> ('+s.compDone+')';
+    } else {
+      msg=s.name+' hears the failure → <b class="warn">'+s.comp+'</b> ('+s.compDone+')';
+    }
+    pushEvent(msg);
+  }
+
+  // ---- metrics ----
+  function updateMetrics(){
+    el("m-committed").innerHTML=committedCount+'<small>/4</small>';
+    el("m-comp").textContent=compCount;
+    var o=el("m-outcome");
+    o.textContent=outcome;
+    o.className="v "+(outcome==="COMMITTED"?"ok":outcome==="ABORTED"?"crit":"");
+  }
+
+  // ---- coaching ----
+  function coach(kind, i){
+    var c=el("coach"), s=(i!=null)?STEPS[i]:null, msg;
+    if(kind==="idle") msg="Press ▷ Run saga to push one distributed transaction through four services. Each performs a local commit with no global lock — so every forward step must define an inverse (its compensation) for the saga to undo it if a later step fails.";
+    else if(kind==="commit") msg=s.name+" committed locally and its result is immediately visible — no two-phase lock is holding the other services. That immediate visibility is why sagas stay available (they trade away isolation to get it).";
+    else if(kind==="fail") msg=s.name+" failed. Its own local transaction rolled back, but every earlier step already committed and is visible. The saga must now undo those, in reverse order, with compensating transactions.";
+    else if(kind==="comp") msg="Running "+s.comp+" — a NEW offsetting transaction, not a storage rollback. The original commit really happened; compensation semantically reverses its effect (you can't un-charge a card, so you refund it).";
+    else if(kind==="done-ok") msg="All four steps committed. The saga reached a consistent end state across four services with zero distributed locks and no 2PC coordinator blocking anyone.";
+    else if(kind==="done-abort") msg="Saga aborted. Every committed step was unwound in reverse (LIFO) — the failing step needed no compensation because it never committed. Consistency restored without distributed locks: that's the whole point of the pattern.";
+    if(c.textContent!==msg) c.textContent=msg;
+  }
+
+  // ---- mode explainer (separate from live coaching) ----
+  function applyMode(){
+    var tag=el("mode-tag"), name=el("mode-name"), ex=el("mode-explain");
+    var ol=el("origin-label"), os=el("origin-sub");
+    if(mode==="orch"){
+      tag.textContent="orchestration"; name.textContent="Orchestration";
+      ex.innerHTML="A central <b>orchestrator</b> tells each service what to do next and issues the compensations on failure. Easy to monitor and reason about — but the orchestrator holds all the workflow logic and can become a coordination bottleneck.";
+      ol.textContent="ORCHESTRATOR"; os.textContent="central coordinator";
+    } else {
+      tag.textContent="choreography"; name.textContent="Choreography";
+      ex.innerHTML="No coordinator — each service <b>reacts to the previous service's event</b> and emits its own. Loosely coupled and easy to add services, but the end-to-end flow is implicit and easy to turn into a tangle of cyclic event dependencies.";
+      ol.textContent="CLIENT"; os.textContent="publishes 1st event";
+    }
+  }
+
+  // ---- token geometry ----
+  function centerOf(elm){
+    var fr=flow.getBoundingClientRect(), er=elm.getBoundingClientRect();
+    return { x: er.left-fr.left+er.width/2, y: er.top-fr.top+er.height/2 };
+  }
+  function ease(t){ return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
+  function positionToken(){
+    if(!sim.tokenFromEl || !sim.tokenToEl){ token.style.opacity="0"; return; }
+    token.style.opacity="1";
+    var a=centerOf(sim.tokenFromEl), b=centerOf(sim.tokenToEl);
+    var t = sim.sub==="travel" ? Math.max(0,Math.min(sim.legClock/TRAVEL,1)) : 1;
+    t=ease(t);
+    var x=a.x+(b.x-a.x)*t, y=a.y+(b.y-a.y)*t;
+    token.style.transform="translate("+(x-7)+"px,"+(y-7)+"px)";
+  }
+
+  // ---- leg engine ----
+  function startLeg(){
+    var leg=sim.seq[sim.legIndex], i=leg.target;
+    sim.tokenFromEl=sim.lastNodeEl;
+    sim.tokenToEl=el("node-"+i);
+    setState(i, leg.kind==="forward" ? "committing" : "compensating");
+    token.classList.toggle("comp", leg.kind==="comp");
+    sim.sub="travel"; sim.legClock=0;
+  }
+  function resolveLeg(leg){
+    var i=leg.target;
+    if(leg.kind==="forward"){
+      if(i===sim.fail){ setState(i,"failed"); logFail(i); coach("fail",i); }
+      else { setState(i,"committed"); committedCount++; logForward(i); coach("commit",i); }
+    } else {
+      setState(i,"compensated"); compCount++; logComp(i); coach("comp",i);
+    }
+    sim.lastNodeEl=el("node-"+i);
+    updateMetrics();
+  }
+  function finish(){
+    sim.active=false;
+    sim.tokenFromEl=null; sim.tokenToEl=null;
+    var success=(sim.fail===null);
+    outcome=success?"COMMITTED":"ABORTED";
+    updateMetrics();
+    coach(success?"done-ok":"done-abort");
+    runBtn.disabled=false; runBtn.innerHTML="&#9655; Run saga";
+  }
+  function stepSim(dt){
+    sim.legClock+=dt;
+    if(sim.sub==="travel"){
+      if(sim.legClock>=TRAVEL){ resolveLeg(sim.seq[sim.legIndex]); sim.sub="hold"; sim.legClock=0; }
+    } else {
+      if(sim.legClock>=HOLD){
+        sim.legIndex++;
+        if(sim.legIndex>=sim.seq.length) finish();
+        else startLeg();
+      }
+    }
+  }
+
+  // ---- run / reset ----
+  function buildSeq(fail){
+    var seq=[], last=(fail===null)?3:fail, i;
+    for(i=0;i<=last;i++) seq.push({target:i, kind:"forward"});
+    if(fail!==null){ for(i=fail-1;i>=0;i--) seq.push({target:i, kind:"comp"}); }
+    return seq;
+  }
+  function startRun(){
+    var fail=FAILMAP[failKey];
+    for(var k=0;k<4;k++) setState(k,"pending");
+    events.innerHTML=""; logN=0;
+    committedCount=0; compCount=0; outcome="—";
+    pushEvent(mode==="orch"
+      ? "Orchestrator opens the saga transaction"
+      : 'Client publishes <b>StartOrder</b> — choreography begins');
+    updateMetrics();
+    sim={active:true, seq:buildSeq(fail), legIndex:0, sub:"travel", legClock:0, fail:fail,
+         tokenFromEl:null, tokenToEl:null, lastNodeEl:el("origin")};
+    runBtn.disabled=true; runBtn.innerHTML="Running…";
+    startLeg();
+  }
+  function resetAll(){
+    sim.active=false; sim.tokenFromEl=null; sim.tokenToEl=null;
+    for(var k=0;k<4;k++) setState(k,"pending");
+    events.innerHTML=""; logN=0;
+    pushEvent("Ready · press ▷ Run saga");
+    committedCount=0; compCount=0; outcome="—";
+    updateMetrics(); coach("idle");
+    runBtn.disabled=false; runBtn.innerHTML="&#9655; Run saga";
+  }
+
+  // ---- input wiring ----
+  runBtn.addEventListener("click", function(){ if(!sim.active) startRun(); });
+  el("reset").addEventListener("click", resetAll);
+
+  var failBtns=document.querySelectorAll("#fail button");
+  failBtns.forEach(function(b){
+    b.addEventListener("click", function(){
+      failKey=b.getAttribute("data-fail");
+      failBtns.forEach(function(x){ x.setAttribute("aria-pressed", x===b?"true":"false"); });
+    });
+  });
+
+  var modeBtns=document.querySelectorAll("#mode button");
+  modeBtns.forEach(function(b){
+    b.addEventListener("click", function(){
+      mode=b.getAttribute("data-mode");
+      modeBtns.forEach(function(x){ x.setAttribute("aria-pressed", x===b?"true":"false"); });
+      applyMode();
+      if(!sim.active) coach("idle");
+    });
+  });
+
+  // ---- loop ----
+  var lastTs=0;
+  function frame(ts){
+    if(!lastTs) lastTs=ts;
+    var dt=(ts-lastTs)/1000; lastTs=ts; if(dt>0.05) dt=0.05;
+    if(sim.active) stepSim(dt);
+    positionToken();
+    requestAnimationFrame(frame);
+  }
+
+  // ---- boot ----
+  applyMode();
+  updateMetrics();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

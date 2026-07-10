@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Real-Time &amp; Async API Patterns | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#7048e8; --hue-soft:rgba(112,72,232,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#7048e8;--hue-soft:rgba(112,72,232,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#7048e8;--hue-soft:rgba(112,72,232,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#7048e8;--hue-soft:rgba(112,72,232,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+      <a href="../tools/realtime-transport.html">📡 Real-time Transport</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 3 · Communication</span><span class="sep">·</span><span>Module 10</span><span class="sep">·</span><span>Weeks 4-5 · ~13 hrs</span></p>
+      <h1>Real-Time &amp; Async API Patterns</h1>
+      <p class="sub">When the <strong>server must speak first</strong> — pushing the instant something happens, whether to a browser or another backend — this is the toolkit for it: long polling, SSE, WebSockets, webhooks, BFF, and fan-out, plus the judgment to pick the cheapest one that meets the requirement.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#pushpull">Push vs pull: the problem</a></li>
+        <li><a href="#longpoll">Long polling</a></li>
+        <li><a href="#sse">Server-Sent Events (SSE)</a></li>
+        <li><a href="#ws">WebSockets &amp; scaling them</a></li>
+        <li><a href="#choose">Choosing a transport</a></li>
+        <li><a href="#webhooks">Webhooks</a></li>
+        <li><a href="#bff">Backend-for-Frontend</a></li>
+        <li><a href="#fanout">Fan-out at scale</a></li>
+        <li><a href="#yelp">Worked example: Yelp</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="pushpull">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>Push vs pull: the problem</h2>
+      <p class="lead">Ordinary REST is <strong>client-initiated pull</strong>: the client asks, the server answers, the connection closes. That model is perfect for "load my profile" and hopeless for "tell me the moment a message arrives" — because the server has no way to speak first.</p>
+      <p>Real-time features (chat, live scores, presence, collaborative editing, ride tracking, notifications) need the <strong>server to deliver data as events happen</strong>, not when the client next thinks to ask. There is a small, well-worn family of techniques to make that happen over the web, and they trade off along three axes: <strong>direction</strong> (one-way vs bidirectional), <strong>latency</strong> (how fresh), and <strong>cost</strong> (connections, servers, complexity).</p>
+      <ul>
+        <li><strong>Short polling</strong> — client asks on a timer. Simple, wasteful, always a little stale.</li>
+        <li><strong>Long polling</strong> — client asks, server <em>holds</em> the request until there's news. Near-real-time over plain HTTP.</li>
+        <li><strong>Server-Sent Events (SSE)</strong> — one long-lived HTTP response the server streams down. One-way, server→client.</li>
+        <li><strong>WebSockets</strong> — a full-duplex socket. Bidirectional, lowest per-message overhead, most infra.</li>
+        <li><strong>Webhooks</strong> — the server-to-server cousin: a provider POSTs to <em>your</em> URL when an event fires, so you never poll it.</li>
+      </ul>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>The question is never "which is coolest." It's <strong>"what is the cheapest transport that meets the freshness and direction requirement?"</strong> Start at polling and escalate only when an NFR forces it. Reaching for WebSockets on a one-way feed is a classic over-engineering tell in interviews.</p>
+      </div>
+    </section>
+
+    <section id="longpoll">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>Long polling</h2>
+      <p><strong>Short polling</strong> is the naïve baseline: the client hits <code>GET /messages?since=…</code> every few seconds. Most responses are empty, you burn request/response overhead on nothing, and worst-case freshness is your whole interval. It scales badly and feels laggy.</p>
+      <p><strong>Long polling</strong> fixes the waste with one trick: the server <em>doesn't answer immediately</em>. It holds the request open until either new data is ready or a timeout (say 30 s) fires, then responds. The client reads the result and <em>immediately</em> re-issues the request. From the user's perspective, updates arrive within milliseconds of existing — yet it's all vanilla HTTP, so it sails through corporate proxies, firewalls, and ancient load balancers.</p>
+      <pre><code><span class="cmt"># Long polling loop (client side)</span>
+loop:
+  GET /updates?cursor=1042        <span class="cmt"># server HOLDS this open…</span>
+  &lt;-- 200 { events:[…], cursor:1055 }   <span class="cmt"># …until data exists (or 30s timeout → 204)</span>
+  render(events); cursor = 1055
+  <span class="cmt"># immediately reconnect →</span></code></pre>
+      <p>The costs are real, though. Every cycle re-sends full HTTP headers (and re-does TLS/cookie work if not kept alive). The server holds an open connection <em>per waiting client</em>, which pins memory and, on thread-per-request stacks, a thread. There's a tiny blind gap between "server answered" and "client reconnected" where an event can be missed unless you carry a <strong>cursor / last-seen ID</strong> so the next request resumes exactly where you left off. And a broadcast that wakes every long-poll at once is a <strong>thundering herd</strong> of simultaneous reconnects. Long polling is the right answer when you need near-real-time on infrastructure that only speaks plain HTTP — otherwise SSE or WebSockets are cleaner.</p>
+    </section>
+
+    <section id="sse">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Server-Sent Events (SSE)</h2>
+      <p>SSE is the purpose-built answer to <strong>one-way, server→client streaming</strong>. The client opens a single HTTP request; the server responds with <code>Content-Type: text/event-stream</code> and simply <em>never closes it</em>, writing newline-delimited event frames down the pipe as things happen. In the browser it's three lines of code with the built-in <code>EventSource</code>.</p>
+      <pre><code><span class="cmt"># The wire format — a plain, long-lived HTTP response</span>
+HTTP/1.1 200 OK
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
+
+id: 1055
+event: rating_update
+data: {"businessId":"b_42","rating":4.3,"count":1288}
+
+id: 1056
+event: rating_update
+data: {"businessId":"b_42","rating":4.4,"count":1289}
+
+<span class="cmt"># Client: const es = new EventSource('/stream'); es.onmessage = …</span></code></pre>
+      <p>SSE's underrated superpower is <strong>automatic reconnection with resume</strong>. If the connection drops, the browser reconnects on its own and sends a <code>Last-Event-ID</code> header equal to the last <code>id:</code> it saw — so the server can replay exactly what was missed. That makes SSE genuinely reliable for feeds with almost no client code.</p>
+      <p>The limits: it's <strong>server→client only</strong> (client requests still go over normal HTTP), <strong>text/UTF-8 only</strong> (no binary frames), and over HTTP/1.1 a browser caps at ~6 concurrent connections per origin — so a page with many streams starves. HTTP/2 multiplexing dissolves that last one. Reach for SSE whenever the data flows one direction: notifications, live dashboards, sports scores, LLM token streaming, progress bars, the "someone just reviewed this business" ticker.</p>
+    </section>
+
+    <section id="ws">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>WebSockets &amp; scaling them</h2>
+      <p>When you truly need <strong>bidirectional, low-latency</strong> messaging — chat, collaborative editing, multiplayer, live trading, cursors moving in real time — WebSockets are the tool. A WebSocket is a persistent, <strong>full-duplex</strong> channel over a single TCP connection: after setup, either side can send a message at any moment with almost no per-message overhead.</p>
+      <p>It begins life as an HTTP request so it traverses the normal web stack, then <strong>upgrades</strong>:</p>
+      <pre><code><span class="cmt"># The upgrade handshake — HTTP in, WebSocket out</span>
+GET /ws HTTP/1.1
+Host: yelp.example
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
+Sec-WebSocket-Version: 13
+
+HTTP/1.1 101 Switching Protocols          <span class="cmt"># handshake accepted</span>
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+
+<span class="cmt"># from here: framed messages both directions, ~2–14 byte frame header</span>
+<span class="cmt"># (vs. a full HTTP header block on every long-poll round-trip)</span></code></pre>
+      <p>That efficiency is the payoff. The <strong>bill</strong> is statefulness, and it dominates the scaling conversation:</p>
+      <ul>
+        <li><strong>Sticky, pinned connections.</strong> A live socket lives on <em>one</em> server. You can't round-robin a message to the user — you must route it to whichever node holds their connection. Load balancers need <code>Upgrade</code> support and long idle timeouts, and typically consistent-hash or sticky-route sockets.</li>
+        <li><strong>Cross-node delivery needs a backplane.</strong> If Alice is on gateway A and Bob is on gateway B, a message Alice sends must reach B. Solve it with a <strong>pub/sub backplane</strong> (Redis pub/sub, Kafka, NATS): gateways publish to a topic and every gateway subscribed to that topic pushes to its local sockets. (Section 08.)</li>
+        <li><strong>Connection storms.</strong> A deploy or network blip disconnects everyone; they all reconnect at once. You need reconnect <strong>backoff + jitter</strong>, graceful connection draining on rollout, and headroom for the spike.</li>
+        <li><strong>Memory &amp; the C10K/C10M wall.</strong> Each idle socket still costs kernel + heap memory. Millions of concurrent connections means dozens of tuned gateway nodes and a registry of "which user is on which node."</li>
+      </ul>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>Don't open an interview by drawing WebSockets. Say: <em>"This feed is one-directional, so I'd start with SSE; I'd only move to WebSockets for the parts that need the client pushing too — and then I owe you a pub/sub backplane and sticky routing."</em> Naming the cost <em>before</em> you're asked is what reads as senior.</p>
+      </div>
+    </section>
+
+    <section id="choose">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Choosing a transport</h2>
+      <p>Put them side by side. The decision almost always falls out of two questions: <em>which direction does data flow,</em> and <em>how fresh must it be?</em></p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Transport</th><th>Direction</th><th>Freshness</th><th>Cost / complexity</th><th>Best for</th></tr></thead>
+          <tbody>
+            <tr><td>Short polling</td><td>Client pull</td><td>Interval-stale</td><td>Trivial</td><td>Cheap "good enough" refresh</td></tr>
+            <tr><td>Long polling</td><td>Client pull (held)</td><td>Near-real-time</td><td>Low; HTTP-only</td><td>Real-time on legacy/proxy-bound infra</td></tr>
+            <tr><td>SSE</td><td>Server → client</td><td>Real-time</td><td>Low; auto-reconnect</td><td>Feeds, notifications, live counters, token streams</td></tr>
+            <tr><td>WebSockets</td><td>Bidirectional</td><td>Real-time</td><td>High; stateful + backplane</td><td>Chat, collab editing, multiplayer, trading</td></tr>
+            <tr><td>Webhooks</td><td>Server → server</td><td>Event-driven</td><td>Medium; retries + signing</td><td>Integrations between backends (Stripe, GitHub)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>A useful ladder: <strong>polling → long polling → SSE → WebSockets</strong>, climbing only when the previous rung can't meet the requirement. Most "real-time" product features are one-directional and are perfectly served by SSE; reserve WebSockets for genuine two-way interaction.</p>
+
+      <div class="callout tool">
+        <p class="lbl">Play with it → your tool</p>
+        <p>Open the <a href="../tools/realtime-transport.html">📡 Real-time Transport Playground</a> and watch the same "new event" ripple through short polling, long polling, SSE, and a WebSocket side by side — see the wasted empty polls, the held request, the streamed frames, and the duplex channel, with request counts and latency for each. Toggle event rate and client count to feel exactly where each transport starts to hurt.</p>
+      </div>
+    </section>
+
+    <section id="webhooks">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>Webhooks</h2>
+      <p>Everything above pushes to a <em>browser</em>. <strong>Webhooks</strong> push between <em>backends</em>. Instead of your service polling Stripe every minute asking "any new charges?", you register a URL and Stripe <strong>POSTs to you</strong> the instant a charge succeeds. They're often called "reverse APIs" or "push APIs" — the provider becomes the client, your endpoint becomes the server. Three things make a webhook system production-grade: delivery, retries, and signature verification.</p>
+
+      <h3>Delivery — accept fast, work later</h3>
+      <p>A webhook handler must do the absolute minimum synchronously: <strong>verify the signature, enqueue the event, return <code>2xx</code> immediately.</strong> If you do real work inside the handler, you risk timing out the provider (which then retries and double-processes) and coupling your throughput to theirs. The pattern is <em>receive → validate → enqueue → 200</em>, then a worker drains the queue. Because networks fail, providers guarantee <strong>at-least-once</strong> delivery — the same event <em>will</em> arrive twice sometimes — so your consumer must be <strong>idempotent</strong>, deduping on the provider's stable <code>event id</code>.</p>
+
+      <h3>Retries — the provider's job, but design for it</h3>
+      <p>If your endpoint returns non-2xx, times out, or is unreachable, the provider retries with <strong>exponential backoff + jitter</strong> over minutes to days. After N failures it parks the event in a <strong>dead-letter queue</strong> and may auto-disable the endpoint and alert you. Good providers expose a <strong>manual replay</strong> so you can reprocess after a fix. Your side of the contract: be fast, be idempotent, and return 2xx <em>only</em> once you've durably accepted the event.</p>
+
+      <h3>Signature verification — is this really from them?</h3>
+      <p>Your webhook URL is public; anyone can POST forged events to it. So the provider <strong>signs</strong> each payload with a shared secret using <strong>HMAC-SHA256</strong> and sends the signature in a header. You recompute the HMAC over the <em>raw request body</em> and compare:</p>
+      <pre><code><span class="cmt"># Incoming request</span>
+POST /webhooks/reviews
+X-Signature: t=1720310400,v1=8b2e…c91f      <span class="cmt"># timestamp + HMAC</span>
+Content-Type: application/json
+
+{"id":"evt_9f3","type":"review.created","data":{…}}
+
+<span class="cmt"># Verification (server side)</span>
+signed  = f"{timestamp}.{raw_body}"                <span class="cmt"># bind the timestamp in</span>
+expected = HMAC_SHA256(secret, signed)
+if not constant_time_equal(expected, v1):  reject 400
+if now - timestamp &gt; 300:                  reject 400   <span class="cmt"># replay guard: 5-min window</span>
+if already_processed(event.id):            return 200   <span class="cmt"># idempotent dedupe</span>
+enqueue(event); return 200</code></pre>
+      <p>Three non-negotiables live in that snippet: hash the <strong>raw bytes</strong> (below), a <strong>constant-time compare</strong> so attackers can't time-leak the secret byte by byte, and a <strong>signed timestamp</strong> with a short freshness window so a captured-and-replayed request is rejected.</p>
+      <div class="callout tip">
+        <p class="lbl">The bug everyone ships once</p>
+        <p>Verify the signature against the <strong>exact raw body bytes</strong> you received — <em>not</em> a parsed-then-re-serialized JSON object. Reordered keys, dropped whitespace, or a different float rendering change the bytes, and every signature check fails mysteriously in production. Capture the raw body <em>before</em> your JSON middleware touches it.</p>
+      </div>
+    </section>
+
+    <section id="bff">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Backend-for-Frontend (BFF)</h2>
+      <p>One generic public API trying to serve a web app, an iOS app, an Android app, and a smart-TV app drifts to a <strong>lowest-common-denominator</strong> contract. Mobile over-fetches fields it doesn't render; web makes five round-trips to assemble one screen; every client is coupled to every other client's needs. The <strong>Backend-for-Frontend</strong> pattern gives each frontend its <em>own</em> thin backend — a per-experience API, ideally owned by the same team that ships that UI.</p>
+      <pre><code>                 ┌─────────────┐        ┌──────────────┐
+   Web  ───────▶  │  Web  BFF   │ ─┐     │  Business svc │
+                 └─────────────┘  ├───▶ ├──────────────┤
+                 ┌─────────────┐  │     │  Review   svc │
+ Mobile ───────▶ │ Mobile BFF  │ ─┘     ├──────────────┤
+                 └─────────────┘        │  Waitlist svc │
+   each BFF: aggregate + shape          └──────────────┘
+   for ITS client; talk to the same downstream services</code></pre>
+      <p>A BFF is a specialized <strong>API gateway</strong> — but instead of <em>one</em> gateway for everyone, there's one <em>per client type</em>. What it buys you:</p>
+      <ul>
+        <li><strong>Tailored payloads.</strong> The mobile BFF returns a compact object; the web BFF returns the richer one. No client parses fields it won't show.</li>
+        <li><strong>Aggregation kills round-trips.</strong> The BFF fans out to Business + Review + Waitlist services and returns one screen-shaped response, cutting mobile latency on flaky networks.</li>
+        <li><strong>Independent cadence.</strong> The mobile team evolves its BFF on the app's release schedule without a cross-team API negotiation.</li>
+        <li><strong>Client-specific concerns.</strong> Auth/session handling can live here — e.g. the BFF holds the OAuth token server-side and hands the browser only a secure cookie (the "token-handler / BFF auth" pattern), keeping tokens out of JavaScript.</li>
+      </ul>
+      <p>The costs: <strong>duplicated logic</strong> across BFFs (guard against it with shared client libraries, and keep <em>business</em> rules in the downstream services), and one more network hop and deployable to operate. In real-time systems the BFF earns its keep twice over: it's the natural place to <strong>terminate the SSE or WebSocket connection</strong> for its client type and shape the event stream — the web BFF might push rich review objects while the mobile BFF pushes a slim "refresh" nudge.</p>
+    </section>
+
+    <section id="fanout">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Fan-out at scale</h2>
+      <p>The defining hard problem of real-time systems: one event must reach <strong>N interested clients</strong>. How you spread it — <strong>fan-out</strong> — decides whether you survive a hot key. Two base strategies, mirroring the delivery choices you met with feeds and timelines:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Strategy</th><th>How</th><th>Wins</th><th>Hurts</th></tr></thead>
+          <tbody>
+            <tr><td>Fan-out on write (push)</td><td>On the event, write/push to all N subscribers now</td><td>Reads are instant &amp; cheap</td><td>Write amplification; a "celebrity" event = millions of writes</td></tr>
+            <tr><td>Fan-out on read (pull)</td><td>Store the event once; each client assembles its view on read</td><td>Writes are cheap &amp; simple</td><td>Reads are heavier / slower; recompute every time</td></tr>
+            <tr><td>Hybrid</td><td>Push for the common case, pull for hot/celebrity keys</td><td>Bounds the worst case</td><td>Two code paths to maintain</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>For <strong>live connections</strong> specifically, the mechanism that makes fan-out tractable across a fleet is a <strong>pub/sub backplane</strong>. Producers publish an event to a topic; every gateway holding a subscriber to that topic pushes it to its local sockets. Gateways stay stateless about <em>who</em> produced the event, and you scale connections and producers independently.</p>
+      <pre><code>  review.created(business=b_42)
+        │
+        ▼
+   ┌──────────┐   publish topic="biz:b_42"   ┌──────────────┐
+   │ Producer │ ─────────────────────────▶  │  Pub/Sub bus  │
+   └──────────┘                              │ (Redis/Kafka) │
+                                             └──────┬────────┘
+                    ┌───────────────┬───────────────┤  (each gateway
+                    ▼               ▼               ▼   subscribes to the
+              ┌─────────┐     ┌─────────┐     ┌─────────┐ topics its clients
+              │Gateway A│     │Gateway B│     │Gateway C│ care about)
+              └────┬────┘     └────┬────┘     └────┬────┘
+             SSE/WS to        SSE/WS to        SSE/WS to
+            viewers of b_42   viewers of b_42  viewers of b_42</code></pre>
+      <p>The remaining sharp edges: a <strong>connection registry</strong> (which user/topic lives on which gateway) so you can target a single user; <strong>topic sharding</strong> so no one bus partition is a hotspot; and the <strong>celebrity problem</strong> — a viral topic with millions of viewers. For a broadcast (everyone gets the <em>same</em> update) that's fine, because it's one publish fanned out by the bus. It only explodes when you'd write a <em>personalized</em> copy per user — so for hot keys, prefer broadcasting a lightweight "something changed, refetch" (or a shared delta) over materializing per-user pushes.</p>
+    </section>
+
+    <section id="yelp">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Worked example: Yelp (the real-time slice)</h2>
+      <p>Yelp's <em>whole</em> product includes geo-search and ranking — a different module. Here we design the <strong>real-time and async slice</strong>: the live waitlist, live review/rating updates on a business page, owner alerts, and partner webhooks. Run all five framework steps, steering every one toward this module's tools.</p>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Functional:</strong> (a) <em>Waitlist</em> — a diner joins a restaurant's virtual line and sees live position, then a "your table is ready" push. (b) <em>Live business page</em> — rating and new reviews update in near-real-time as people post. (c) <em>Owner alerts</em> — the business owner is notified the instant a new review/photo lands. (d) <em>Partner webhooks</em> — reservation/delivery partners subscribe to events like <code>review.created</code> and <code>waitlist.seated</code>.</li>
+        <li><strong>Non-functional:</strong> low-latency notifications (seconds), <strong>high availability</strong> — the waitlist must never lose your spot; heavily <strong>read-heavy / high fan-out</strong> on popular business pages; <strong>durable, at-least-once</strong> event delivery to partners; both mobile and web clients.</li>
+        <li><strong>Out of scope (say it):</strong> geo-search ranking, photo storage/CDN, and the review spam-ML pipeline. Name them, defer them.</li>
+      </ul>
+
+      <h3>② Estimate</h3>
+      <pre><code>50M DAU · 5M businesses
+reviews:   10M/day ÷ 86,400  ≈ 115 writes/s avg   <span class="cmt">peak ×4 ≈ ~500/s</span>
+biz-page views: 500M/day     ≈ 6,000 reads/s       <span class="cmt">→ cache + read-model, huge fan-out</span>
+live connections at peak     ≈ 2M concurrent (SSE/WS)
+  ÷ ~100k conns/gateway node ≈ 20–40 gateway nodes  <span class="cmt">+ headroom for reconnect storms</span>
+webhook partners             ≈ 50k endpoints × event rate → async dispatcher fleet</code></pre>
+      <p>Verdict: writes are modest, but <strong>fan-out is the whole game</strong> — millions of viewers on hot pages and millions of live connections. That points at SSE for the one-way page updates, a pub/sub backplane, and a durable event log feeding both the real-time gateways and the webhook dispatcher.</p>
+
+      <h3>③ Interface</h3>
+      <pre><code><span class="cmt"># Writes — plain REST</span>
+POST /v1/businesses/{id}/reviews   { "rating":4, "text":"…" }  → 201
+POST /v1/businesses/{id}/waitlist  { "partySize":2 }          → 201 { "ticketId":"…","pos":7 }
+
+<span class="cmt"># Real-time reads</span>
+GET  /v1/businesses/{id}/stream     <span class="cmt"># SSE: rating_update, review_created events (one-way)</span>
+GET  /v1/waitlist/{ticketId}/stream <span class="cmt"># SSE: position_update, table_ready</span>
+
+<span class="cmt"># Partner integration — webhooks (server→server)</span>
+POST /v1/webhook-endpoints  { "url":"https://partner/hook", "events":["review.created","waitlist.seated"] }
+  → we POST signed events (HMAC-SHA256 + timestamp) to that URL, with retries</code></pre>
+      <p>Note the deliberate transport choices: the diner's waitlist and the page ticker are <strong>server→client</strong>, so SSE — cheaper and auto-reconnecting — beats WebSockets. We'd only introduce a WebSocket if a feature needed the client streaming <em>up</em> (e.g. live typing in an owner-diner chat).</p>
+
+      <h3>④ High-level design</h3>
+      <pre><code>Clients ─▶ Web BFF / Mobile BFF ─▶ Review svc ─▶ [ Reviews DB ]
+                                      │ emit event
+                                      ▼
+                               ┌─────────────┐
+                               │  Event log  │  (Kafka: durable, replayable)
+                               └──────┬──────┘
+             ┌────────────────────────┼───────────────────────────┐
+             ▼                        ▼                            ▼
+     Read-model updater      Real-time fan-out           Webhook dispatcher
+     (rating cache, feed)    (Redis pub/sub ─▶ SSE        (signed POST + retry
+                              gateways ─▶ viewers)          + DLQ to partners)</code></pre>
+      <p>A write goes through the BFF to the Review service, which persists it and emits one immutable event to a <strong>Kafka log</strong>. Three independent consumers fan out from that single source of truth: one updates the cached rating and read model, one broadcasts to the real-time gateways over a pub/sub backplane, and one dispatches signed webhooks to partners. Decoupling through the log means a slow partner never slows a diner's page.</p>
+
+      <h3>⑤ Deep-dive &amp; scale</h3>
+      <ul>
+        <li><strong>Page fan-out (hot business).</strong> Viewers of a business subscribe (via their BFF) to an SSE stream keyed on <code>biz:{id}</code>. A new review publishes once to that topic; the bus fans it to every gateway holding those viewers. A viral page with millions of viewers is a <em>broadcast</em>, so it stays a single publish — and for the very hottest pages we push a lightweight "rating changed → refetch" rather than a personalized payload per viewer, dodging write amplification.</li>
+        <li><strong>Waitlist correctness beats freshness.</strong> The DB (or a durable queue) is the source of truth for your position; the SSE stream is just a fast delivery channel. On reconnect the client <em>re-fetches</em> current position rather than trusting it never missed a push — and "table ready" is at-least-once, so the UI renders idempotently. Never let an in-memory push be the only record of your spot.</li>
+        <li><strong>Webhook delivery to partners.</strong> The dispatcher reads the Kafka log, signs each payload (HMAC-SHA256 over the raw body + timestamp), POSTs, and expects a fast 2xx. Failures retry with exponential backoff + jitter, then land in a DLQ; after N failures we disable the endpoint and alert the partner, and expose manual replay. Every event carries a stable <code>event id</code> so partners dedupe.</li>
+        <li><strong>BFF shaping.</strong> The web BFF aggregates business + recent reviews + rating into one response and streams rich review objects; the mobile BFF returns a compact page and streams slim nudges — same downstream services, two tuned experiences, and the SSE connection terminates at the BFF.</li>
+        <li><strong>Availability of the gateway fleet.</strong> Connection state lives in gateway memory plus a Redis registry (user → gateway); the LB consistent-hashes sockets and supports long-lived streams. On deploy we drain gracefully and clients auto-reconnect — SSE's <code>Last-Event-ID</code> replays anything missed, so a rollout doesn't drop a diner's "table ready."</li>
+      </ul>
+      <div class="callout">
+        <p class="lbl">Why this is a real-time answer, not a generic one</p>
+        <p>Swap "Yelp" for any CRUD app and this design would <em>change</em> — because its spine is the event log, the SSE fan-out, the pub/sub backplane, the signed retrying webhook dispatcher, and per-client BFFs. That's the litmus test: the case study must exercise the module, not just wear its name.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Your reps this week</h2>
+      <p>Reading is not learning — reps are. Do these, in order:</p>
+      <ol>
+        <li><strong>Whiteboard the Yelp real-time slice yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design the waitlist + live page + partner webhooks end-to-end with the 5-step framework, out loud, timed to ~35 minutes — <em>before</em> re-reading Section 09. Draw the event log, the SSE fan-out, and the webhook dispatcher explicitly.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your transport choices against pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer running a system design interview. Give me the prompt: "Design Yelp, focusing on its real-time and async features — a live restaurant waitlist, live review/rating updates on a business page, business-owner alerts, and webhook integrations for partners." Then act as the interviewer — let me drive, ask clarifying and probing questions, and push hard on: when I'd use SSE vs WebSockets vs long polling and why; how I fan out an update to millions of viewers of a hot business; how webhook delivery handles retries, idempotency, and signature verification; and where a BFF earns its place. Do NOT give me the answer or lead me. After ~35 minutes (or when I say "done"), grade me 1–5 on each of: requirements gathering, capacity estimation, API design, high-level design, deep-dives &amp; trade-offs, and communication — with specific feedback and what a strong candidate would have added.</div>
+      <ol start="3">
+        <li><strong>Feel the transports move</strong> in the <a href="../tools/realtime-transport.html">📡 Real-time Transport Playground</a> — crank the event rate and client count and watch where short polling wastes requests, where long polling holds, and where SSE/WebSockets pull ahead. Match what you see to the table in Section 05.</li>
+        <li><strong>Explain it back.</strong> Teach two things to a rubber duck without notes: <em>how HMAC webhook signature verification works (and why you hash the raw body)</em>, and <em>fan-out on write vs on read plus the celebrity problem</em>. Gaps you can't explain are gaps you don't have yet.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end):
+          <em>When do you actually need WebSockets over SSE? · How does HMAC signature verification work, and why hash the raw bytes + include a timestamp? · Fan-out on write vs on read — when does each win, and what's the celebrity problem? · Why put a BFF in front of your microservices instead of one shared API? · Long polling vs short polling — what does long polling save, and what does it still cost?</em>
+        </li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">11 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the transport comparison first; save the live-fan-out walkthrough for <em>after</em> your own Yelp attempt.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=MbgfLUovCwA" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Polling vs WebSockets vs SSE vs Webhooks (When to Use What?)</b><div class="ch">Kathan Vakharia <span class="dur">· ~19 min · transports</span></div><p>All four patterns mapped to when-to-use in one sitting. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=2Nt-ZrNP22A" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>WebSockets Crash Course — Handshake, Use-cases, Pros &amp; Cons and more</b><div class="ch">Hussein Nasser <span class="dur">· ~48 min · websockets</span></div><p>The definitive primer: the upgrade handshake, framing, and honest pros/cons.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=vXJsJ52vwAA" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>How to scale WebSockets to millions of connections</b><div class="ch">Ably Realtime <span class="dur">· ~13 min · scaling</span></div><p>The stateful-connection wall and the pub/sub backplane that gets you past it.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=mrkQ5iLb4DM" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>What is a Webhook? Webhooks for Beginners</b><div class="ch">Mehul Mohan <span class="dur">· ~12 min · webhooks</span></div><p>Clean mental model of the reverse-API push before you design delivery + signing.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=Pmzrogq4W4I" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Expert Guide: Backend for Frontend (BFF) in Microservices</b><div class="ch">ByteMonk <span class="dur">· ~11 min · BFF</span></div><p>Why one API per client beats a shared lowest-common-denominator gateway.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=LjLx0fCd1k8" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>System Design Interview: Design Live Comments w/ an Ex-Meta Staff Engineer</b><div class="ch">Hello Interview <span class="dur">· ~33 min · real-time fan-out</span></div><p>End-to-end real-time updates + fan-out, interview-framed. Watch AFTER your Yelp attempt.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA Chapter 11 (Stream Processing) — the definitive treatment of event logs, at-least-once delivery, and consumers, which is the backbone of every async design above. And the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> sections on asynchronism and communication (free).</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/11-microservices-fundamentals.html">Next module →</a>
+    </div>
+
+    <footer>Module 10 of 24 · System Design Mastery · Next up: Module 11 — Microservices Fundamentals (services, boundaries, and the operational tax of going distributed).</footer>
+  </div>
+</body>
+</html>

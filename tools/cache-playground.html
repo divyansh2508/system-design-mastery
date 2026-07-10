@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cache Playground — System Design</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b1016; --panel:#121a23; --panel-2:#0e151d;
+    --border:#223140; --border-soft:#1a2530;
+    --text:#cdd9e5; --muted:#7d8fa1; --faint:#54626f;
+    --accent:#34d3e0; --accent-dim:rgba(52,211,224,.14);
+    --ok:#3fb950; --warn:#e3b341; --crit:#f85149; --violet:#9d8bff;
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1100px 600px at 82% -8%, rgba(52,211,224,.06), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* topnav */
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(11,16,22,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:30}
+  .topnav .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .topnav .navlinks{display:flex;gap:6px;flex-wrap:wrap}
+  .topnav .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;transition:color .12s,background .12s}
+  .topnav .navlinks a:hover{color:var(--accent);background:var(--accent-dim)}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 56px}
+
+  /* header */
+  header{margin-bottom:22px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);margin:0 0 10px;display:flex;align-items:center;gap:9px}
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  h1{font-family:var(--mono);font-weight:600;font-size:clamp(26px,4.4vw,40px);letter-spacing:-.01em;margin:0 0 10px;text-wrap:balance}
+  .lede{max-width:68ch;color:var(--muted);font-size:15.5px;margin:0}
+  .lede b{color:var(--text);font-weight:600}
+
+  /* layout */
+  .grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:24px}
+  @media(min-width:900px){.grid{grid-template-columns:1.55fr 1fr}}
+
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);border-radius:14px}
+  .stage{padding:16px 18px 18px;min-height:400px;display:flex;flex-direction:column;gap:14px}
+  @media(min-width:900px){.stage{min-height:472px}}
+
+  /* flow schematic */
+  .flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap}
+  .node{flex:1 1 auto;min-width:96px;display:flex;flex-direction:column;justify-content:center;gap:2px;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);background:var(--panel-2);border:1px solid var(--border-soft);border-radius:10px;padding:9px 11px;transition:border-color .18s,box-shadow .18s,color .18s}
+  .node b{font-size:14px;letter-spacing:.02em;text-transform:none;color:var(--text);font-variant-numeric:tabular-nums;font-weight:600}
+  .node.cache{border-color:rgba(52,211,224,.4)}
+  .node.cache b{color:var(--accent)}
+  .node.db .slow{display:inline-block;font-size:9px;letter-spacing:.12em;color:var(--warn)}
+  .node.db.fetch{border-color:rgba(248,81,73,.55);box-shadow:0 0 14px rgba(248,81,73,.22);color:var(--crit)}
+  .arrow{align-self:center;font-family:var(--mono);color:var(--faint);font-size:15px}
+  .arrow.on{color:var(--crit)}
+  .lastreq{font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;min-height:16px}
+  .lastreq b{font-weight:600}
+  .lastreq .hit{color:var(--ok)} .lastreq .miss{color:var(--crit)} .lastreq .key{color:var(--text)}
+
+  /* cache slots */
+  .slots-wrap{flex:1;display:flex;flex-direction:column;gap:10px}
+  .slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:10px;align-content:start}
+  .slot{position:relative;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:11px 10px 11px;min-height:78px;display:flex;flex-direction:column;gap:7px;transition:border-color .15s,box-shadow .15s,background .15s}
+  .slot .key{font-family:var(--mono);font-weight:600;font-size:15px;color:var(--text);font-variant-numeric:tabular-nums;line-height:1}
+  .slot .freq{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.02em}
+  .slot .bar{height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;margin-top:auto}
+  .slot .bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:3px;transition:width .2s ease}
+  .slot.empty{border-style:dashed;border-color:var(--border-soft);align-items:center;justify-content:center}
+  .slot.empty .key{color:var(--faint);font-size:12px;font-weight:400}
+  .slot.victim{border-color:rgba(248,81,73,.55)}
+  .slot.victim .bar i{background:var(--crit)}
+  .slot .badge{position:absolute;top:-8px;right:6px;font-family:var(--mono);font-size:8px;letter-spacing:.08em;background:var(--crit);color:#0b1016;padding:2px 5px;border-radius:4px;font-weight:700}
+  .slot.flash-hit{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok),0 0 16px rgba(63,185,80,.35)}
+  .slot.flash-miss{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 16px rgba(52,211,224,.35)}
+
+  .barkey{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.03em;padding:8px 10px;background:rgba(11,16,22,.4);border:1px solid var(--border-soft);border-radius:9px}
+  .barkey span{display:inline-flex;align-items:center;gap:6px}
+  .barkey i{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .barkey b{color:var(--text);font-weight:600}
+
+  .side{display:flex;flex-direction:column;gap:16px}
+
+  /* metrics */
+  .metrics{padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border-soft);border-radius:14px;overflow:hidden}
+  .metric{background:var(--panel);padding:13px 14px}
+  .metric .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:0 0 4px}
+  .metric .v{font-family:var(--mono);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .metric .v small{font-size:12px;color:var(--muted);font-weight:400;margin-left:3px}
+  .metric.wide{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .v.ok{color:var(--ok)} .v.warn{color:var(--warn)} .v.crit{color:var(--crit)} .v.accent{color:var(--accent)}
+  canvas#spark{width:118px;height:34px;display:block}
+
+  /* coaching */
+  .coach{padding:15px 16px;border:1px solid var(--border);border-radius:14px;background:var(--panel);border-left:3px solid var(--accent)}
+  .coach .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+  .coach p{margin:0;font-size:14px;color:var(--text)}
+
+  /* recent stream */
+  .events{padding:13px 16px;border:1px solid var(--border-soft);border-radius:14px;background:var(--panel-2)}
+  .events .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 9px;display:flex;justify-content:space-between}
+  .events .lbl small{color:var(--muted);letter-spacing:.02em;text-transform:none;font-size:10px}
+  .stream{display:flex;gap:3px;flex-wrap:nowrap;overflow:hidden;min-height:18px}
+  .stream i{width:8px;height:18px;border-radius:2px;background:var(--border);flex:0 0 auto;transition:background .1s}
+  .stream i.hit{background:var(--ok)} .stream i.miss{background:var(--crit)}
+  .streamkey{display:flex;gap:14px;margin-top:9px;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+  .streamkey span{display:inline-flex;align-items:center;gap:5px}
+  .streamkey i{width:9px;height:9px;border-radius:2px;display:inline-block}
+
+  /* controls */
+  .controls{grid-column:1/-1;padding:18px;display:flex;flex-wrap:wrap;gap:22px;align-items:flex-end}
+  .ctrl{display:flex;flex-direction:column;gap:8px}
+  .ctrl>label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+  .seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px}
+  .seg button{font-family:var(--mono);font-size:12px;color:var(--muted);background:transparent;border:0;padding:7px 13px;border-radius:6px;cursor:pointer;transition:background .12s,color .12s;white-space:nowrap}
+  .seg button:hover{color:var(--text)}
+  .seg button[aria-pressed="true"]{background:var(--accent-dim);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(52,211,224,.35)}
+
+  .slider{display:flex;align-items:center;gap:12px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:172px;height:4px;background:var(--border);border-radius:3px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px rgba(52,211,224,.5)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--accent);cursor:pointer}
+  .rps-val{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--accent);min-width:118px;font-variant-numeric:tabular-nums}
+  .rps-val small{color:var(--faint);font-weight:400;font-size:11px}
+
+  .stepper{display:inline-flex;align-items:center;gap:0;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+  .stepper button{font-family:var(--mono);font-size:16px;width:36px;height:36px;background:var(--panel-2);border:0;color:var(--text);cursor:pointer;transition:background .12s}
+  .stepper button:hover:not(:disabled){background:var(--accent-dim);color:var(--accent)}
+  .stepper button:disabled{color:var(--faint);cursor:not-allowed}
+  .stepper .count{font-family:var(--mono);font-size:15px;font-weight:600;min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
+
+  .ghost{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:9px 14px;cursor:pointer;transition:color .12s,border-color .12s}
+  .ghost:hover{color:var(--crit);border-color:var(--crit)}
+
+  /* experiments */
+  .labcard{grid-column:1/-1;padding:20px 22px;border:1px solid var(--border);border-radius:14px;background:linear-gradient(180deg,rgba(52,211,224,.03),transparent),var(--panel)}
+  .labcard h2{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  .labs{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:640px){.labs{grid-template-columns:1fr 1fr}}
+  .lab{display:flex;gap:12px;align-items:flex-start}
+  .lab .n{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(52,211,224,.3);width:24px;height:24px;border-radius:6px;display:grid;place-items:center;flex-shrink:0}
+  .lab p{margin:0;font-size:13.5px;color:var(--muted)}
+  .lab p b{color:var(--text);font-weight:600}
+
+  footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.03em}
+  footer b{color:var(--muted);font-weight:600}
+
+  button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+  }
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <a class="brand" href="../index.html">◇ SD Mastery</a>
+  <div class="navlinks">
+    <a href="../index.html">Home</a>
+    <a href="../roadmap-dashboard.html">Roadmap</a>
+    <a href="../modules/05-caching-fundamentals.html">Module 5 notes</a>
+    <a href="load-balancer-simulator.html">Load Balancer</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow"><span class="dot"></span>System Design · Module 5 — Caching</p>
+    <h1>Cache Playground</h1>
+    <p class="lede">A small cache sits in front of a slow database. Requests for keys stream in, and a few <b>hot keys</b> take most of the traffic. Every request either <b>HITs</b> the cache (fast) or <b>MISSes</b> — fetching from the DB and inserting the key, which forces an <b>eviction</b> when the cache is full. Pick an eviction policy, crank the hot-key skew, and watch the hit ratio move. <b>Who gets evicted is the whole game.</b></p>
+  </header>
+
+  <div class="grid">
+    <!-- stage -->
+    <div class="panel stage" aria-label="Live cache: requests hitting or missing the cache in front of a database.">
+      <div class="flow" aria-hidden="true">
+        <span class="node req">Requests<b id="req-key">—</b></span>
+        <span class="arrow">→</span>
+        <span class="node cache">Cache<b id="cache-fill">0/8</b></span>
+        <span class="arrow" id="miss-arrow">→</span>
+        <span class="node db" id="db-node">Database<span class="slow">◷ slow ~80ms</span></span>
+      </div>
+      <p class="lastreq" id="lastreq" aria-live="polite">Warming up the cache…</p>
+
+      <div class="slots-wrap">
+        <div class="slots" id="slots" role="group" aria-label="Cache slots"></div>
+        <div class="barkey" aria-hidden="true">
+          <span><i style="background:var(--accent)"></i><span id="bar-meaning">bar = recency · full = just used</span></span>
+          <span><i style="background:var(--crit)"></i><b>NEXT OUT</b> = the entry this policy will evict next</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- side -->
+    <div class="side">
+      <div class="metrics" role="group" aria-label="Live metrics">
+        <div class="metric"><p class="k">Hit ratio</p><p class="v accent" id="m-ratio">—</p></div>
+        <div class="metric"><p class="k">Avg latency</p><p class="v" id="m-lat">—</p></div>
+        <div class="metric"><p class="k">Hits</p><p class="v ok" id="m-hits">0</p></div>
+        <div class="metric"><p class="k">Misses <small style="letter-spacing:.02em">DB fetches</small></p><p class="v crit" id="m-miss">0</p></div>
+        <div class="metric wide">
+          <div><p class="k">Cache fill</p><p class="v" id="m-fill">0<small>/8</small></p></div>
+          <canvas id="spark" aria-hidden="true"></canvas>
+        </div>
+      </div>
+
+      <div class="coach">
+        <p class="lbl">What's happening</p>
+        <p id="coach" aria-live="polite">LRU evicts the least-recently-used key. Change the policy or skew and this line explains the trade-off you just made.</p>
+      </div>
+
+      <div class="events">
+        <p class="lbl">Recent requests <small>newest →</small></p>
+        <div class="stream" id="stream" aria-hidden="true"></div>
+        <div class="streamkey" aria-hidden="true">
+          <span><i style="background:var(--ok)"></i>hit</span>
+          <span><i style="background:var(--crit)"></i>miss (went to DB)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- controls -->
+    <div class="panel controls">
+      <div class="ctrl">
+        <label id="pol-lbl">Eviction policy</label>
+        <div class="seg" role="group" aria-labelledby="pol-lbl" id="policy">
+          <button data-p="LRU" aria-pressed="true">LRU</button>
+          <button data-p="LFU" aria-pressed="false">LFU</button>
+          <button data-p="FIFO" aria-pressed="false">FIFO</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>Cache capacity</label>
+        <div class="stepper">
+          <button id="cap-minus" aria-label="Remove a cache slot">–</button>
+          <span class="count" id="cap-count">8</span>
+          <button id="cap-plus" aria-label="Add a cache slot">+</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label for="skew">Hot-key skew</label>
+        <div class="slider">
+          <input type="range" id="skew" min="0" max="2" step="0.1" value="1">
+          <span class="rps-val" id="skew-out">top&nbsp;5&nbsp;=&nbsp;51%</span>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label for="rps">Request rate</label>
+        <div class="slider">
+          <input type="range" id="rps" min="1" max="30" step="1" value="8">
+          <span class="rps-val" id="rps-out">8 req/s</span>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>&nbsp;</label>
+        <button class="ghost" id="reset">↺ Reset counters</button>
+      </div>
+    </div>
+
+    <!-- experiments -->
+    <div class="labcard">
+      <h2>◆ Run these experiments</h2>
+      <div class="labs">
+        <div class="lab"><span class="n">1</span><p><b>Skew is the free lunch.</b> Drag hot-key skew from flat to high and watch the hit ratio climb — same cache, same policy. Most real traffic is skewed, which is <b>why caching works at all</b>: a few keys carry the load and they all fit.</p></div>
+        <div class="lab"><span class="n">2</span><p><b>LFU wins on stable popularity.</b> At skew ~1.0, cycle <b>LRU → LFU → FIFO</b> and read the hit ratio. LFU locks the genuinely hottest keys in place, so it posts the highest number when the ranking doesn't change.</p></div>
+        <div class="lab"><span class="n">3</span><p><b>Watch FIFO betray you.</b> On <b>FIFO</b>, follow the red <b>NEXT OUT</b> badge — it marches down the queue by <b>age</b>, so a red-hot key gets evicted just for arriving early, then instantly re-fetched. That churn is why FIFO trails LRU here.</p></div>
+        <div class="lab"><span class="n">4</span><p><b>Buy hit ratio with RAM.</b> Add cache slots and the ratio rises toward 100%; remove them and it falls. Capacity and skew both raise hits — <b>latency</b> tracks the ratio directly, since every miss pays the ~80ms DB tax.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>interactive simulator &nbsp;·&nbsp; pairs with <b>Module 5 notes</b></footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var el = function(id){ return document.getElementById(id); };
+
+  // ---- config ----
+  var K = 50;              // key universe size (keys K1..K50, id == popularity rank)
+  var HIT_MS = 1, MISS_MS = 80;
+  var WIN = 300;           // rolling window for hit ratio
+  var STREAM_N = 34;       // chips shown in the recent-request strip
+  var MINCAP = 4, MAXCAP = 16;
+
+  // ---- state ----
+  var policy = "LRU", cap = 8, skew = 1.0, rps = 8;
+  var slots = [];          // fixed-position slots: entry or null
+  var map = new Map();      // key -> entry  {key,lastUsed,freq,ins,slot}
+  var tick = 0, insCounter = 0;
+  var hits = 0, misses = 0;
+  var recent = [];          // rolling window of 1/0 (hit/miss)
+  var lastReq = null;       // {key, hit, slot}
+  var spark = [];
+  var sample = null, topShare = 0;
+
+  // ---- Zipf sampler (id == rank) ----
+  function buildSampler(){
+    var cum = new Array(K), total = 0, i;
+    for(i=1;i<=K;i++){ total += 1/Math.pow(i, skew); cum[i-1] = total; }
+    // share of traffic captured by the top 5 keys
+    var top5 = 0; for(i=1;i<=5;i++) top5 += 1/Math.pow(i, skew);
+    topShare = top5/total;
+    sample = function(){
+      var r = Math.random()*total;
+      for(var j=0;j<K;j++){ if(r <= cum[j]) return j+1; }
+      return K;
+    };
+  }
+
+  // ---- eviction: the victim, computed one way, used everywhere ----
+  function findVictim(){
+    var v = null;
+    for(var i=0;i<slots.length;i++){
+      var e = slots[i]; if(!e) continue;
+      if(!v){ v = e; continue; }
+      if(policy === "LRU"){ if(e.lastUsed < v.lastUsed) v = e; }
+      else if(policy === "FIFO"){ if(e.ins < v.ins) v = e; }
+      else { // LFU: least frequency, tie-break least-recently-used
+        if(e.freq < v.freq || (e.freq === v.freq && e.lastUsed < v.lastUsed)) v = e;
+      }
+    }
+    return v;
+  }
+
+  function insert(key){
+    var e = { key:key, lastUsed:tick, freq:1, ins:insCounter++, slot:-1 };
+    if(map.size >= cap){
+      var v = findVictim();
+      e.slot = v.slot; map.delete(v.key); slots[v.slot] = e;
+    } else {
+      var idx = 0; while(idx < slots.length && slots[idx]) idx++;
+      e.slot = idx; slots[idx] = e;
+    }
+    map.set(key, e);
+  }
+
+  // ---- one request against the cache ----
+  function request(){
+    tick++;
+    var key = sample();
+    var e = map.get(key), hit;
+    if(e){
+      hit = true; hits++;
+      e.lastUsed = tick;   // LRU: refresh recency on use
+      e.freq += 1;         // LFU: count the access
+      // FIFO: e.ins is NEVER touched — that is the whole contrast
+    } else {
+      hit = false; misses++;
+      insert(key);          // MISS: fetch from DB, insert, maybe evict
+    }
+    lastReq = { key:key, hit:hit, slot: map.get(key).slot };
+    recent.push(hit?1:0); if(recent.length > WIN) recent.shift();
+  }
+
+  // ---- capacity resize (keeps the cache warm) ----
+  function resize(newCap){
+    newCap = Math.max(MINCAP, Math.min(MAXCAP, newCap));
+    if(newCap === cap) return;
+    cap = newCap;
+    // evict (per policy) until we fit, then repack into fresh fixed slots
+    while(map.size > cap){ var v = findVictim(); map.delete(v.key); slots[v.slot] = null; }
+    var entries = []; for(var i=0;i<slots.length;i++){ if(slots[i]) entries.push(slots[i]); }
+    entries.sort(function(a,b){ return a.ins - b.ins; });
+    slots = new Array(cap);
+    for(i=0;i<cap;i++) slots[i] = null;
+    for(i=0;i<entries.length;i++){ entries[i].slot = i; slots[i] = entries[i]; }
+    lastReq = null;
+    buildGrid();
+    el("cap-count").textContent = cap;
+    syncStepper();
+    render();
+  }
+
+  function resetCounters(){
+    hits = 0; misses = 0; recent = []; spark = []; lastReq = null;
+    updateMetrics(); updateCoach();
+  }
+
+  // ---- DOM grid (reused cells) ----
+  var cellEls = [];
+  function buildGrid(){
+    var host = el("slots"); host.innerHTML = ""; cellEls = [];
+    for(var i=0;i<cap;i++){
+      var s = document.createElement("div"); s.className = "slot empty";
+      var badge = document.createElement("span"); badge.className = "badge"; badge.textContent = "NEXT OUT"; badge.style.display = "none";
+      var key = document.createElement("div"); key.className = "key"; key.textContent = "empty";
+      var freq = document.createElement("div"); freq.className = "freq"; freq.textContent = "";
+      var bar = document.createElement("div"); bar.className = "bar"; var fill = document.createElement("i"); bar.appendChild(fill);
+      s.appendChild(badge); s.appendChild(key); s.appendChild(freq); s.appendChild(bar);
+      host.appendChild(s);
+      cellEls.push({ root:s, badge:badge, key:key, freq:freq, fill:fill });
+    }
+  }
+
+  function scoreOf(e){ return policy === "LFU" ? e.freq : policy === "FIFO" ? e.ins : e.lastUsed; }
+
+  function render(){
+    var victim = map.size > 0 ? findVictim() : null;
+    // normalize the keep-score for bar fills
+    var mn = Infinity, mx = -Infinity;
+    for(var i=0;i<slots.length;i++){ var e=slots[i]; if(!e) continue; var sc=scoreOf(e); if(sc<mn)mn=sc; if(sc>mx)mx=sc; }
+    var span = mx - mn;
+    for(i=0;i<cap;i++){
+      var c = cellEls[i]; if(!c) continue; var ent = slots[i];
+      var cls = "slot";
+      if(!ent){
+        c.root.className = "slot empty";
+        c.key.textContent = "empty"; c.freq.textContent = ""; c.fill.style.width = "0%";
+        c.badge.style.display = "none";
+        continue;
+      }
+      c.key.textContent = "K" + ent.key;
+      c.freq.textContent = ent.freq + "× hits";
+      var frac = span > 0 ? (scoreOf(ent) - mn) / span : 1;
+      c.fill.style.width = Math.round(frac*100) + "%";
+      if(victim && ent === victim){ cls += " victim"; c.badge.style.display = ""; }
+      else { c.badge.style.display = "none"; }
+      if(!reduceMotion && lastReq && lastReq.slot === i){ cls += lastReq.hit ? " flash-hit" : " flash-miss"; }
+      c.root.className = cls;
+    }
+    // flow schematic
+    el("cache-fill").textContent = map.size + "/" + cap;
+    if(lastReq){
+      el("req-key").textContent = "K" + lastReq.key;
+      var db = el("db-node"), ar = el("miss-arrow");
+      if(!lastReq.hit){ db.className = "node db fetch"; ar.className = "arrow on"; }
+      else { db.className = "node db"; ar.className = "arrow"; }
+      var lr = el("lastreq");
+      if(lastReq.hit) lr.innerHTML = '<b class="key">K'+lastReq.key+'</b> → <b class="hit">HIT</b> · served from cache in '+HIT_MS+'ms';
+      else lr.innerHTML = '<b class="key">K'+lastReq.key+'</b> → <b class="miss">MISS</b> · fetched from DB (~'+MISS_MS+'ms) &amp; cached';
+    }
+  }
+
+  function renderStream(){
+    var host = el("stream");
+    // show the last STREAM_N results, oldest first so newest sits on the right
+    var start = Math.max(0, recent.length - STREAM_N);
+    var frag = "";
+    for(var i=start;i<recent.length;i++){ frag += '<i class="'+(recent[i]?"hit":"miss")+'"></i>'; }
+    // pad the left with neutral ticks until warmed
+    var pad = STREAM_N - (recent.length - start);
+    var lead = ""; for(var j=0;j<pad;j++) lead += '<i></i>';
+    host.innerHTML = lead + frag;
+  }
+
+  // ---- metrics ----
+  function windowRatio(){ if(recent.length===0) return null; var s=0; for(var i=0;i<recent.length;i++) s+=recent[i]; return s/recent.length; }
+
+  function updateMetrics(){
+    var r = windowRatio();
+    var rm = el("m-ratio");
+    if(r===null){ rm.textContent = "—"; rm.className = "v accent"; }
+    else {
+      rm.innerHTML = Math.round(r*100) + '<small>%</small>';
+      rm.className = "v " + (r>=0.7?"ok":r>=0.4?"accent":"warn");
+    }
+    var lat = r===null ? 0 : r*HIT_MS + (1-r)*MISS_MS;
+    var lm = el("m-lat");
+    lm.innerHTML = (r===null?"—":lat.toFixed(lat<10?1:0)) + (r===null?"":'<small>ms</small>');
+    lm.className = "v " + (r===null?"":lat<15?"ok":lat<40?"warn":"crit");
+    el("m-hits").textContent = hits;
+    el("m-miss").textContent = misses;
+    el("m-fill").innerHTML = map.size + '<small>/' + cap + '</small>';
+    drawSpark();
+  }
+
+  var sc = el("spark"), sctx = sc.getContext("2d");
+  function drawSpark(){
+    var w=118,h=34,d=Math.min(window.devicePixelRatio||1,2);
+    sc.width=w*d; sc.height=h*d; sctx.setTransform(d,0,0,d,0,0); sctx.clearRect(0,0,w,h);
+    if(spark.length<2) return;
+    var n=spark.length;
+    sctx.beginPath();
+    for(var i=0;i<n;i++){ var x=i/(n-1)*w, y=h-3-(spark[i])*(h-6); if(i===0)sctx.moveTo(x,y); else sctx.lineTo(x,y); }
+    sctx.strokeStyle="#34d3e0"; sctx.lineWidth=1.5; sctx.stroke();
+    sctx.lineTo(w,h); sctx.lineTo(0,h); sctx.closePath();
+    sctx.fillStyle="rgba(52,211,224,.10)"; sctx.fill();
+    var lx=w, ly=h-3-(spark[n-1])*(h-6);
+    sctx.beginPath(); sctx.arc(lx-1,ly,2,0,6.2832); sctx.fillStyle="#34d3e0"; sctx.fill();
+  }
+
+  // ---- coaching ----
+  function updateCoach(){
+    var c = el("coach"), base, note;
+    var r = windowRatio(), floor = Math.round(cap/K*100);
+    if(policy === "LRU")
+      base = "LRU evicts the least-recently-used key. Your hot keys get touched constantly, so they keep refreshing their recency and stay resident — LRU tracks the popular set well and clearly beats FIFO, which would drop a hot key just for being old.";
+    else if(policy === "LFU")
+      base = "LFU evicts the least-frequently-used key. Under stable popularity it locks the genuinely hottest keys in place and rarely lets them go — which is why it posts the highest hit ratio of the three when the ranking doesn't change.";
+    else
+      base = "FIFO evicts the oldest-inserted key regardless of use — insertion age only, never refreshed on a hit. Watch the NEXT OUT badge march down the queue: a red-hot key can be evicted purely for arriving early, forcing an instant re-fetch. That churn is why FIFO trails LRU and LFU here.";
+
+    if(skew < 0.35)
+      note = " Right now traffic is almost flat across all " + K + " keys, so no policy can beat capacity ÷ universe (≈" + floor + "%). Slide the skew up to concentrate traffic and watch every policy climb.";
+    else if(r !== null && r >= 0.72)
+      note = " With this skew the top few keys carry most requests and they all fit the cache — hits are high and misses are rare.";
+    else
+      note = " The hot set is a bit larger than the cache, so there's real churn on the boundary — this is exactly the regime where the eviction policy matters most.";
+    var msg = base + note;
+    if(c.textContent !== msg) c.textContent = msg;
+  }
+
+  // ---- controls ----
+  document.querySelectorAll("#policy button").forEach(function(b){
+    b.addEventListener("click", function(){
+      policy = b.getAttribute("data-p");
+      document.querySelectorAll("#policy button").forEach(function(x){ x.setAttribute("aria-pressed", x===b?"true":"false"); });
+      el("bar-meaning").textContent = policy === "LFU" ? "bar = frequency · full = most hits"
+        : policy === "FIFO" ? "bar = time in cache · full = newest in" : "bar = recency · full = just used";
+      render(); updateCoach();
+    });
+  });
+  el("cap-plus").addEventListener("click", function(){ resize(cap+1); });
+  el("cap-minus").addEventListener("click", function(){ resize(cap-1); });
+  el("skew").addEventListener("input", function(e){
+    skew = +e.target.value; buildSampler();
+    el("skew-out").innerHTML = "top&nbsp;5&nbsp;=&nbsp;" + Math.round(topShare*100) + "%";
+    updateCoach();
+  });
+  el("rps").addEventListener("input", function(e){ rps = +e.target.value; el("rps-out").textContent = rps + " req/s"; });
+  el("reset").addEventListener("click", resetCounters);
+  function syncStepper(){ el("cap-minus").disabled = cap<=MINCAP; el("cap-plus").disabled = cap>=MAXCAP; }
+
+  // ---- loop ----
+  var spawnAcc=0, vizAcc=0, metricAcc=0, sparkAcc=0, coachAcc=0, last=0;
+  function frame(ts){
+    if(!last) last = ts; var dt = (ts-last)/1000; last = ts; if(dt>0.1) dt=0.1;
+    spawnAcc += rps*dt; var guard=0;
+    while(spawnAcc >= 1 && guard < 60){ spawnAcc--; request(); guard++; }
+    vizAcc += dt; if(vizAcc >= 0.1){ vizAcc = 0; render(); renderStream(); }
+    metricAcc += dt; if(metricAcc >= 0.2){ metricAcc = 0; updateMetrics(); }
+    sparkAcc += dt; if(sparkAcc >= 0.5){ sparkAcc = 0; var r=windowRatio(); if(r!==null){ spark.push(r); if(spark.length>60) spark.shift(); } }
+    coachAcc += dt; if(coachAcc >= 0.6){ coachAcc = 0; updateCoach(); }
+    requestAnimationFrame(frame);
+  }
+
+  // ---- boot ----
+  slots = new Array(cap); for(var i=0;i<cap;i++) slots[i]=null;
+  buildSampler(); buildGrid();
+  el("skew-out").innerHTML = "top&nbsp;5&nbsp;=&nbsp;" + Math.round(topShare*100) + "%";
+  render(); renderStream(); updateMetrics(); updateCoach(); syncStepper();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

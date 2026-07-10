@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Event-Driven Architecture &amp; CQRS | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#7048e8; --hue-soft:rgba(112,72,232,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#9775fa;--hue-soft:rgba(151,117,250,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#7048e8;--hue-soft:rgba(112,72,232,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#9775fa;--hue-soft:rgba(151,117,250,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+      <a href="../tools/saga-flow.html">🔀 Saga Flow</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 3 · Communication</span><span class="sep">·</span><span>Module 8</span><span class="sep">·</span><span>Weeks 4-5 · ~13 hrs</span></p>
+      <h1>Event-Driven Architecture &amp; CQRS</h1>
+      <p class="sub">When one action must fan out to a dozen services and stay correct after a crash, synchronous request/response stops scaling — this module is the communication toolkit for systems that talk in <strong>events</strong>, keep a perfect audit trail, and stay consistent across services without distributed locks.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#why">Why events: the communication shift</a></li>
+        <li><a href="#sourcing">Event sourcing</a></li>
+        <li><a href="#cqrs">CQRS: split reads from writes</a></li>
+        <li><a href="#saga">The saga pattern</a></li>
+        <li><a href="#coordination">Choreography vs orchestration</a></li>
+        <li><a href="#outbox">The outbox pattern</a></li>
+        <li><a href="#cdc">Change data capture (CDC)</a></li>
+        <li><a href="#leetcode">Worked example: LeetCode</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="why">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>Why events: the communication shift</h2>
+      <p class="lead">Event-driven architecture (EDA) is a style where services communicate by publishing and reacting to <strong>events</strong> — immutable facts about something that already happened — instead of calling each other directly and blocking for a reply.</p>
+      <p>The default way services talk is <strong>request/response</strong>: the checkout service calls the inventory service, waits, calls the payment service, waits, calls the email service, waits. It's simple to reason about, but it's <em>temporally coupled</em> — every callee must be up, fast, and reachable <em>right now</em>, and the caller's latency is the sum of everyone downstream. Add a service and you edit the caller. One slow dependency and the whole chain stalls.</p>
+      <p>EDA inverts the flow. The checkout service does its own job, then emits <code>OrderPlaced</code> to a <strong>broker</strong> (Kafka, RabbitMQ, AWS SNS/SQS) and moves on. Inventory, payment, and email each <em>subscribe</em> and react on their own schedule. The producer doesn't know who listens; consumers don't know who produced. That decoupling is the whole point — you can add a fraud-check consumer next quarter without touching checkout.</p>
+
+      <h3>Commands vs events — a distinction interviewers probe</h3>
+      <p>These get muddled constantly, and the difference is load-bearing:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th></th><th>Command</th><th>Event</th></tr></thead>
+          <tbody>
+            <tr><td>Intent</td><td>"Please do X" — a request</td><td>"X happened" — a fact</td></tr>
+            <tr><td>Tense</td><td>Imperative: <code>ChargePayment</code></td><td>Past tense: <code>PaymentCharged</code></td></tr>
+            <tr><td>Recipients</td><td>Exactly one handler</td><td>Zero to many subscribers</td></tr>
+            <tr><td>Can be rejected?</td><td>Yes — it may fail validation</td><td>No — it already occurred</td></tr>
+            <tr><td>Coupling</td><td>Sender knows the receiver</td><td>Producer is oblivious to consumers</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>You get real benefits — loose coupling, independent scaling, natural buffering during spikes (the broker soaks up bursts), and easy fan-out — but you pay for them in <strong>eventual consistency</strong>, harder debugging (no single call stack — you trace a flow across topics), and duplicate delivery you must design around. The rest of this module is the set of patterns that make those costs manageable.</p>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>An <strong>event names a fact in the past tense</strong> and is broadcast to whoever cares; a <strong>command</strong> is a request aimed at one handler that can still say no. Confusing the two is the fastest way to design a "pub/sub" system that's secretly a tangle of point-to-point RPCs.</p>
+      </div>
+    </section>
+
+    <section id="sourcing">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>Event sourcing</h2>
+      <p>Ordinary systems store <strong>current state</strong> and mutate it in place. Update a row and the previous value is gone forever — you kept the <em>answer</em> but destroyed the <em>history</em> that produced it. <strong>Event sourcing</strong> flips that: the source of truth is an <strong>append-only log of events</strong>, and current state is derived by replaying them in order. Nothing is ever overwritten; you only append new facts.</p>
+      <p>This is a <strong>persistence</strong> decision, and it is <em>independent</em> of the other two big ideas in this module. Event sourcing is not the same as event-driven architecture (a communication style), and it is not CQRS (a read/write modelling split). They compose beautifully, but you can do any one without the others — keep them separate in your head or you'll say something an interviewer catches.</p>
+
+      <p>Picture a warehouse tracking stock for one SKU. Instead of a single mutable <code>quantity</code> column, you keep the events and fold over them:</p>
+      <pre><code><span class="cmt"># Event stream for aggregate  sku:ABC123  (append-only, ordered)</span>
+  v1  StockReceived   { qty: 10 }
+  v2  StockReceived   { qty:  5 }
+  v3  StockShipped    { qty:  6 }
+  v4  StockAdjusted   { qty: -2, reason: "damaged" }
+
+<span class="cmt"># current state = left-fold over the events</span>
+  quantity = 10 + 5 − 6 − 2 = <strong>7</strong></code></pre>
+      <p>The unit that owns a stream is the <strong>aggregate</strong> — the consistency boundary (one SKU, one bank account, one order). To change state you load its events, rebuild the in-memory object, run a command that validates and <em>appends</em> a new event. Concurrency is handled with an <strong>expected version</strong>: "append <code>v5</code> only if the stream is still at <code>v4</code>," which gives optimistic locking without holding a database lock.</p>
+
+      <h3>Replaying millions of events? Snapshots.</h3>
+      <p>Rebuilding an aggregate with 2 million events on every request would be absurd. The fix is a <strong>snapshot</strong>: periodically persist the folded state at version <em>N</em>, then on load start from the snapshot and replay only events after <em>N</em>. The log stays the source of truth; the snapshot is a cache you can always throw away and regenerate.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Dimension</th><th>State-oriented (CRUD)</th><th>Event sourcing</th></tr></thead>
+          <tbody>
+            <tr><td>Stores</td><td>Latest state, mutated in place</td><td>Every state change, appended forever</td></tr>
+            <tr><td>History</td><td>Lost on update</td><td>Complete, replayable audit trail</td></tr>
+            <tr><td>"How did we get here?"</td><td>Unanswerable</td><td>Replay to any point in time</td></tr>
+            <tr><td>Reads</td><td>Query the table directly</td><td>Need projections (see CQRS)</td></tr>
+            <tr><td>Cost</td><td>Simple, familiar</td><td>Schema evolution, replay complexity</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>You reach for event sourcing when history <em>is</em> the product: audit and compliance ("prove this balance"), debugging by replay, temporal queries ("what did the cart look like at 14:02?"), and the freedom to spin up a brand-new read model later by replaying the log through it. The costs are real — evolving event schemas over years, and the fact that you can't run an ad-hoc <code>WHERE</code> over a log. That second problem is exactly what the next pattern solves.</p>
+    </section>
+
+    <section id="cqrs">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>CQRS: split reads from writes</h2>
+      <p><strong>Command Query Responsibility Segregation (CQRS)</strong>, coined by Greg Young, is the idea that the model you use to <em>change</em> data and the model(s) you use to <em>read</em> data don't have to be the same model. Split them. The <strong>write side</strong> handles commands — validation, invariants, consistency — and is often normalized (or an event store). The <strong>read side</strong> is one or more <strong>denormalized projections</strong>, each shaped for a specific query and kept in whatever store serves it best.</p>
+      <p>Here's the guardrail that separates strong candidates from shaky ones: <strong>CQRS does not require event sourcing, and event sourcing does not require CQRS.</strong> Plenty of teams run CQRS over a plain relational write DB, publishing change events to build read replicas. They just pair naturally — an event log is a perfect source to build projections from — which is why the two are so often discussed together.</p>
+
+      <pre><code>WRITE SIDE (source of truth)                     READ SIDE (projections)
+                                                 ┌───────────────────────────┐
+  command ─▶ [validate + apply] ─▶ append event ─┼─▶ projector ─▶ Search index (Elasticsearch)
+                    │                            ├─▶ projector ─▶ Leaderboard (Redis sorted set)
+                    ▼                            └─▶ projector ─▶ Reporting DB (denormalized SQL)
+              event log / write DB                        ▲
+                                                          │
+                              client queries ─────────────┘   (fast, purpose-built reads)</code></pre>
+      <p>Each projection subscribes to the write side's event stream and updates its own store. Reads never touch the write model — they hit a table (or index, or cache) already shaped like the answer. The trade-off is baked in: the read side is <strong>eventually consistent</strong>, lagging the write side by the projection delay (usually milliseconds). If a user must read-their-own-write instantly, you either read from the write model for that one case or show an optimistic UI.</p>
+      <p>Reach for CQRS when reads and writes have <strong>asymmetric shapes or scale</strong>: reads vastly outnumber writes, the read queries are complex or varied (a dozen dashboards over the same data), or the two sides need to scale and be stored independently. Skip it for simple CRUD — a split model is real complexity you should only buy when the asymmetry is paying for it.</p>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>Say the seam out loud: <em>"I'll use CQRS here — the write model enforces invariants, and I'll build a denormalized read model per query shape, accepting eventual consistency on the read side."</em> Then immediately name how you'll keep projections updated (consume the event stream) and what happens on a stale read. That one sentence signals you understand the cost, not just the buzzword.</p>
+      </div>
+    </section>
+
+    <section id="saga">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>The saga pattern</h2>
+      <p>Split a monolith into services, each with its own database, and you lose the one thing a single database gave you for free: the <strong>ACID transaction</strong> spanning everything. "Charge the card AND reserve the seat AND book the hotel" now touches three services and three databases. There is no <code>BEGIN … COMMIT</code> that wraps all three.</p>
+      <p>The textbook fix is <strong>two-phase commit (2PC)</strong>: a coordinator asks every participant to <em>prepare</em>, then tells all of them to <em>commit</em>. It gives real atomicity — but participants hold locks through the whole exchange, the coordinator is a single point of failure that can leave everyone blocked, and most modern datastores and message brokers don't support it well. It doesn't scale, and it's fragile. So distributed systems reach for a different bargain.</p>
+      <p>A <strong>saga</strong> is a sequence of <strong>local</strong> transactions. Each step commits in its own service and emits an event that triggers the next step. If a step fails, the saga runs <strong>compensating transactions</strong> — explicit, business-level "undo" operations — to walk back the steps that already committed. You trade ACID atomicity for eventual consistency plus a documented rollback path.</p>
+
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>Charge payment <span class="ft">forward</span></b><p>Payment service authorizes and captures. Local commit. Emits <code>PaymentCharged</code>. Compensation: <code>RefundPayment</code>.</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>Activate subscription <span class="ft">forward</span></b><p>Account service flips the user to premium. Local commit. Emits <code>SubscriptionActivated</code>. Compensation: <code>DeactivateSubscription</code>.</p></div></div>
+        <div class="fstep"><span class="fn">3</span><div><b>Grant entitlements <span class="ft">fails ✗</span></b><p>Entitlement service tries to unlock premium content — and errors out. No local commit here.</p></div></div>
+        <div class="fstep"><span class="fn">↩</span><div><b>Compensate in reverse <span class="ft">rollback</span></b><p>Run <code>DeactivateSubscription</code>, then <code>RefundPayment</code>. The system is back to a consistent state — money returned, access revoked — without ever holding a cross-service lock.</p></div></div>
+      </div>
+
+      <p>Two properties make sagas actually work in production. Compensations must be <strong>idempotent</strong> and effectively <strong>retryable-until-success</strong> — a refund that's applied twice must not double-refund, and it must eventually go through even if the payment service is briefly down. And because a saga has <em>no isolation</em> (other transactions can observe the half-finished intermediate state), you add countermeasures: <strong>semantic locks</strong> (mark the record <code>PENDING</code> so nothing else acts on it), commutative updates, or re-reads before committing.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th></th><th>Two-phase commit (2PC)</th><th>Saga</th></tr></thead>
+          <tbody>
+            <tr><td>Atomicity</td><td>True, all-or-nothing</td><td>Eventual; undone via compensation</td></tr>
+            <tr><td>Isolation</td><td>Yes (locks held)</td><td>No — intermediate state is visible</td></tr>
+            <tr><td>Locks</td><td>Held across the whole exchange</td><td>Only within each local transaction</td></tr>
+            <tr><td>Failure mode</td><td>Coordinator down ⇒ everyone blocks</td><td>Step fails ⇒ compensate &amp; move on</td></tr>
+            <tr><td>Scales?</td><td>Poorly; rarely used at web scale</td><td>Yes — the distributed-systems default</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Notice that "undo" is a <em>business</em> decision, not a database rollback. You can't un-send an email — so the compensation for "email sent" might be a follow-up correction email. Designing sensible compensations is most of the real work in a saga.</p>
+    </section>
+
+    <section id="coordination">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Choreography vs orchestration</h2>
+      <p>A saga still needs someone to decide <em>what happens next</em> and <em>when to compensate</em>. There are exactly two ways to wire that coordination, and knowing when to pick each is a classic senior signal.</p>
+
+      <h3>Choreography — no conductor</h3>
+      <p>There is no central brain. Each service subscribes to the events it cares about, does its local work, and emits its own event, which the next service happens to be listening for. The workflow is an <strong>emergent property</strong> of who-listens-to-what.</p>
+      <pre><code>PaymentCharged ─▶ (Account listens) ─▶ SubscriptionActivated
+                                    ─▶ (Entitlement listens) ─▶ EntitlementsGranted
+                                                            ─▶ (Notification listens) ─▶ ReceiptSent</code></pre>
+      <p>Upside: maximally decoupled, no extra component, easy to add a listener. Downside: the end-to-end flow lives <em>nowhere</em> — it's smeared across five services' subscriptions, so no one can point at "the workflow." It invites cyclic dependencies and gets very hard to follow past a few steps, and compensation logic is scattered.</p>
+
+      <h3>Orchestration — a conductor</h3>
+      <p>A dedicated <strong>orchestrator</strong> (a saga coordinator) owns the workflow. It sends a command to each participant, waits for the reply, tracks progress in a state machine, and on failure issues the compensating commands in reverse. The whole process is readable in one place.</p>
+      <pre><code>            ┌──────────────── Saga Orchestrator (state machine) ────────────────┐
+            │  → ChargePayment    → ActivateSub    → GrantEntitlements  → SendReceipt
+   on fail: │  ← RefundPayment    ← DeactivateSub  ← (revoke)                     │
+            └───────────────────────────────────────────────────────────────────┘</code></pre>
+      <p>Upside: the workflow is explicit, testable, and easy to extend with branching logic; compensation is centralized. Downside: it's a component you build, run, and keep from turning into a god-object that hoards business logic.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th></th><th>Choreography</th><th>Orchestration</th></tr></thead>
+          <tbody>
+            <tr><td>Control</td><td>Decentralized; event reactions</td><td>Central coordinator issues commands</td></tr>
+            <tr><td>Coupling</td><td>Loosest</td><td>Participants coupled to orchestrator</td></tr>
+            <tr><td>Visibility</td><td>Flow is implicit, hard to trace</td><td>Flow is explicit in one place</td></tr>
+            <tr><td>Best for</td><td>Simple, linear, ≤ ~4 steps</td><td>Complex, branching, business-critical</td></tr>
+            <tr><td>Risk</td><td>Cyclic deps, scattered logic</td><td>Orchestrator becomes a bottleneck</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Most large systems use <strong>both</strong>: choreography for high-throughput, loosely-coupled pipelines, and orchestration for the gnarly stateful workflows where you must see and control every step.</p>
+
+      <div class="callout tool">
+        <p class="lbl">Play with it → your tool</p>
+        <p>Open the <a href="../tools/saga-flow.html">🔀 Saga Flow</a> playground and step a saga through its forward path, then force a failure at step 3 and watch the compensating transactions fire in reverse. Toggle between <strong>choreography</strong> and <strong>orchestration</strong> views to <em>see</em> how the same business flow looks when there's no conductor versus when there is one — the fastest way to make this section stick.</p>
+      </div>
+    </section>
+
+    <section id="outbox">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>The outbox pattern</h2>
+      <p>Every event-driven service hits the same trap on its very first write. It needs to do two things that must both happen or neither: <strong>update its own database</strong> and <strong>publish an event</strong> to the broker. But the database and Kafka are two separate systems with no shared transaction. This is the <strong>dual-write problem</strong>, and both naive orderings are broken:</p>
+      <ul>
+        <li><strong>DB first, then publish:</strong> commit the order, then the process crashes (or Kafka is down) before publishing. The order exists but no event was ever emitted — downstream services never find out. <em>Lost event.</em></li>
+        <li><strong>Publish first, then DB:</strong> emit <code>OrderPlaced</code>, then the DB commit fails and rolls back. Now the world believes in an order that doesn't exist. <em>Phantom event.</em></li>
+      </ul>
+      <p>The <strong>transactional outbox</strong> removes the dual write entirely. You write the event into an <strong>outbox table in the very same local transaction</strong> as the business change. One atomic commit — either both the row and the outbox record land, or neither does. A separate <strong>relay</strong> process then reads unsent outbox rows and publishes them to the broker, marking each as sent.</p>
+
+      <pre><code><span class="cmt">-- ONE local ACID transaction: business row + event, atomically</span>
+BEGIN;
+  INSERT INTO orders(id, user_id, total, status) VALUES (…);
+  INSERT INTO outbox(id, aggregate, type, payload, published_at)
+         VALUES (…, 'order', 'OrderPlaced', '{…}', NULL);   <span class="cmt">-- published_at = NULL ⇒ pending</span>
+COMMIT;
+
+<span class="cmt"># Relay (separate process): drain the outbox → broker</span>
+for row in outbox where published_at is null:
+    publish(row.type, row.payload)          <span class="cmt"># to Kafka</span>
+    mark row.published_at = now()           <span class="cmt"># at-least-once: a crash here re-publishes</span></code></pre>
+
+      <p>One consequence to say out loud: the relay gives <strong>at-least-once</strong> delivery. If it publishes a row and crashes before marking it sent, it'll publish that row again on restart. That's a deliberate trade — never lose an event, occasionally duplicate one — which is why <strong>every consumer must be idempotent</strong> (dedupe by event ID). "At-least-once + idempotent consumers" is the reliable-messaging phrase to have ready.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Approach</th><th>Guarantee</th><th>Verdict</th></tr></thead>
+          <tbody>
+            <tr><td>Naive dual write</td><td>None — lost or phantom events</td><td>Broken; never do this</td></tr>
+            <tr><td>2PC across DB + broker</td><td>Atomic, but locking &amp; fragile</td><td>Rarely supported; avoid</td></tr>
+            <tr><td>Transactional outbox</td><td>Atomic write, at-least-once publish</td><td>The standard solution</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The only open question the outbox leaves is <em>how</em> the relay tails the table. Polling works, but there's a cleaner mechanism — which is the next section.</p>
+    </section>
+
+    <section id="cdc">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Change data capture (CDC)</h2>
+      <p><strong>Change data capture</strong> turns a database's changes into a stream of events. The crude version is <strong>query-based</strong> polling — <code>SELECT … WHERE updated_at &gt; :last</code> on a timer — which is simple but adds load, adds latency, and silently misses hard-deletes and rows that changed twice between polls.</p>
+      <p>The production version is <strong>log-based CDC</strong>: read the database's own <strong>transaction log</strong> — the Postgres <em>WAL</em>, the MySQL <em>binlog</em> — the same log the database already writes for durability and replication. Every committed change is there, in commit order, with before/after images. Tailing it is low-overhead, misses nothing, and preserves ordering. <strong>Debezium</strong> is the popular open-source CDC platform that does exactly this: it runs as a set of Kafka Connect source connectors, tails the WAL/binlog, and emits a change event to a Kafka topic for every row change.</p>
+
+      <p>CDC and the outbox pattern <strong>compose</strong> — this is the connection interviewers love to hear:</p>
+      <pre><code>service ──▶ [tx: business row + outbox row]        <span class="cmt"># §6, atomic local commit</span>
+              │
+              ▼  (WAL / binlog)
+          Debezium ──▶ Kafka topic  "orders.events"  <span class="cmt"># §7, tails the log, no polling</span>
+              │
+              ▼
+          consumers (idempotent)</code></pre>
+      <p>Point Debezium at the <strong>outbox table</strong> and it becomes the cleanest possible relay: no polling loop to run, near-real-time latency, and the publishing concern fully decoupled from your service code. Because you emit <em>domain events</em> you authored (<code>OrderPlaced</code>) rather than raw row diffs, downstream stays clean.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Approach</th><th>Overhead / latency</th><th>Catch</th></tr></thead>
+          <tbody>
+            <tr><td>Query-based polling</td><td>Extra DB load; polling lag</td><td>Misses deletes &amp; intra-interval changes</td></tr>
+            <tr><td>Log-based CDC (Debezium)</td><td>Low; near-real-time</td><td>Needs WAL/binlog access &amp; a connector</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>You <em>can</em> also run Debezium straight on your business tables to derive events without an outbox — but then you get <strong>row-level diffs</strong>, not domain events: the stream leaks your table schema and loses the <em>intent</em> behind a change (a row where <code>status</code> went <code>PENDING→SHIPPED</code> doesn't tell you it was an <code>OrderShipped</code> business event). The outbox-plus-CDC combo keeps the reliability of log-based capture while letting <em>you</em> decide the event shape. That's the pairing to reach for.</p>
+    </section>
+
+    <section id="leetcode">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Worked example: Design LeetCode</h2>
+      <p>Let's run the five-step framework on <em>"Design an online judge like LeetCode"</em> — users submit code, it runs against hidden tests in a sandbox, and they get a verdict; plus contests with a live leaderboard. It's a near-perfect stage for everything above: async judging (event-driven), verdict history (event sourcing), leaderboards &amp; stats (CQRS projections), premium purchase (saga), and never-lose-a-submission (outbox + CDC).</p>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Functional:</strong> submit a solution → run it against hidden test cases in an isolated sandbox → return a verdict (<em>Accepted / Wrong Answer / TLE / Runtime Error</em>) with runtime &amp; memory; view your submission history; per-problem stats (acceptance rate, total submissions); contests with a near-real-time leaderboard. Stretch: premium subscription.</li>
+        <li><strong>Non-functional:</strong> submissions must <strong>never be lost</strong> (durability); judging is <strong>asynchronous</strong> and slow (seconds), so it must be elastic and handle brutal <strong>contest spikes</strong>; heavily <strong>read-heavy</strong> for stats and leaderboards (~100:1); the leaderboard may be <strong>eventually consistent</strong> (near-real-time is fine); each verdict recorded <strong>effectively once</strong> (idempotent); code execution must be securely <strong>isolated</strong>.</li>
+        <li><strong>Out of scope (say it):</strong> the sandbox's container-security internals, the discussion forum, and editorial content — keep the core tight.</li>
+      </ul>
+
+      <h3>② Estimate</h3>
+      <pre><code>3M submissions/day ÷ 100k  ≈ 30 writes/s average
+contest spike: 20k users submit within ~2 min ≈ 150+/s bursts   <span class="cmt">→ must buffer</span>
+reads 100:1 (problem pages, leaderboards) ≈ 3,000 reads/s        <span class="cmt">→ CQRS read models + cache</span>
+storage: 3M × ~2.5 KB (code + metadata) ≈ 7.5 GB/day ≈ ~2.7 TB/yr (× replication)
+judge compute: 30/s × ~3 s per run ≈ ~90 concurrent slots avg    <span class="cmt">→ autoscale to 100s at peak</span></code></pre>
+      <p>Verdict: writes are modest <em>on average</em> but <strong>spiky</strong> → put a broker in front to absorb bursts and autoscale judge workers on lag. Reads dominate → build denormalized read models. Never-lose-a-submission → outbox on the write path.</p>
+
+      <h3>③ Interface</h3>
+      <pre><code>POST /api/v1/submissions        { problemId, language, code }
+     → 202 { submissionId, status:"QUEUED" }          <span class="cmt"># async — judging happens out of band</span>
+GET  /api/v1/submissions/{id}
+     → 200 { status, verdict, runtimeMs, memoryKb }
+GET  /api/v1/problems/{id}/stats
+     → 200 { accepted, total, acceptanceRate }
+GET  /api/v1/contests/{id}/leaderboard?top=100
+     → 200 { rankings:[ { rank, userId, score, penalty } … ] }
+POST /api/v1/subscriptions      { plan:"premium", paymentToken }
+     → 202 { status:"PROCESSING" }</code></pre>
+      <p>The submit returns <code>202 Accepted</code>, not <code>200</code> — the client gets a ticket and polls (or subscribes over WebSocket). That asymmetry <em>is</em> the event-driven core, spotted before a single box is drawn.</p>
+
+      <h3>④ High-level design (happy path)</h3>
+      <pre><code>SUBMIT  client ─▶ API ─▶ [tx: INSERT submission row + INSERT outbox row] ─▶ 202 QUEUED
+                              │  (code blob → object storage; row keeps the pointer)
+RELAY   Debezium tails outbox (WAL) ─▶ Kafka topic  "submissions"
+JUDGE   judge-worker pool consumes ─▶ run code in sandbox ─▶ emit "SubmissionJudged" ─▶ Kafka
+PROJECT projectors consume "SubmissionJudged" and update read models:
+            • user submission history   (read DB)
+            • problem stats             (accepted / total counters)
+            • contest leaderboard       (Redis sorted set, score+penalty)
+QUERY   client polls GET /submissions/{id}; stats &amp; leaderboard served from read models</code></pre>
+      <p>The <code>submissions</code> table is the write-side source of truth, and the <code>SubmissionJudged</code> stream is effectively an <strong>event-sourced</strong> log of every verdict. The leaderboard, acceptance-rate stats, and history are <strong>CQRS projections</strong> — each optimized for its query (a Redis sorted set ranks in <em>O(log n)</em>; counters answer stats in <em>O(1)</em>) and each rebuildable by replaying the event log through a fresh projector.</p>
+
+      <h3>⑤ Deep-dive &amp; scale</h3>
+      <ul>
+        <li><strong>Reliable ingestion (outbox + CDC).</strong> We deliberately do <em>not</em> publish to Kafka directly from the API — that's the dual-write trap (§6). The API writes the submission row and an outbox row in one transaction; Debezium tails the WAL and publishes (§7). A crash can never accept a submission that then goes un-judged.</li>
+        <li><strong>The judge pipeline is choreography.</strong> <code>submissions → SubmissionJudged → projected</code> is a short, linear flow with no central coordinator — each stage simply reacts to the previous stage's event. Perfect fit for choreography.</li>
+        <li><strong>Idempotency under at-least-once.</strong> Kafka and the outbox both deliver at-least-once, so events carry a <code>submissionId</code> and every consumer dedupes on it: the history projector <em>upserts</em> by <code>submissionId</code>; the stats counter records "already counted" IDs so a redelivered <code>SubmissionJudged</code> never double-increments the acceptance rate.</li>
+        <li><strong>Premium purchase is an orchestrated saga.</strong> <em>charge payment → activate premium → grant entitlements → send receipt</em>, and if entitlements fail, compensate in reverse (deactivate, refund). This needs branching and visible state, so an orchestrator owns it — exactly what the <a href="../tools/saga-flow.html">🔀 Saga Flow</a> tool visualizes. (Choreography for the pipeline, orchestration for the money — both, in one system.)</li>
+        <li><strong>Contest spikes = backpressure.</strong> Thousands submit at once; Kafka buffers the burst and judge workers autoscale on consumer-group lag. Per-user rate limits and an in-flight cap stop abuse. The leaderboard updates near-real-time as events flow — eventual consistency here is expected and fine.</li>
+        <li><strong>Hot leaderboard key.</strong> A marquee contest's Redis sorted set is a hot partition; shard by <code>contestId</code>, and compute any global ranking by periodic aggregation rather than a per-event global sort.</li>
+        <li><strong>Event schema evolution.</strong> <code>SubmissionJudged</code> will grow new fields and verdict types over years; use a schema registry with backward-compatible changes so old projectors keep working and you can replay full history to build new read models.</li>
+      </ul>
+      <div class="callout">
+        <p class="lbl">See it move</p>
+        <p>The premium-purchase saga you just designed — charge → activate → grant → receipt, with compensations on failure — is exactly what the <a href="../tools/saga-flow.html">🔀 Saga Flow</a> playground lets you step through and break. Run it after your own attempt below.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Your reps this week</h2>
+      <p>Reading is not learning — reps are. Do these, in order:</p>
+      <ol>
+        <li><strong>Whiteboard LeetCode yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design it end-to-end with the 5-step framework, out loud, timed to ~40 minutes — <em>before</em> re-reading Section 08. Force yourself to place the outbox, name where you use event sourcing vs CQRS, and pick choreography or orchestration for each flow.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend every trade-off against pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer running a system design interview. Give me the prompt: "Design an online judge like LeetCode — users submit code that is run against hidden test cases and get a verdict, plus contests with a live leaderboard." Then act as the interviewer — let me drive, ask clarifying and probing questions, and push hard on: how I make submissions reliable end-to-end (dual-write / outbox / CDC), whether my leaderboard and acceptance-rate are event-sourced CQRS projections, where I use a saga and whether it's choreography or orchestration, how consumers stay idempotent under at-least-once delivery, and how the system behaves during a contest spike. Do NOT give me the answer or lead me. Keep asking "why?". After ~40 minutes (or when I say "done"), grade me 1–5 on each of: requirements &amp; scope, capacity estimation, API design, high-level (event-driven) design, deep-dives &amp; trade-offs (event sourcing / CQRS / saga / outbox / CDC), and communication — with specific feedback and what a strong candidate would have added.</div>
+      <ol start="3">
+        <li><strong>Break a saga in the tool.</strong> In the <a href="../tools/saga-flow.html">🔀 Saga Flow</a> playground, run the premium-purchase saga forward, then force a failure mid-flow and watch the compensations fire in reverse. Switch between choreography and orchestration views and note what changes.</li>
+        <li><strong>Explain it back.</strong> Teach the difference between <em>event sourcing</em>, <em>event-driven architecture</em>, and <em>CQRS</em> to a rubber duck (or me) without notes. If you can't keep the three cleanly apart, that's the gap to close before the interview.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>Event sourcing vs event-driven vs CQRS — one line each? · What exact problem does the outbox pattern solve, and how? · Choreography vs orchestration — when each? · Why does at-least-once delivery force idempotent consumers? · One reason log-based CDC (Debezium) beats query-based polling?</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the mindset and pattern explainers <em>before</em> your reps; save the deeper cuts for <em>after</em> your own LeetCode attempt.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=rJHTK2TfZ1I" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>What's an Event Driven System?</b><div class="ch">Gaurav Sen <span class="dur">· ~12 min · mindset</span></div><p>The producer/broker/consumer shift and why decoupling wins. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=AUj4M-st3ic" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Event Sourcing Example &amp; Explained in plain English</b><div class="ch">CodeOpinion <span class="dur">· ~12 min · event sourcing</span></div><p>Append-only log, aggregates, and rebuilding state by replay — in plain English.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=BjTVdcGtnh8" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>What is CQRS Pattern? How does it work?</b><div class="ch">Javarevisited <span class="dur">· ~10 min · CQRS</span></div><p>Splitting the write model from denormalized read projections, and when to bother.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=d2z78guUR4g" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Saga Pattern | Distributed Transactions | Microservices</b><div class="ch">ByteMonk <span class="dur">· ~12 min · saga</span></div><p>Local transactions, compensating actions, and choreography vs orchestration.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=G6ZhgdHBcUI" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>This is How You Can Scale The Outbox Pattern</b><div class="ch">Milan Jovanović <span class="dur">· ~15 min · outbox · deeper cut</span></div><p>The dual-write fix in practice, plus how the relay behaves at scale. Watch after the basics land.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=DU8o-OTeoCc" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Kafka System Design Deep Dive w/ a Ex-Meta Staff Engineer</b><div class="ch">Hello Interview <span class="dur">· ~45 min · the broker/log</span></div><p>How the log substrate under every pattern here actually works in an interview. Optional depth.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA Chapter 11 (<em>Stream Processing</em>) is the perfect companion — it covers event sourcing, change data capture/change streams, and building derived state from a log; Chapter 12 (<em>The Future of Data Systems</em>) sharpens the CQRS/derived-data angle. Free alternative: the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> sections on asynchronism and message queues.</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/09-api-architectures.html">Next module →</a>
+    </div>
+
+    <footer>Module 8 of 24 · System Design Mastery · Next up: Module 9 — API Architectures (REST vs GraphQL vs gRPC, versioning, and the contract that ties every service together).</footer>
+  </div>
+</body>
+</html>

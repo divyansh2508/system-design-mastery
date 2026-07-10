@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caching Fundamentals | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#0ca678; --hue-soft:rgba(12,166,120,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#28c39a;--hue-soft:rgba(40,195,154,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#0ca678;--hue-soft:rgba(12,166,120,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#28c39a;--hue-soft:rgba(40,195,154,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+      <a href="../tools/cache-playground.html">🗃️ Cache Playground</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 2 · Data at Scale</span><span class="sep">·</span><span>Module 5</span><span class="sep">·</span><span>Weeks 2–3 · ~13 hrs</span></p>
+      <h1>Caching Fundamentals</h1>
+      <p class="sub">A cache is the single highest-leverage move in system design — it can cut latency and shield your database by 100× — but only if you can defend <strong>which pattern, which eviction policy, and how you keep it honest</strong> when the data underneath it changes.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#why">Why caching works</a></li>
+        <li><a href="#where">Where caches live</a></li>
+        <li><a href="#read">Read patterns: cache-aside &amp; read-through</a></li>
+        <li><a href="#write">Write patterns: through, behind, around</a></li>
+        <li><a href="#evict">Eviction: LRU, LFU, FIFO</a></li>
+        <li><a href="#invalidate">Invalidation: TTL, event, tag</a></li>
+        <li><a href="#stampede">Cache stampede &amp; thundering herd</a></li>
+        <li><a href="#never">When NOT to cache</a></li>
+        <li><a href="#ticketmaster">Worked example: Ticketmaster</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="why">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>Why caching works</h2>
+      <p class="lead">A cache is a small, fast store that keeps a copy of data close to where it's used, so you can skip the slow, expensive work of fetching or recomputing it. Everything in this module is a variation on that one bet.</p>
+      <p>Recall the latency table from Module 1: RAM is ~100 ns, an SSD read ~150 µs, a disk seek ~10 ms, a cross-continent round-trip ~150 ms. A cache exists to <strong>trade cheap memory for avoided slow work</strong>. It pulls exactly two levers: <strong>latency</strong> (serve from RAM instead of disk or network) and <strong>load</strong> (absorb reads so the slow backend never sees them). In a read-heavy system those two levers are most of your scaling story.</p>
+
+      <h3>The one number that matters: hit ratio</h3>
+      <p>A cache is only as good as its <strong>hit ratio</strong> — the fraction of reads it serves without touching the backend. Effective read latency is a weighted average of the fast path and the slow path, and because a miss is so much more expensive than a hit, the <em>top</em> of the hit-ratio curve is where the money is:</p>
+      <pre><code>effective read latency  ≈  h·T_hit + (1 − h)·T_miss
+
+  T_hit   ≈ 0.5 ms    <span class="cmt">RAM / same-datacenter Redis</span>
+  T_miss  ≈ 30  ms    <span class="cmt">DB query + deserialize + repopulate cache</span>
+
+  h = 0.90 → 0.90·0.5 + 0.10·30 = 3.45 ms   <span class="cmt">the 10% of misses dominate the average</span>
+  h = 0.99 → 0.99·0.5 + 0.01·30 = 0.80 ms   <span class="cmt">the last 9 points of hit-rate are worth ~4×</span></code></pre>
+      <p>The same jump does something even bigger for <strong>load</strong>: at 99% hit ratio the database sees only 1% of reads — a <strong>100× reduction</strong> in query volume. That single fact is why "add a cache" is the standard first move once your estimate says a system is read-heavy.</p>
+
+      <h3>Caching needs locality</h3>
+      <p>Hit ratio is only high when access is <strong>skewed</strong> — a small hot set is requested over and over (the classic "80% of traffic hits 20% of the data," or a Zipf distribution where a handful of keys dominate). If every key in a huge keyspace is equally likely, your cache evicts an item just before it's next needed, the hit ratio collapses toward the cache-size-over-keyspace ratio, and you've bought nothing but a coherence problem.</p>
+
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>A cache is a <strong>bet on locality plus a tolerance for staleness</strong>. If your access pattern isn't skewed, or your data can never be even slightly stale, the cache is the wrong tool — you'll learn to say so out loud in Section 08.</p>
+      </div>
+    </section>
+
+    <section id="where">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>Where caches live</h2>
+      <p>"Add a cache" isn't one decision — there's a cache at almost every layer between the user and the source of truth, and each has a different cost and coherence story. A request can be served by whichever one hits first:</p>
+      <ul>
+        <li><strong>Client / browser cache</strong> — the response never leaves the device. Governed by HTTP headers (<code>Cache-Control</code>, <code>ETag</code>). Free and instant, but you can't invalidate it once it's out there.</li>
+        <li><strong>CDN / edge cache</strong> — a copy near the user, at the network edge. The best tool for static and semi-static content; it's a read-through cache in front of your origin. (Its own module — Module 6 — so we only gesture at it here.)</li>
+        <li><strong>Reverse-proxy / gateway cache</strong> — Varnish or Nginx in front of your app, caching whole HTTP responses.</li>
+        <li><strong>Application (in-process) cache</strong> — an in-memory map inside the app process (Caffeine, Guava). Nanosecond-fast, no network hop, but <em>per-node</em>: each server has its own copy, so it's incoherent and small.</li>
+        <li><strong>Distributed cache</strong> — a shared remote store like Redis or Memcached. One coherent copy all app servers read, at the cost of a network round-trip. This is the workhorse of the patterns below; scaling and coherence of this layer is Module 6.</li>
+        <li><strong>Database-internal caches</strong> — the buffer pool, query cache, and materialized views. Real caches you get "for free," worth knowing before you bolt another one on top.</li>
+      </ul>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Dimension</th><th>Local (in-process)</th><th>Distributed (remote)</th></tr></thead>
+          <tbody>
+            <tr><td>Access latency</td><td class="num">~100 ns</td><td class="num">~0.5 ms</td></tr>
+            <tr><td>Capacity</td><td>Bounded by one node's RAM</td><td>Scales across many nodes</td></tr>
+            <tr><td>Coherence</td><td>Per-node — copies drift</td><td>One shared copy for all app servers</td></tr>
+            <tr><td>Blast radius on failure</td><td>One node degrades</td><td>Shared dependency (SPOF if unclustered)</td></tr>
+            <tr><td>Best for</td><td>Tiny, ultra-hot, staleness-tolerant keys</td><td>Shared hot data across a fleet</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>These aren't rivals — real systems stack them. A common high-scale pattern is a small <strong>local cache in front of a distributed cache</strong> (a two-tier cache) so the hottest keys never even pay the Redis network hop. Hold that thought; it's exactly what rescues the Ticketmaster on-sale in Section 09.</p>
+    </section>
+
+    <section id="read">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Read patterns: cache-aside &amp; read-through</h2>
+      <p>There are two ways to structure reads through a cache. The difference is simply <strong>who is responsible for loading data on a miss</strong> — your application, or the cache itself.</p>
+
+      <h3>Cache-aside (lazy loading)</h3>
+      <p>The application owns the logic: it checks the cache, and on a miss it reads the database, populates the cache, and returns. The cache sits "aside" the main path — the app talks to both.</p>
+      <pre><code>def get_user(id):
+    u = cache.get(id)              <span class="cmt"># 1. try the cache</span>
+    if u is not None:
+        return u                   <span class="cmt"># HIT — done</span>
+    u = db.query(id)               <span class="cmt"># 2. MISS — read source of truth</span>
+    cache.set(id, u, ttl=300)      <span class="cmt"># 3. populate for next time</span>
+    return u</code></pre>
+      <p><strong>Why it's the default:</strong> only data that's actually requested ever gets cached (no wasted memory), and the cache is <em>optional</em> — if Redis is down, reads fall through to the database and the system stays up (just slower). <strong>The costs:</strong> the first request for each key is always a miss (a cold cache is a slow cache), the cache can go stale relative to the DB, the same load-on-miss code gets copy-pasted across every read path, and — crucially — concurrent misses on a hot key all stampede the database at once (Section 07).</p>
+
+      <h3>Read-through</h3>
+      <p>The cache sits <em>inline</em>: the application only ever talks to the cache, and the cache itself knows how to load from the database on a miss (via a configured loader function or a caching library that wraps the datastore).</p>
+      <pre><code>app ──get(id)──▶ [ cache ] ──miss──▶ loader ──▶ [ database ]
+                     ▲                              │
+                     └──────── populate ◀───────────┘
+app never sees the database directly.</code></pre>
+      <p><strong>Upside:</strong> the load logic lives in exactly one place, and application code shrinks to a single <code>cache.get(id)</code>. <strong>Downside:</strong> the cache is now a hard dependency — if it's down, reads fail (so it must be clustered), the first read of a key is still slow, and you need a cache that supports the read-through pattern rather than a plain key-value store. A CDN is the read-through pattern you already use every day: on a miss it fetches from your origin, caches the result, and serves it.</p>
+    </section>
+
+    <section id="write">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>Write patterns: through, behind, around</h2>
+      <p>Reads decide how you populate the cache; writes decide how you <strong>keep it consistent with the source of truth</strong>. The three write patterns trade write latency against consistency and durability.</p>
+      <ul>
+        <li><strong>Write-through</strong> — write to the cache <em>and</em> the database synchronously, as one operation, before acking the client. The cache is always in step with the DB for written keys, so subsequent reads are fresh hits. The price is higher write latency (two writes on the critical path) and a cache full of data that may never be read.</li>
+        <li><strong>Write-behind (write-back)</strong> — write to the cache, ack the client immediately, and flush to the database asynchronously (often batched or coalesced). This gives the fastest writes and absorbs write bursts beautifully. The danger is a <strong>data-loss window</strong>: if the cache node dies before the flush, unflushed writes vanish — plus you inherit ordering, retry, and durability complexity.</li>
+        <li><strong>Write-around</strong> — write straight to the database and skip the cache entirely; the cache is populated later, lazily, on the next read (via cache-aside). This avoids polluting the cache with write-heavy data that's rarely read back. The trade-off: a just-written key is a guaranteed miss the first time someone reads it.</li>
+      </ul>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Pattern</th><th>Path</th><th>Consistency</th><th>Write latency</th><th>Main risk / best for</th></tr></thead>
+          <tbody>
+            <tr><td>Cache-aside</td><td>App reads DB on miss</td><td>Eventual</td><td>Low</td><td>Stampede on hot keys · the general-purpose default</td></tr>
+            <tr><td>Read-through</td><td>Cache loads DB on miss</td><td>Eventual</td><td>Low</td><td>Cache is a SPOF · clean app code</td></tr>
+            <tr><td>Write-through</td><td>Cache + DB, sync</td><td>Strong (cache↔DB)</td><td>Higher</td><td>Caches unread data · read-after-write freshness</td></tr>
+            <tr><td>Write-behind</td><td>Cache now, DB later</td><td>Eventual</td><td>Lowest</td><td>Data loss on crash · write-heavy, bursty loads</td></tr>
+            <tr><td>Write-around</td><td>DB direct, cache on read</td><td>Eventual</td><td>Low</td><td>First read is a miss · write-heavy, read-rarely data</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>In practice you compose these. The overwhelmingly common web combination is <strong>cache-aside reads + write-around writes</strong>, where each write to the database <em>deletes</em> the affected cache key rather than trying to update it. That "invalidate, don't update" rule is subtle enough to earn its own warning:</p>
+
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>On a write, prefer to <strong>delete the cached key, not overwrite it</strong>. If two writers race — A writes v1 then B writes v2 to the DB, but their cache-updates arrive out of order — an <em>update</em> can leave the cache pinned on the stale v1 forever. A <em>delete</em> just forces the next reader to reload the current truth. Deleting is self-correcting; updating is a race waiting to happen.</p>
+      </div>
+    </section>
+
+    <section id="evict">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Eviction: LRU, LFU, FIFO</h2>
+      <p>A cache has bounded memory. When it's full and a new key needs to go in, the cache must throw something out — the <strong>eviction policy</strong> decides the victim. A good policy keeps the items you're about to need and drops the ones you aren't; the whole game is predicting the future from the past.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Policy</th><th>Evicts</th><th>Best when</th><th>Weakness</th></tr></thead>
+          <tbody>
+            <tr><td>FIFO</td><td>Oldest-inserted item</td><td>Age really does track usefulness</td><td>Ignores access — drops hot items just because they're old</td></tr>
+            <tr><td>LRU</td><td>Least-recently-used item</td><td>Temporal locality (recent ⇒ soon again)</td><td>A big one-time scan flushes the hot set (no scan resistance)</td></tr>
+            <tr><td>LFU</td><td>Least-frequently-used item</td><td>Popularity is stable over time</td><td>Yesterday's star gets stuck; needs aging/decay; more bookkeeping</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>FIFO</strong> is the simplest — a queue, evict from the front — but it's usually the worst, because insertion age says nothing about whether an item is hot. <strong>LRU</strong> is the workhorse default: it assumes an item touched recently will be touched again soon, which holds for most web traffic. Its famous failure is a <em>scan</em> — one bulk read of a million cold keys evicts your entire hot set. <strong>LFU</strong> counts accesses and keeps the genuinely popular items, which is better for stable, skewed popularity, but without a decay mechanism a key that was hot last week clings to the cache long after it's gone cold.</p>
+
+      <p>LRU is implemented in <strong>O(1)</strong> with a hash map plus a doubly linked list — the map finds any node instantly, the list orders nodes by recency, and every access splices the touched node to the front:</p>
+      <pre><code>LRU = hash map (key → node)  +  doubly linked list (MRU ⟷ LRU)
+
+  get(k):   node = map[k]; move node to head; return node.val     <span class="cmt"># O(1)</span>
+  put(k,v): insert at head; map[k]=node
+            if size &gt; capacity: evict tail (the LRU item)           <span class="cmt"># O(1)</span>
+
+     head ─▶ [K7] ⟷ [K2] ⟷ [K9] ⟷ [K4] ◀─ tail
+            (most recent)            (evicted next)</code></pre>
+      <p>Real systems rarely run these textbook forms exactly. Redis approximates LRU and LFU by <em>sampling</em> a few random keys rather than maintaining perfect global order (its <code>allkeys-lru</code>, <code>allkeys-lfu</code>, <code>volatile-ttl</code>, <code>noeviction</code> modes), and high-end libraries like Caffeine use <strong>W-TinyLFU</strong> — a frequency sketch that gets LFU's smarts with LRU's recency and built-in scan resistance. You don't need to implement these; you need to name the trade-off and reach for the right default.</p>
+
+      <div class="callout tool">
+        <p class="lbl">Play with it → your tool</p>
+        <p>Open the <a href="../tools/cache-playground.html">🗃️ Cache Playground</a> and drive it: set the cache size, pick <strong>LRU vs LFU vs FIFO</strong>, dial the request distribution from uniform to sharply skewed, and watch the <strong>hit ratio</strong> and backend load move in real time. Then shrink the cache until a scan tanks LRU — and see how the same workload treats LFU differently. Change one knob at a time and build the intuition.</p>
+      </div>
+    </section>
+
+    <section id="invalidate">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>Invalidation: TTL, event, tag</h2>
+      <p>"There are only two hard things in computer science: cache invalidation and naming things." Eviction is about <em>space</em> — dropping items to make room. <strong>Invalidation is about truth</strong> — making sure the cache never serves data that the source of truth has already changed. Three strategies, in rising order of freshness and cost:</p>
+
+      <ul>
+        <li><strong>TTL (time-based expiry)</strong> — stamp each entry with a lifetime; after it elapses the entry is considered stale and reloaded on the next read. Dead simple, zero coordination, and it bounds staleness to the TTL. The costs: you knowingly serve stale data for up to one TTL, and if a batch of keys was written together they all expire together and stampede the backend at the same instant — so you <strong>jitter</strong> the TTL (add a random ± spread).</li>
+        <li><strong>Event / write-based invalidation</strong> — when the source of truth changes, the write path actively deletes (or refreshes) the affected cache key. This is the freshest option — no staleness window — but it requires the writer to know <em>exactly</em> which keys a change affects, and it couples your write path to your caching layer, often across service boundaries. (And remember Section 04: delete, don't update.)</li>
+        <li><strong>Tag / group-based invalidation</strong> — attach tags to cache entries (<code>event:987</code>, <code>user:123</code>) and invalidate by tag to drop a whole related set at once. When one seat sells, you don't want to hunt down every derived key — you flush everything tagged <code>event:987</code>. It needs a tag → keys index (a reverse map), and it's exactly what CDN "surrogate keys" give you at the edge.</li>
+      </ul>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Strategy</th><th>Freshness</th><th>Coordination cost</th><th>Best for</th></tr></thead>
+          <tbody>
+            <tr><td>TTL</td><td>Stale up to the TTL</td><td>None</td><td>Data that can lag a little; the safe default</td></tr>
+            <tr><td>Event-based</td><td>Near-immediate</td><td>High — writer must know the keys</td><td>Data that must be fresh right after a write</td></tr>
+            <tr><td>Tag-based</td><td>Near-immediate, in bulk</td><td>Medium — needs a tag index</td><td>One change fans out to many cached entries</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>A fourth trick worth knowing is <strong>versioned / namespaced keys</strong>: prefix keys with a version (<code>v7:event:987:...</code>) and "invalidate everything" by simply bumping the version number — old keys are never read again and age out on their own, no bulk delete required. And <strong>stale-while-revalidate</strong> lets you serve the expired value <em>once</em> while a single background refresh runs, so users never wait on a miss. In real systems you layer these: a short TTL as a safety net <em>plus</em> event-based deletes for freshness gives you both correctness and a backstop if an event is ever missed.</p>
+    </section>
+
+    <section id="stampede">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Cache stampede &amp; thundering herd</h2>
+      <p class="lead">This is the failure mode that separates senior candidates: a cache that works beautifully at steady state can <em>cause</em> the outage it was meant to prevent.</p>
+      <p>A <strong>cache stampede</strong> (a.k.a. thundering herd or dogpile) happens when a hot key expires or misses and <em>many concurrent requests all miss at the same instant</em> — so instead of one recompute, thousands of identical requests slam the database simultaneously to rebuild the same value. It strikes at the worst possible moment: on a popular key, under peak load, right after a TTL expiry, a cold start, or a cache flush. The backend, sized to serve the 1% of reads that normally miss, suddenly takes 100% of them and falls over.</p>
+
+      <pre><code>t=0.000  cache key "event:987" TTL expires
+t=0.001  10,000 in-flight requests all call cache.get → MISS
+t=0.001  10,000 requests all fire the SAME db.query(...)   <span class="cmt">← the herd</span>
+t=0.050  database saturates, latency spikes, timeouts cascade
+                                                     <span class="cmt">the cache made it WORSE</span></code></pre>
+
+      <p>Four mitigations, each a nameable trade-off:</p>
+      <ul>
+        <li><strong>Request coalescing / single-flight (per-key lock)</strong> — the first miss takes a lock and does the one recompute; every other concurrent request for that key waits for the shared result (or is served the stale value). One key ⇒ one backend call, no matter how big the crowd. This is the primary defense.</li>
+        <li><strong>Probabilistic early recompute (XFetch)</strong> — refresh a key <em>before</em> it expires, with a probability that rises as expiry approaches, so one lucky request rebuilds it early and the synchronized expiry cliff never forms.</li>
+        <li><strong>TTL jitter</strong> — never give a batch of keys the same expiry; spread it (e.g. 300 s ± 10%) so they don't all die on the same tick.</li>
+        <li><strong>Stale-while-revalidate</strong> — keep serving the last good value to everyone while exactly one background worker refreshes it. Users never block on a miss.</li>
+      </ul>
+
+      <pre><code><span class="cmt"># single-flight: turn a herd into a single backend call</span>
+def get(key):
+    v = cache.get(key)
+    if v is not None:
+        return v                         <span class="cmt"># hit</span>
+    if lock.acquire(key, nx=True, ttl=5): <span class="cmt"># only the FIRST miss wins the lock</span>
+        try:
+            v = db.query(key)
+            cache.set(key, v, ttl=jitter(300))
+        finally:
+            lock.release(key)
+        return v
+    else:
+        wait_briefly(); return cache.get(key) or serve_stale(key)  <span class="cmt"># the herd waits</span></code></pre>
+
+      <p>Two cousins to keep in your pocket: <strong>cache penetration</strong> — repeated misses for keys that <em>don't exist</em> (often malicious), fixed by <em>negative caching</em> (briefly cache the "not found") or a Bloom filter guarding the lookup; and <strong>cache warming</strong> — pre-loading known-hot keys before a traffic spike so the first request is never a miss. All of these show up in the Ticketmaster deep-dive next.</p>
+    </section>
+
+    <section id="never">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>When NOT to cache</h2>
+      <p>A cache is not free. It adds a second copy of the truth that you now have to keep coherent, a new failure mode, real memory cost, and cold-start behavior. Reaching for one reflexively is a junior tell; knowing when to <em>refuse</em> is a senior one. Don't cache when:</p>
+      <ul>
+        <li><strong>There's no locality.</strong> Uniformly random access over a huge keyspace means the hit ratio can't climb above cache-size ÷ keyspace — you're paying for RAM and coherence to get almost no hits.</li>
+        <li><strong>The workload is write-heavy with little re-read.</strong> Entries are invalidated as fast as they're written; you pay all the invalidation cost and harvest almost no hits.</li>
+        <li><strong>Correctness beats latency and staleness is a bug.</strong> Account balances, seat inventory at the moment of purchase, authorization decisions — if a stale answer is a <em>wrong</em> answer with real consequences, read the source of truth. (You can still cache the display of that data; just never the decision.)</li>
+        <li><strong>The data is already fast.</strong> If it's a trivial indexed lookup or cheap to compute, a cache only adds a network hop, a coherence bug surface, and ops burden for no real win.</li>
+        <li><strong>Responses are highly personalized and rarely repeat.</strong> Per-user, one-off results have almost no reuse, so nothing to amortize.</li>
+      </ul>
+      <div class="callout">
+        <p class="lbl">The senior move</p>
+        <p>Add a cache because an <strong>NFR or your capacity estimate forces it</strong> — then <strong>measure the hit ratio</strong>. A cache running at a 20% hit ratio is a liability pretending to be an optimization: rip it out. The decision rule is simple — cache when the cost of a slightly-stale answer is far smaller than the cost of the slow one, and not otherwise.</p>
+      </div>
+    </section>
+
+    <section id="ticketmaster">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Worked example: Ticketmaster</h2>
+      <p>Let's run all five framework steps on a design that lives or dies on caching decisions — <em>"Design a ticketing system like Ticketmaster."</em> It's the perfect capstone because it forces you to cache one thing aggressively (browsing) while refusing to cache another (the seat you're buying).</p>
+
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>Scope <span class="ft">~5 min</span></b><p><strong>Functional:</strong> search/browse events, view an event's detail and seat map, reserve seats (hold → pay → confirm). <strong>Non-functional:</strong> brutally read-heavy browse traffic with extreme flash-crowd spikes (a marquee on-sale), low-latency browse, but <em>strong consistency on the booking path — never double-sell a seat.</em> <strong>Out of scope:</strong> payment internals, recommendations, fraud.</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>Estimate <span class="ft">~5 min</span></b><p>The estimate exists to justify the design: it proves the load is read-dominated <em>and</em> savagely concentrated on a few hot events — the exact shape caching is made for, and the exact shape stampedes are made for.</p></div></div>
+        <div class="fstep"><span class="fn">3</span><div><b>Interface <span class="ft">~5 min</span></b><p>Split the API into a cacheable read surface and a strongly-consistent write surface — the seam runs right down the middle of the design.</p></div></div>
+        <div class="fstep"><span class="fn">4</span><div><b>High-level design <span class="ft">~10 min</span></b><p>CDN + app cache for the read path; a separate reservation service over a consistent store for the write path.</p></div></div>
+        <div class="fstep"><span class="fn">5</span><div><b>Deep-dive &amp; scale <span class="ft">~15 min</span></b><p>Survive the on-sale hot key without ever double-selling a seat — where every concept in this module gets used at once.</p></div></div>
+      </div>
+
+      <h3>① Scope</h3>
+      <p>The whole design hinges on one observation you should say out loud in the first minute: <strong>browsing and buying have opposite requirements.</strong> Browsing is read-heavy, spiky, and totally fine slightly stale — cache it hard. Buying is a write that must be exactly correct — do not cache the truth of it. Nail that split and the rest falls out.</p>
+
+      <h3>② Estimate</h3>
+      <pre><code>100M registered users; a marquee on-sale draws ~10M fans in minutes.
+
+steady-state browse         ≈ 10,000 reads/s
+on-sale spike, ONE event    ≈ 1,000,000+ reads/s  <span class="cmt">→ concentrated on a single hot key</span>
+
+writes (reservations): a 50k-seat arena, sold out in ~10 min
+   50,000 ÷ 600 s           ≈ 83 writes/s          <span class="cmt">tiny — but must be exactly-once</span>
+
+on-sale read : write        ≈ 1,000,000 : 83  ≈  12,000 : 1</code></pre>
+      <p>Verdict: reads dominate by ~4 orders of magnitude and collapse onto a <em>single</em> event page → <strong>cache the browse path aggressively, and expect a thundering herd on that one key.</strong> Writes are trivially small in volume but consistency-critical → <strong>do not cache seat availability as truth; guard it with the database.</strong></p>
+
+      <h3>③ Interface</h3>
+      <pre><code><span class="cmt"># READ surface — highly cacheable</span>
+GET /events/{id}              <span class="cmt"># event details: long TTL, tag-invalidated</span>
+GET /events/{id}/seatmap      <span class="cmt"># availability: very short TTL + stale-while-revalidate</span>
+GET /search?q=...             <span class="cmt"># cache-aside per query, short TTL</span>
+
+<span class="cmt"># WRITE surface — strongly consistent, NOT cached</span>
+POST /events/{id}/reservations   { "seats": ["A12","A13"] }  → 201 hold (expires in 10 min)
+POST /reservations/{id}/purchase { "paymentToken": "..." }   → 200 confirmed</code></pre>
+
+      <h3>④ High-level design</h3>
+      <pre><code>            ┌─── static: images, event pages ──▶ [ CDN / edge ]
+ client ──▶ │
+            └─── dynamic ──▶ [ LB ] ──▶ [ app servers ]
+                                            │  cache-aside + local L1
+                                            ▼
+                                        [ Redis ]  ── miss ──▶ [ events DB ]
+                                        (event meta, search,
+                                         seatmap snapshot)
+
+ booking (separate, consistent path):
+   [ app ] ──▶ [ reservation service ] ──▶ [ seat inventory DB ]
+                     ▲                        (row locks / conditional
+              [ virtual waiting room /         update — source of truth)
+                queue paces the spike ]</code></pre>
+      <p>Map each concept onto the boxes: <strong>event details</strong> = cache-aside + long TTL, <strong>tag-invalidated</strong> on <code>event:{id}</code> when an organizer edits it. <strong>Search</strong> = cache-aside keyed by query string, short TTL. <strong>Seatmap for display</strong> = a read-through snapshot with a very short TTL and stale-while-revalidate — good enough to render, never trusted to sell. The <strong>reservation service</strong> owns the real seat state in a strongly-consistent store, completely outside the cache.</p>
+
+      <h3>⑤ Deep-dive: surviving the on-sale without double-selling</h3>
+      <p>The estimate promised two problems; here's how the module's tools solve them together:</p>
+      <ul>
+        <li><strong>The hot key (thundering herd).</strong> One event = one cache key = the entire 1M-RPS flash crowd on a single entry. Defend it with <strong>single-flight</strong> so one recompute serves millions, <strong>TTL jitter</strong> so nothing expires in lockstep, and a two-tier <strong>local L1 cache in front of Redis</strong> so the hottest key never even pays the network hop — and replicate that key across cache nodes so one shard doesn't melt. Serve the seatmap <strong>stale-while-revalidate</strong>: a half-second-old availability view is fine to look at.</li>
+        <li><strong>The waiting room.</strong> Don't let 10M people hit the booking path at once — a <strong>virtual queue</strong> admits users in controlled batches, shedding and pacing load so the consistent store is never stampeded. This is load management, not caching — the flip side of the same spike.</li>
+        <li><strong>Consistency at purchase (when NOT to cache).</strong> The seatmap can say "A12 available" from a slightly-stale cache, but the <em>reservation</em> is an atomic operation against the database — a conditional update / <code>SELECT … FOR UPDATE</code> / optimistic version check — so two fans racing for A12 are safely serialized and exactly one wins. The cache can be wrong; the write cannot. On a successful hold, <strong>event-based invalidation</strong> refreshes the seatmap so the display trends back toward truth.</li>
+      </ul>
+      <p>That's the whole story in one sentence: <strong>cache what people look at, guard what people buy.</strong> Every concept in this module — patterns, eviction, TTL, tag invalidation, stampede defense, and the discipline to <em>not</em> cache the seat inventory — earns its place in that one design.</p>
+
+      <div class="callout">
+        <p class="lbl">See it move</p>
+        <p>The flash-crowd + waiting-room dynamic you just designed — pacing a 1M-RPS spike so the backend survives — is exactly what the <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer Playground</a> (Module 2) lets you stress and break. Pair it with the Cache Playground to watch both halves of the on-sale at once.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Your reps this week</h2>
+      <p>Reading is not learning — reps are. Do these, in order:</p>
+      <ol>
+        <li><strong>Whiteboard Ticketmaster yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design it end-to-end with the 5-step framework, out loud, timed to ~35 minutes — <em>before</em> re-reading Section 09. Force yourself to name where you cache and where you refuse to.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your caching decisions against pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer running a system design interview. Give me the prompt: "Design a ticketing system like Ticketmaster." Then act as the interviewer — let me drive, ask clarifying and probing questions, and push hard on the caching decisions specifically: which read paths I cache and why, my eviction policy, my TTL and invalidation strategy, and — above all — how I prevent a cache stampede on a hot on-sale AND how I guarantee two people can never buy the same seat. Keep asking "why?" and never let me hand-wave "just add Redis." Do NOT give me the answer or lead me. After ~35 minutes (or when I say "done"), grade me 1–5 on each of: requirements gathering, capacity estimation, API design, high-level design, caching deep-dives &amp; trade-offs (patterns, eviction, invalidation, stampede, and when-not-to-cache), and communication — with specific feedback and what a strong candidate would have added.</div>
+      <ol start="3">
+        <li><strong>Tune it in the tool.</strong> Open the <a href="../tools/cache-playground.html">🗃️ Cache Playground</a>, reproduce a stampede on a hot key, then turn on single-flight and watch backend load drop. Compare hit ratios under LRU vs LFU on a skewed workload — did your intuition match the numbers?</li>
+        <li><strong>Explain it back.</strong> Teach a rubber duck (or me), without notes: cache-aside vs read-through, write-through vs write-behind, and three ways to stop a stampede. Gaps you can't explain are gaps you don't have yet.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>Cache-aside vs read-through — who loads on a miss? · Write-through vs write-behind — what's the failure trade-off? · LRU vs LFU — when does each win, and how does a scan pollute LRU? · Name three ways to stop a cache stampede. · Name two situations where you should NOT cache.</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">11 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the strategy and eviction ones <em>before</em> your reps; save the stampede deep-dives for when you're wrestling with the Ticketmaster on-sale.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=1NngTUYPdpI" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Caching in System Design Interviews w/ Meta Staff Engineer</b><div class="ch">Hello Interview <span class="dur">· ~30 min · strategies</span></div><p>The best single overview: where caches live, cache-aside, and how to talk about caching in an interview. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=dGAgxozNWFE" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Cache Systems Every Developer Should Know</b><div class="ch">ByteByteGo <span class="dur">· ~6 min · read/write patterns</span></div><p>Tight visual tour of cache-aside, read-through, write-through, write-back, and write-around.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=ZqI7i3v4baQ" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Cache Eviction Policies | System Design Interview | LRU LFU FIFO TTL</b><div class="ch">Lazy Programmer <span class="dur">· ~11 min · eviction</span></div><p>Walks LRU vs LFU vs FIFO vs TTL side by side — exactly the Section 05 comparison.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=ROfrHShYKLQ" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>The hardest problem in computer science — cache invalidation</b><div class="ch">Syntax <span class="dur">· ~3 min · invalidation</span></div><p>Fast, intuitive take on why keeping a cache honest is genuinely hard.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=pFBCgFzS2W8" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>How PayPal Beat the Thundering Herd Problem and Fixed Their Architecture</b><div class="ch">Arpit Bhayani <span class="dur">· ~17 min · stampede</span></div><p>A real production stampede — how one cache miss floods the backend, and the fix. Watch during the deep-dive.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=8sTuCPh3s0s" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Thundering Herd Problem and How not to do API retries</b><div class="ch">Arpit Bhayani <span class="dur">· ~15 min · stampede</span></div><p>Backoff, jitter, and coalescing — the mitigation toolkit from Section 07, applied.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> the <a href="https://github.com/donnemartin/system-design-primer#cache" target="_blank" rel="noopener">System Design Primer — Caching section</a> (free) is the tightest written summary of these patterns and their trade-offs. For deeper context, <strong>DDIA Chapter 1</strong> gives you the reliability/scalability/maintainability vocabulary these caching trade-offs live inside, and Chapter 11 (derived data &amp; materialized views) frames a cache as one more piece of derived state you must keep in sync.</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/06-distributed-caching-cdn.html">Next module →</a>
+    </div>
+
+    <footer>Module 5 of 24 · System Design Mastery · Next up: Module 6 — Distributed Caching &amp; CDNs (Redis clustering, cache coherence across nodes, and pushing content to the edge).</footer>
+  </div>
+</body>
+</html>

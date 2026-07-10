@@ -1,0 +1,46 @@
+# WebSocket Chat sandbox — two chat servers + Redis pub/sub + an nginx load balancer.
+# Modern Compose schema (no top-level `version:` key — it is obsolete).
+
+services:
+  # Shared Redis broker: the pub/sub channel every chat instance fans messages through.
+  redis:
+    image: redis:7-alpine
+    container_name: ws-chat-redis
+    restart: unless-stopped
+
+  # Chat instance #1 — a Node `ws` server that publishes to and subscribes from Redis.
+  chat1:
+    build: .
+    image: ws-chat-lab:1.0
+    container_name: ws-chat-1
+    environment:
+      - INSTANCE_ID=chat1
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # Chat instance #2 — the identical image run as a second replica, so messages must cross Redis.
+  chat2:
+    build: .
+    image: ws-chat-lab:1.0
+    container_name: ws-chat-2
+    environment:
+      - INSTANCE_ID=chat2
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # nginx load balancer: round-robins WebSocket connections across chat1/chat2, published on host :8080.
+  nginx:
+    image: nginx:alpine
+    container_name: ws-chat-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - chat1
+      - chat2
+    restart: unless-stopped

@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Containers &amp; Kubernetes | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#e64980; --hue-soft:rgba(230,73,128,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#f06595;--hue-soft:rgba(240,101,149,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#e64980;--hue-soft:rgba(230,73,128,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#f06595;--hue-soft:rgba(240,101,149,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 5 · Cloud &amp; DevOps</span><span class="sep">·</span><span>Module 18</span><span class="sep">·</span><span>Weeks 9-10 · ~13 hrs</span></p>
+      <h1>Containers &amp; Kubernetes</h1>
+      <p class="sub">Once you've designed a system, you have to <strong>ship and run it</strong> — and modern systems run as containers on an orchestrator. This module turns your architecture diagrams into deployable, self-healing, auto-scaling infrastructure.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#why">Why containers changed everything</a></li>
+        <li><a href="#docker">Docker: images, layers, builds</a></li>
+        <li><a href="#k8s">Kubernetes: the control loop</a></li>
+        <li><a href="#config">Config, secrets, scaling &amp; Helm</a></li>
+        <li><a href="#ecs">ECS: Fargate vs EC2</a></li>
+        <li><a href="#gitops">GitOps: ArgoCD &amp; Flux</a></li>
+        <li><a href="#rollout">Rolling updates &amp; image scanning</a></li>
+        <li><a href="#topk">Worked example: YouTube Top-K</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="why">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>Why containers changed everything</h2>
+      <p class="lead">A <strong>container</strong> packages an application together with its exact dependencies — libraries, runtime, config — into one immutable artifact that runs identically on your laptop, in CI, and in production.</p>
+      <p>The old pain was "<em>works on my machine.</em>" You'd build against Python 3.11 and OpenSSL 3, then production had 3.9 and a different libc, and things broke in ways no one could reproduce. Containers kill that class of bug by shipping the whole userland with the app. The deploy artifact <em>is</em> the tested artifact.</p>
+      <p>People conflate containers with virtual machines, but the mechanism is different. A VM virtualizes <strong>hardware</strong> and boots a full guest OS with its own kernel — heavy, slow to start, gigabytes on disk. A container virtualizes the <strong>operating system</strong>: it's just a normal Linux process that the kernel has been told to isolate, using two features — <strong>namespaces</strong> (which give the process its own view of the filesystem, network, process tree, and users) and <strong>cgroups</strong> (which cap its CPU and memory). No guest kernel, no boot. That's why a container starts in milliseconds and a VM starts in seconds.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Dimension</th><th>Virtual machine</th><th>Container</th></tr></thead>
+          <tbody>
+            <tr><td>Isolates</td><td>Hardware (own kernel)</td><td>OS process (shared kernel)</td></tr>
+            <tr><td>Startup</td><td class="num">seconds</td><td class="num">milliseconds</td></tr>
+            <tr><td>Footprint</td><td>GBs (full OS)</td><td>MBs (just the app)</td></tr>
+            <tr><td>Density / host</td><td>tens</td><td>hundreds+</td></tr>
+            <tr><td>Isolation strength</td><td>Stronger (hypervisor)</td><td>Weaker (shared kernel)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>A container is <strong>a process, not a machine</strong>. It shares the host kernel and is isolated by namespaces + cgroups. Understanding this explains everything else — why it's fast, why it's small, and why kernel-level isolation is weaker than a VM's.</p>
+      </div>
+    </section>
+
+    <section id="docker">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>Docker: images, layers, builds</h2>
+      <p>Docker is the tooling that made containers usable. Three nouns carry the whole model:</p>
+      <ul>
+        <li>An <strong>image</strong> is a read-only template — a filesystem snapshot plus metadata (entrypoint, env, ports). It's built once and never changes.</li>
+        <li>A <strong>container</strong> is a running instance of an image: the image's read-only layers plus a thin <em>writable</em> layer on top for that run's changes.</li>
+        <li>A <strong>registry</strong> (Docker Hub, ECR, GHCR) stores and distributes images by <code>name:tag</code> — or, immutably, by content <code>digest</code>.</li>
+      </ul>
+
+      <h3>Layers &amp; the build cache</h3>
+      <p>An image is built from a <code>Dockerfile</code>, and <strong>each instruction produces a layer</strong> — a diff on top of the previous filesystem. Layers are content-addressed and cached: if an instruction and everything above it are unchanged, Docker reuses the cached layer instead of re-running it. This is the single most important thing to exploit for fast builds.</p>
+      <p>The rule that falls out: <strong>order instructions from least-changing to most-changing.</strong> Copy your dependency manifest and install dependencies <em>before</em> copying your source code — so an edit to a source file doesn't bust the (expensive) dependency-install layer.</p>
+
+      <pre><code><span class="cmt"># BAD — any code change re-runs the slow install</span>
+COPY . .
+RUN npm install
+
+<span class="cmt"># GOOD — deps cached until package.json changes</span>
+COPY package.json package-lock.json .
+RUN npm ci              <span class="cmt"># cached layer, reused on every code edit</span>
+COPY . .                <span class="cmt"># only this cheap layer rebuilds</span></code></pre>
+
+      <h3>Multi-stage builds</h3>
+      <p>Your build toolchain (compilers, dev headers, the whole <code>node_modules</code> for building) does not belong in the image you ship. A <strong>multi-stage build</strong> uses one stage with the full toolchain to produce artifacts, then <code>COPY --from</code> only those artifacts into a tiny final stage. The result is a runtime image that's a fraction of the size — smaller to push, faster to pull, and with a smaller attack surface.</p>
+
+      <pre><code><span class="cmt"># ---- stage 1: build (has the full toolchain) ----</span>
+FROM golang:1.22 AS build
+WORKDIR /src
+COPY go.mod go.sum .
+RUN go mod download            <span class="cmt"># cached layer</span>
+COPY . .
+RUN CGO_ENABLED=0 go build -o /app ./cmd/topk
+
+<span class="cmt"># ---- stage 2: runtime (tiny, no compiler) ----</span>
+FROM gcr.io/distroless/static
+COPY --from=build /app /app    <span class="cmt"># just the binary</span>
+USER nonroot:nonroot
+ENTRYPOINT ["/app"]            <span class="cmt"># final image ≈ 10 MB, not 900 MB</span></code></pre>
+
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>When asked "how do you keep images small and builds fast," name three things: <strong>multi-stage builds</strong> (drop the toolchain), <strong>layer ordering</strong> (deps before source), and a <strong>minimal base</strong> (<code>distroless</code>/<code>alpine</code> over a full OS). Pin by digest for reproducibility. That answer signals you've actually run this in production.</p>
+      </div>
+    </section>
+
+    <section id="k8s">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Kubernetes: the control loop</h2>
+      <p>One container on one host is easy. Now run 400 containers across 30 machines, restart the ones that die, roll out a new version without downtime, and move workloads off a failing node — by hand, that's impossible. <strong>Kubernetes (K8s)</strong> is the orchestrator that does it for you.</p>
+      <p>Its core idea is <strong>declarative reconciliation</strong>: you submit the <em>desired state</em> ("I want 5 replicas of this image"), and K8s runs a control loop that continuously compares desired vs actual and takes action to close the gap. A pod crashes and now there are 4? The controller starts a 5th. You never issue imperative "start a container" commands — you edit the desired state and let the loop converge.</p>
+
+      <h3>Cluster anatomy</h3>
+      <p>A cluster splits into a <strong>control plane</strong> and <strong>worker nodes</strong>:</p>
+      <ul>
+        <li><strong>Control plane</strong> — the <em>API server</em> (the front door; everything goes through it), <em>etcd</em> (the consistent key-value store that <em>is</em> the cluster's source of truth), the <em>scheduler</em> (decides which node a new pod lands on), and <em>controllers</em> (the reconciliation loops).</li>
+        <li><strong>Worker node</strong> — runs the <em>kubelet</em> (the agent that starts/stops containers and reports health), <em>kube-proxy</em> (programs the network rules for Services), and a <em>container runtime</em> (containerd) that actually runs the containers.</li>
+      </ul>
+
+      <h3>The objects you'll actually name in an interview</h3>
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>Pod <span class="ft">smallest unit</span></b><p>One or more containers that share a network namespace (same IP) and storage. Pods are <em>ephemeral</em> — they get replaced, and their IP changes. You rarely create them directly.</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>Deployment <span class="ft">manages pods</span></b><p>Declares "N replicas of this pod template." Owns a ReplicaSet, keeps the count correct, and orchestrates rolling updates and rollbacks. This is your primary workload object.</p></div></div>
+        <div class="fstep"><span class="fn">3</span><div><b>Service <span class="ft">stable address</span></b><p>A stable virtual IP + DNS name in front of a shifting set of pods, load-balancing across them. Types: <em>ClusterIP</em> (internal), <em>NodePort</em>, <em>LoadBalancer</em> (cloud LB).</p></div></div>
+        <div class="fstep"><span class="fn">4</span><div><b>Ingress <span class="ft">L7 routing</span></b><p>HTTP(S) routing into the cluster — host/path rules, TLS termination — fronting many Services through one entry point, run by an ingress controller (nginx, Traefik).</p></div></div>
+        <div class="fstep"><span class="fn">5</span><div><b>Namespace <span class="ft">tenancy</span></b><p>A virtual partition for isolating and grouping resources (team, environment) with their own quotas and RBAC. <code>default</code>, <code>kube-system</code>, and yours.</p></div></div>
+      </div>
+
+      <p>Here's a minimal Deployment + Service — the two objects that turn an image into a reachable, self-healing workload:</p>
+      <pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata: { name: topk-api }
+spec:
+  replicas: 3                       <span class="cmt"># desired state — the loop keeps it at 3</span>
+  selector: { matchLabels: { app: topk-api } }
+  template:
+    metadata: { labels: { app: topk-api } }
+    spec:
+      containers:
+      - name: api
+        image: registry/topk-api:1.4.2
+        ports: [ { containerPort: 8080 } ]
+        readinessProbe:             <span class="cmt"># gate traffic until healthy</span>
+          httpGet: { path: /healthz, port: 8080 }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: topk-api }
+spec:
+  selector: { app: topk-api }       <span class="cmt"># matches the pods above</span>
+  ports: [ { port: 80, targetPort: 8080 } ]</code></pre>
+
+      <div class="callout">
+        <p class="lbl">Mental model</p>
+        <p>Pods are cattle, not pets. You never SSH in and fix one — you change the <strong>desired state</strong> and let the controller replace it. Design every service to be stateless and disposable so K8s can kill and reschedule it freely.</p>
+      </div>
+    </section>
+
+    <section id="config">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>Config, secrets, scaling &amp; Helm</h2>
+      <p>A container image should be <strong>environment-agnostic</strong> — the same <code>topk-api:1.4.2</code> runs in staging and prod. Everything that differs per environment gets injected at runtime, which is where ConfigMaps and Secrets come in.</p>
+
+      <h3>ConfigMaps &amp; Secrets</h3>
+      <p>A <strong>ConfigMap</strong> holds non-sensitive configuration (feature flags, window sizes, service URLs) as key-value pairs, injected into a pod as environment variables or mounted files. A <strong>Secret</strong> is the same shape for sensitive values — API keys, DB passwords, TLS certs.</p>
+      <div class="callout tip">
+        <p class="lbl">Gotcha that bites people</p>
+        <p>Kubernetes Secrets are <strong>base64-encoded, not encrypted</strong>. Base64 is not security — anyone with read access decodes it instantly. For real protection you must enable <strong>encryption-at-rest</strong> for etcd, lock down RBAC, and ideally pull from an external manager (AWS Secrets Manager, Vault, Sealed Secrets). Saying this out loud is a strong seniority signal.</p>
+      </div>
+
+      <h3>Horizontal Pod Autoscaler (HPA)</h3>
+      <p>The <strong>HPA</strong> automatically changes a Deployment's replica count based on observed load. It watches a metric (CPU, memory, or a custom/external metric) and every ~15s recomputes how many pods it needs:</p>
+      <pre><code>desiredReplicas = ceil( currentReplicas × currentMetric / targetMetric )
+
+<span class="cmt"># e.g. 4 pods averaging 90% CPU, target 60%:</span>
+<span class="cmt">#   ceil(4 × 90 / 60) = ceil(6) = 6 pods</span></code></pre>
+      <p>Two prerequisites people forget: the pods must declare resource <strong>requests</strong> (otherwise there's no baseline to compute a percentage against), and a metrics source (<code>metrics-server</code>, or Prometheus via an adapter for custom metrics) must be running. You also set <code>minReplicas</code>/<code>maxReplicas</code> as guardrails.</p>
+      <pre><code>apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: topk-processor }
+spec:
+  scaleTargetRef: { kind: Deployment, name: topk-processor }
+  minReplicas: 4
+  maxReplicas: 60
+  metrics:
+  - type: Pods
+    pods:
+      metric: { name: kafka_consumer_lag }   <span class="cmt"># custom metric</span>
+      target: { type: AverageValue, averageValue: "2000" }</code></pre>
+
+      <h3>Networking, briefly</h3>
+      <p>K8s mandates a <strong>flat network</strong>: every pod gets its own IP and can reach every other pod directly, with no NAT — a <strong>CNI</strong> plugin (Calico, Cilium) implements it. Services give stable addressing on top; Ingress handles L7 entry; and <strong>NetworkPolicies</strong> are your firewall — by default everything can talk to everything, so you add policies to restrict pod-to-pod traffic (e.g. only the API may reach the database).</p>
+
+      <h3>Helm — the package manager</h3>
+      <p>Hand-maintaining dozens of YAML files across environments is misery. <strong>Helm</strong> packages them into a <em>chart</em>: templated manifests plus a <code>values.yaml</code> of parameters. You install/upgrade a chart as a versioned <em>release</em>, override values per environment, and <code>helm rollback</code> to any previous release in one command.</p>
+      <pre><code>helm install topk ./chart -f values.prod.yaml
+helm upgrade topk ./chart --set image.tag=1.4.3   <span class="cmt"># new version</span>
+helm rollback topk 1                              <span class="cmt"># revert to release 1</span></code></pre>
+    </section>
+
+    <section id="ecs">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>ECS: Fargate vs EC2</h2>
+      <p>Kubernetes is powerful but operationally heavy. On AWS, many teams reach for <strong>ECS (Elastic Container Service)</strong> instead — AWS's own, simpler orchestrator. You define a <em>task definition</em> (which containers, CPU/memory, env), run it as a <em>service</em> that keeps N tasks healthy behind a load balancer. The interview-relevant fork is the <strong>launch type</strong>: who owns the compute?</p>
+      <ul>
+        <li><strong>EC2 launch type</strong> — you provision and manage a fleet of EC2 instances; ECS packs tasks onto them. You control the instance type, patching, and bin-packing, and you pay for the whole instance whether it's full or not.</li>
+        <li><strong>Fargate launch type</strong> — serverless. You just declare each task's CPU/memory; AWS provisions the compute invisibly. No instances to patch or scale. You pay per-task for exactly the resources requested.</li>
+      </ul>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Dimension</th><th>EC2 launch type</th><th>Fargate</th></tr></thead>
+          <tbody>
+            <tr><td>You manage</td><td>The instances (OS, patching, scaling)</td><td>Nothing below the task</td></tr>
+            <tr><td>Pricing</td><td>Per instance-hour (idle = waste)</td><td>Per task vCPU/GB (no idle)</td></tr>
+            <tr><td>Bin-packing</td><td>Your job — dense &amp; cheap if tuned</td><td>Automatic, but a premium per task</td></tr>
+            <tr><td>Cost at scale</td><td>Cheaper if steady &amp; well-packed</td><td>Cheaper for spiky/low utilization</td></tr>
+            <tr><td>Best for</td><td>Steady high load, GPU, special AMIs</td><td>Bursty, low-ops, small teams</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The rule of thumb: <strong>Fargate to move fast and stop managing servers</strong>; <strong>EC2 when steady, predictable load lets careful bin-packing beat Fargate's per-task premium</strong>. And if you specifically want Kubernetes on AWS without running the control plane yourself, that's <strong>EKS</strong> — managed K8s, which itself can run its nodes on EC2 or Fargate.</p>
+    </section>
+
+    <section id="gitops">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>GitOps: ArgoCD &amp; Flux</h2>
+      <p>How does a new image tag actually reach the cluster? The modern answer is <strong>GitOps</strong>: a Git repository is the single source of truth for your declarative infrastructure, and an in-cluster agent <strong>continuously reconciles the live cluster to match Git</strong>. You never <code>kubectl apply</code> to prod by hand — you open a pull request.</p>
+      <p>This flips the deployment model from <strong>push</strong> (CI reaches into the cluster and applies changes) to <strong>pull</strong> (an agent inside the cluster watches Git and pulls changes in). The payoffs are big:</p>
+      <ul>
+        <li><strong>Auditability</strong> — every change is a reviewed, signed Git commit. The repo <em>is</em> the audit log.</li>
+        <li><strong>Trivial rollback</strong> — reverting a deploy is <code>git revert</code>; the agent reconciles back to the previous state.</li>
+        <li><strong>No drift</strong> — if someone hand-edits the cluster, the agent detects the divergence from Git and can self-heal it back.</li>
+        <li><strong>Disaster recovery</strong> — rebuild an entire cluster by pointing a fresh agent at the repo.</li>
+      </ul>
+
+      <p>Two CNCF tools dominate. <strong>ArgoCD</strong> is application-centric with a rich UI showing sync status and diffs, and an "app-of-apps" pattern for managing many apps. <strong>Flux</strong> is a lighter, modular toolkit (a set of controllers) that leans CLI/API-first and has strong built-in image-update automation.</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Dimension</th><th>ArgoCD</th><th>Flux</th></tr></thead>
+          <tbody>
+            <tr><td>Model</td><td>Pull, in-cluster agent</td><td>Pull, in-cluster controllers</td></tr>
+            <tr><td>UI</td><td>First-class dashboard</td><td>Minimal — CLI / API-first</td></tr>
+            <tr><td>Shape</td><td>Monolithic app, opinionated</td><td>Modular GitOps toolkit</td></tr>
+            <tr><td>Multi-app</td><td>App-of-apps pattern</td><td>Kustomize + source controllers</td></tr>
+            <tr><td>Leans toward</td><td>Teams wanting visibility &amp; RBAC</td><td>Composable, automation-heavy setups</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Both are correct answers. What matters in an interview is naming the <em>principle</em> — Git as source of truth, pull-based reconciliation, PR-driven deploys — not picking a winner.</p>
+    </section>
+
+    <section id="rollout">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Rolling updates &amp; image scanning</h2>
+      <p>Shipping a new version can't mean downtime. A Deployment's default <strong>rolling update</strong> replaces pods gradually: it spins up new-version pods, waits for their <strong>readiness probe</strong> to pass before sending them traffic, then terminates old ones — bounded by <code>maxSurge</code> (how many extra you may create) and <code>maxUnavailable</code> (how many may be down at once). Traffic only ever flows to healthy pods, so users see no interruption.</p>
+      <pre><code>strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 25%          <span class="cmt"># create up to 25% extra during rollout</span>
+    maxUnavailable: 0      <span class="cmt"># never drop below desired capacity</span>
+
+<span class="cmt"># if the new version misbehaves:</span>
+kubectl rollout undo deployment/topk-api   <span class="cmt"># instant revert to prior ReplicaSet</span></code></pre>
+      <p>When you need more caution than a blind roll, reach for <strong>canary</strong> (send 5% of traffic to the new version, watch error rates, then ramp) or <strong>blue-green</strong> (stand up the new version fully, then flip the Service to it — instant switch, instant rollback). Rolling is the default; canary/blue-green buy you a controlled blast radius.</p>
+
+      <h3>Image scanning &amp; supply-chain safety</h3>
+      <p>A container image is a frozen snapshot of an OS — including whatever <strong>known CVEs</strong> its packages carry the day you built it. Production hygiene means scanning every image in CI for vulnerabilities with a tool like <strong>Trivy</strong>, <strong>Grype</strong>, or <strong>Clair</strong>, and failing the build on high-severity findings. Going further: <strong>sign</strong> images (<code>cosign</code>) so you can prove provenance, and add an <strong>admission controller</strong> that refuses to run unsigned or vulnerable images. This whole chain — scan → sign → verify at admission — is what "supply-chain security" means in practice.</p>
+      <div class="callout">
+        <p class="lbl">Put it together</p>
+        <p>A production pipeline reads end-to-end: <strong>build multi-stage image → scan (Trivy) → sign (cosign) → push to registry → bump the tag in the Git manifest repo → ArgoCD reconciles → K8s does a readiness-gated rolling update.</strong> Every step is automated and auditable. That's the shape you're aiming to describe.</p>
+      </div>
+    </section>
+
+    <section id="topk">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Worked example: YouTube Top-K</h2>
+      <p>Let's run the 5-step framework on <em>"Design a system that returns the Top-K most-viewed videos"</em> — the classic heavy-hitters problem — and then <strong>deploy it on everything from this module</strong>. The twist for a Cloud &amp; DevOps interview is that the deep-dive isn't only the algorithm; it's how you containerize, scale, and roll out the design.</p>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Functional:</strong> ingest a firehose of "video viewed" events; return the top-K (K≈100–1000) most-viewed videos over rolling windows (last 1 min, 1 hr, 24 hr), optionally per region.</li>
+        <li><strong>Non-functional:</strong> enormous <em>write</em> throughput; low-latency, high-QPS <em>reads</em> of the trending list; <strong>approximate counts are acceptable</strong> (nobody needs exact view counts to rank trending); highly available; and <strong>elastic</strong> — load spikes hard when a video goes viral.</li>
+        <li><strong>Out of scope (say it):</strong> personalized recommendations, exact per-video lifetime counts, fraud/bot filtering. Keep the core tight.</li>
+      </ul>
+
+      <h3>② Estimate</h3>
+      <pre><code>5B views/day        ≈ 58,000 events/s avg   <span class="cmt">(5e9 ÷ 86,400)</span>
+peak (×3 viral)     ≈ 175,000 events/s       <span class="cmt">→ the number that drives autoscaling</span>
+trending reads 200M/day ≈ 2,300 reads/s      <span class="cmt">→ tiny &amp; cacheable (few hot keys)</span>
+K = 100–1000 per (window, region)            <span class="cmt">→ result set is small</span></code></pre>
+      <p>Verdict: writes dominate by ~75:1 and spike hard, so the <em>ingestion + processing</em> tier is what must autoscale; reads are trivial and cache beautifully. That single observation tells you where the HPA belongs.</p>
+
+      <h3>③ Interface</h3>
+      <pre><code><span class="cmt"># Ingest (fire-and-forget, extreme volume)</span>
+POST /v1/events/view   { "videoId": "...", "region": "US", "ts": 1720000000 }
+  returns: 202 Accepted
+
+<span class="cmt"># Read the trending list (hot, cacheable)</span>
+GET  /v1/trending?window=1h&amp;region=US&amp;k=100
+  returns: 200 { "videos": [ { "videoId": "...", "approxViews": 91230 }, ... ] }</code></pre>
+
+      <h3>④ High-level design</h3>
+      <p>Never sort billions of counters on the read path. Precompute the answer with a streaming pipeline and serve it from a cache:</p>
+      <pre><code>ingest API ─▶ Kafka (partitioned by videoId) ─▶ stream processors
+                                                     │  per-shard, per-window:
+                                                     │  Count-Min Sketch + min-heap(K)
+                                                     ▼
+                                          local top-K per partition
+                                                     │
+                                                     ▼  merge
+                                            global top-K aggregator
+                                                     │
+                                                     ▼
+                     Redis sorted-set  key = (window, region)   ◀── GET /trending
+                                                     ▲
+                          stateless serving API reads precomputed top-K</code></pre>
+      <p>Partitioning Kafka by <code>videoId</code> means every view of a given video lands on the same processor, so its count is local and lock-free. Each processor keeps a <strong>Count-Min Sketch</strong> (approximate counts in fixed memory) plus a <strong>min-heap of size K</strong> (the running top-K). A two-tier merge combines per-partition top-Ks into a global one, written to Redis for the serving tier to read in O(1).</p>
+
+      <h3>⑤ Deep-dive &amp; scale — and how it ships</h3>
+      <p><strong>Algorithmic scale.</strong> A Count-Min Sketch trades a little accuracy for bounded memory — perfect since we only need <em>approximate</em> ranking. Rolling windows use bucketed counters (e.g. 60 one-minute buckets summed for the hour). The danger is a <strong>hot partition</strong>: a globally viral video overwhelms one processor. Fix it with key-salting (split the hot video across N sub-keys, sum at merge) or a two-level pre-aggregation.</p>
+      <p><strong>Now the module's payload — how this actually runs:</strong></p>
+      <ul>
+        <li><strong>Containerize each service</strong> — ingest gateway, stream processor, aggregator, and serving API each become a <em>multi-stage</em> image (§02): a tiny distroless binary, scanned and signed in CI.</li>
+        <li><strong>Deployments + Services</strong> — each runs as a Deployment behind a Service (§03). The serving API sits behind an Ingress/LoadBalancer; the stream processors form a Kafka consumer group.</li>
+        <li><strong>HPA on the processors</strong> — the write tier is the elastic one. An HPA scales the <code>topk-processor</code> Deployment on <strong>Kafka consumer lag</strong> (a custom metric) rather than CPU: when a video goes viral, lag climbs, the HPA adds pods, each grabs more partitions, and lag drains — then it scales back down (§04). This is exactly the ×3 spike from step ②, handled automatically.</li>
+        <li><strong>ConfigMap + Secret</strong> — window sizes, K, and the region list live in a ConfigMap so you retune without rebuilding the image; Kafka SASL credentials and the Redis auth token live in Secrets (with etcd encryption-at-rest enabled — §04).</li>
+        <li><strong>Helm</strong> — one chart parameterizes replicas and resource requests per environment: small in staging, <code>maxReplicas: 60</code> in prod.</li>
+        <li><strong>GitOps rollout</strong> — CI scans + signs the new image and bumps its tag in the manifest repo; <strong>ArgoCD</strong> reconciles the cluster to Git and triggers a <strong>readiness-gated rolling update</strong> (§06–07). A new processor only takes traffic once it has joined the consumer group and its probe is green; a bad release is one <code>git revert</code> away.</li>
+      </ul>
+
+      <div class="callout tool">
+        <p class="lbl">See it move → your tool</p>
+        <p>The serving tier — Ingress → stateless API replicas → Redis — is a textbook load-balanced read path. Stress and break it in the <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer Playground</a>: watch how adding replicas (what the HPA does for you) changes tail latency under a viral spike.</p>
+      </div>
+      <p>Notice the shape of a strong answer: the <em>algorithm</em> (Count-Min Sketch + heaps) and the <em>operations</em> (containers, HPA, GitOps) are one continuous story. In a Cloud &amp; DevOps round, leaving out the second half leaves points on the table.</p>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Your reps this week</h2>
+      <p>Reading is not learning — reps are. Do these, in order:</p>
+      <ol>
+        <li><strong>Whiteboard YouTube Top-K yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design it end-to-end with the 5-step framework, out loud, timed to ~35 minutes — <em>and finish by drawing the deployment</em>: which pods, where the HPA sits, how a new version rolls out. Do this <em>before</em> re-reading Section 08.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend both the design <em>and</em> its deployment against pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer running a Cloud &amp; DevOps system design interview. Give me the prompt: "Design a YouTube Top-K system — the K most-viewed videos over rolling time windows — and explain how you would containerize, deploy, and scale it on Kubernetes." Then act as the interviewer — let me drive, ask clarifying and probing questions, and push back on anything hand-wavy. Probe specifically on: why approximate counts are OK, hot-partition handling, what metric the HPA scales on and why (not just CPU), why Kubernetes Secrets alone aren't secure, and how a bad release is rolled back under GitOps. Do NOT give me the answer or lead me; keep asking "why?". After ~35 minutes (or when I say "done"), grade me 1–5 on each of: requirements gathering, capacity estimation, API design, high-level design, deep-dives &amp; trade-offs, deployment/Kubernetes fluency, and communication — with specific feedback and what a strong candidate would have added.</div>
+      <ol start="3">
+        <li><strong>Containerize something real.</strong> Take any small app, write a <em>multi-stage</em> Dockerfile, and get the final image under ~50 MB. Then deploy it to a local cluster (<a href="https://kind.sigs.k8s.io" target="_blank" rel="noopener">kind</a> or minikube), add an HPA, and generate load until you watch it scale up and back down. Nothing teaches K8s like seeing the replica count move.</li>
+        <li><strong>Explain it back.</strong> Teach a rubber duck (or me) two things without notes: the container-vs-VM mechanism (namespaces + cgroups), and the GitOps pull-based loop. Gaps you can't explain are gaps you don't have yet.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>What are image layers and why does Dockerfile instruction order matter for caching? · What metric should the Top-K processor's HPA scale on, and what's the desiredReplicas formula? · Are Kubernetes Secrets encrypted by default — and what do you add for real security? · ECS Fargate vs EC2 launch type — one trade-off each way? · GitOps: what makes rollback trivial, and what's "pull vs push"?</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the two "100 Seconds" primers first for the mental model, then go deep with the crash courses before your reps.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=Gjnup-PuquQ" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Docker in 100 Seconds</b><div class="ch">Fireship <span class="dur">· ~2 min · docker primer</span></div><p>The fastest possible mental model of image vs container vs Dockerfile. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=3c-iBn73dDE" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Docker Tutorial for Beginners [FULL COURSE in 3 Hours]</b><div class="ch">TechWorld with Nana <span class="dur">· ~3 hrs · docker deep-dive</span></div><p>The definitive hands-on Docker course — Dockerfiles, layers, volumes, Compose. Skim the sections you need.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=PziYflu8cB8" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Kubernetes Explained in 100 Seconds</b><div class="ch">Fireship <span class="dur">· ~2 min · k8s primer</span></div><p>Why an orchestrator exists and what pods/nodes/services are, in one breath.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=s_o8dwzRlu4" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Kubernetes Crash Course for Absolute Beginners [NEW]</b><div class="ch">TechWorld with Nana <span class="dur">· ~1 hr · k8s beginners</span></div><p>Pods, Deployments, Services, and ConfigMaps hands-on. The best single intro to K8s objects.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=Ays8sM-tylU" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Kubernetes HPA with Demo | Horizontal Pod Autoscaler Demo</b><div class="ch">Java Home Cloud <span class="dur">· ~15 min · autoscaling</span></div><p>Watch an HPA add and remove pods live under load — the exact behavior our Top-K processors rely on.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=c1sOAdQx91U" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>How to Use Argo CD for GitOps (Beginner-Friendly Tutorial)</b><div class="ch">Akuity <span class="dur">· ~20 min · gitops</span></div><p>Pull-based reconciliation in action, from the team behind Argo. See a Git commit become a live deploy.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA Chapter 11 (Stream Processing) — the theory behind the Kafka + windowed-aggregation pipeline in our Top-K design. And <a href="https://12factor.net" target="_blank" rel="noopener">The Twelve-Factor App</a> (III. Config, free) — the discipline that ConfigMaps and Secrets exist to enforce: keep config out of the image and in the environment.</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/19-cicd-platform-engineering.html">Next module →</a>
+    </div>
+
+    <footer>Module 18 of 24 · System Design Mastery · Next up: Module 19 — CI/CD &amp; Platform Engineering (turning this rolling-update-and-GitOps foundation into a full delivery platform).</footer>
+  </div>
+</body>
+</html>

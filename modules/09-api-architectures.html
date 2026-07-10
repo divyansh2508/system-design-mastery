@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Architectures: REST, GraphQL, gRPC | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#7048e8; --hue-soft:rgba(112,72,232,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#7048e8;--hue-soft:rgba(112,72,232,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#7048e8;--hue-soft:rgba(112,72,232,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#7048e8;--hue-soft:rgba(112,72,232,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+      <a href="../tools/protocol-compare.html">🔌 Protocol Compare</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 3 · Communication</span><span class="sep">·</span><span>Module 9</span><span class="sep">·</span><span>Weeks 4-5 · ~13 hrs</span></p>
+      <h1>API Architectures: REST, GraphQL, gRPC</h1>
+      <p class="sub">Every service in a distributed system talks to another one over an API. This module is the <strong>vocabulary of that conversation</strong> — how to model a clean REST resource, when GraphQL earns its complexity, why gRPC dominates the wire between microservices, and how a gateway ties it all together at the edge.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#contract">APIs are contracts</a></li>
+        <li><a href="#rest">REST done right</a></li>
+        <li><a href="#versioning">Versioning an API</a></li>
+        <li><a href="#graphql">GraphQL</a></li>
+        <li><a href="#grpc">gRPC &amp; Protocol Buffers</a></li>
+        <li><a href="#choosing">Choosing between them</a></li>
+        <li><a href="#gateway">The API gateway</a></li>
+        <li><a href="#whatsapp">Worked example: WhatsApp</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="contract">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>APIs are contracts</h2>
+      <p class="lead">An API is a <strong>promise</strong>: given this request, in this shape, the service will do this and return that. Every choice in this module is really a choice about what kind of promise you want to make — and who pays for its rigidity.</p>
+      <p>The three architectures you'll meet are not competitors so much as tools for different jobs. <strong>REST</strong> models your system as a set of nouns (resources) manipulated with a fixed set of verbs — the lingua franca of public web APIs. <strong>GraphQL</strong> hands the client a query language so it can ask for exactly the data it wants in one round-trip — a cure for the over-fetching and endpoint-sprawl that REST creates for rich, evolving frontends. <strong>gRPC</strong> makes a call to a remote service feel like calling a local function, over a compact binary protocol — the default for the chatty, internal traffic between microservices.</p>
+      <p>Here's the senior framing to carry through the whole module: <strong>the "best" API style is the one whose strengths line up with your traffic and whose weaknesses you can afford.</strong> A payments team exposing a public API optimizes for caching, tooling, and stability (REST). A mobile team fighting round-trips on a flaky network optimizes for one flexible request (GraphQL). A pair of internal services exchanging millions of messages a second optimizes for latency and payload size (gRPC). Same building, different doors.</p>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>You are not choosing a "winner." You are matching an <strong>API style to a traffic profile</strong>: public vs internal, read-shape variety, payload size, latency budget, and how fast the contract will change. Name that profile out loud and the choice makes itself.</p>
+      </div>
+    </section>
+
+    <section id="rest">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>REST done right</h2>
+      <p>REST (Representational State Transfer) isn't a protocol — it's a set of constraints on how to use HTTP well. Get three things right and 90% of REST design falls into place: <strong>resource modeling</strong>, <strong>statelessness</strong>, and using HTTP's own semantics instead of reinventing them.</p>
+
+      <h3>Resource modeling: nouns, not verbs</h3>
+      <p>A REST API is a collection of <em>resources</em> — the nouns of your domain — each addressable by a URL, each manipulated with the standard HTTP verbs. The discipline is to keep verbs <em>out</em> of your URLs and let the HTTP method carry the action:</p>
+      <pre><code><span class="cmt"># Good — resource nouns, HTTP verbs do the work</span>
+GET    /v1/users/42            <span class="cmt">→ fetch user 42</span>
+GET    /v1/users/42/messages   <span class="cmt">→ that user's messages (sub-resource)</span>
+POST   /v1/users/42/messages   <span class="cmt">→ create a message</span>
+PATCH  /v1/messages/8817       <span class="cmt">→ partial update</span>
+DELETE /v1/messages/8817       <span class="cmt">→ remove it</span>
+
+<span class="cmt"># Anti-pattern — verbs in the path, method ignored</span>
+POST   /v1/getUserMessages
+POST   /v1/deleteMessage?id=8817</code></pre>
+      <p>Match verbs to intent and status codes to outcome: <code>200</code> OK, <code>201</code> Created (with a <code>Location</code> header), <code>204</code> No Content, <code>400</code> bad request, <code>401/403</code> auth, <code>404</code> not found, <code>409</code> conflict, <code>429</code> rate-limited, <code>5xx</code> server fault. Two properties are worth naming in an interview because they show maturity: <strong>safe</strong> methods (<code>GET</code>, <code>HEAD</code>) never mutate state, and <strong>idempotent</strong> methods (<code>GET</code>, <code>PUT</code>, <code>DELETE</code>) can be retried without changing the result beyond the first call. <code>POST</code> is neither — which is why "create" endpoints need an idempotency key to survive a client retry safely.</p>
+
+      <h3>Statelessness: the property that lets you scale</h3>
+      <p>Every REST request must carry everything the server needs to process it — identity, params, body. The server keeps <em>no</em> per-client session in memory between requests. This is the constraint that makes horizontal scaling trivial: because no server "owns" a client, any request can hit any server, and a load balancer can spray traffic across a fleet, add nodes, or lose one without a broken session. State that must persist lives in a database or a shared cache, not in the app server's RAM. (This is the same statelessness that made the app tier scale-out in Module 2 — REST bakes it into the contract.)</p>
+
+      <h3>The Richardson Maturity Model</h3>
+      <p>Leonard Richardson's model grades how "RESTful" an API actually is across four levels. It's a fast, memorable way to critique a design out loud:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Level</th><th>What it adds</th><th>Smell test</th></tr></thead>
+          <tbody>
+            <tr><td>0 — The Swamp of POX</td><td>One URL, one verb (usually <code>POST</code>), RPC-over-HTTP</td><td>Everything is <code>POST /api</code> with an action in the body</td></tr>
+            <tr><td>1 — Resources</td><td>Many URLs, one per resource</td><td>You have <code>/users/42</code> but still <code>POST</code> everything</td></tr>
+            <tr><td>2 — HTTP verbs</td><td>Proper GET/POST/PUT/DELETE + status codes</td><td>Where most "good" REST APIs live — and it's enough</td></tr>
+            <tr><td>3 — HATEOAS</td><td>Responses embed links to the next valid actions</td><td>Client discovers transitions from hypermedia, not docs</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The honest, senior take: <strong>Level 2 is the pragmatic target</strong> for almost every real API. Level 3 (HATEOAS — Hypermedia As The Engine Of Application State) is elegant but rarely pays for its complexity outside of a few large public APIs. Knowing the ladder lets you say "this design is Level 2, and that's the right place to stop here" — which sounds far better than an unexamined "it's RESTful."</p>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>When you sketch a REST API, narrate two things: <em>"these are my resources"</em> and <em>"this endpoint is idempotent, so client retries are safe."</em> Idempotency on writes is the detail interviewers probe when networks get flaky — have an answer ready (idempotency keys, dedupe on a client-generated ID).</p>
+      </div>
+    </section>
+
+    <section id="versioning">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Versioning an API</h2>
+      <p>The moment a second team depends on your API, you can't change it freely — a rename or a removed field breaks their code at 3 a.m. Versioning is how you <strong>evolve a contract without breaking existing clients</strong>. Three mainstream strategies, each with a real trade-off:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Strategy</th><th>Looks like</th><th>Trade-off</th></tr></thead>
+          <tbody>
+            <tr><td>URL path</td><td><code>GET /v1/users/42</code></td><td>Dead obvious, easy to route &amp; cache; but the version leaks into every URL and "v2" can duplicate a lot</td></tr>
+            <tr><td>Custom / Accept header</td><td><code>Accept: application/vnd.api.v2+json</code></td><td>Clean URLs, one resource identity; but invisible in a browser and easy to forget in a curl</td></tr>
+            <tr><td>Query parameter</td><td><code>GET /users/42?version=2</code></td><td>Trivial to add; but muddies caching and mixes versioning with filtering</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>Content negotiation</strong> is the header-based approach done properly: the client states what representation it can accept via the <code>Accept</code> header, and the server picks the matching version (or media type — JSON vs CSV). It's the most "correct" per HTTP's design and keeps a resource's URL stable forever, which is why hypermedia purists prefer it. In practice, <strong>URL-path versioning wins on sheer legibility</strong> — you can see the version in a log line, a bookmark, a gateway route — and that operational clarity is worth a lot.</p>
+      <p>Whichever you pick, the golden rule is the same: <strong>additive changes don't need a new version.</strong> Adding an optional field or a new endpoint is backward-compatible; renaming a field, removing one, or changing a type is breaking and forces a bump. Design responses so new fields can appear without harm, and you'll bump versions far less often. (You'll see this exact principle again in Module 10 for event schemas, and in gRPC's Protocol Buffers below, where numbered fields make forward/backward compatibility a first-class feature.)</p>
+    </section>
+
+    <section id="graphql">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>GraphQL</h2>
+      <p>GraphQL, from Meta, flips the control of shape. In REST, the <em>server</em> decides what each endpoint returns; a mobile screen that needs a user plus their last three messages plus unread counts might hit three endpoints and throw away half the payload. GraphQL exposes a <strong>single endpoint</strong> and a <strong>type system</strong>, and lets the <em>client</em> ask for exactly the fields it wants — no more, no less — in one round-trip.</p>
+
+      <h3>Schema, queries, mutations</h3>
+      <p>The <strong>schema</strong> is the contract: strongly-typed nouns and the entry points to reach them. The client's query mirrors the shape of the data it wants back:</p>
+      <pre><code><span class="cmt"># Schema (Schema Definition Language)</span>
+type User {
+  id: ID!
+  name: String!
+  messages(last: Int): [Message!]!   <span class="cmt"># fields can take arguments</span>
+}
+type Message { id: ID!, body: String!, sentAt: String! }
+
+type Query    { user(id: ID!): User }
+type Mutation { sendMessage(to: ID!, body: String!): Message! }
+type Subscription { messageReceived(userId: ID!): Message! }
+
+<span class="cmt"># One request, exactly the fields the screen needs</span>
+query {
+  user(id: "42") {
+    name
+    messages(last: 3) { body sentAt }
+  }
+}</code></pre>
+      <p>That single query kills two classic REST pains at once: <strong>over-fetching</strong> (getting fields you don't need) and <strong>under-fetching</strong> (the "N+1 round-trips" where one call's result forces several follow-up calls). The frontend evolves its data needs by editing the query, not by begging the backend for a new endpoint.</p>
+
+      <h3>Resolvers: where the data actually comes from</h3>
+      <p>A GraphQL server doesn't magically know where <code>User.messages</code> lives. Every field is backed by a <strong>resolver</strong> — a function that fetches that piece, possibly from a different database, cache, or downstream service. The engine walks the query tree and calls resolvers to fill it in. This is GraphQL's superpower (one schema can stitch together many backends) and its sharpest footgun:</p>
+      <div class="callout tip">
+        <p class="lbl">Watch out — the N+1 resolver trap</p>
+        <p>A query for 100 users, each resolving <code>messages</code> separately, fires 1 + 100 database calls. The fix is <strong>batching</strong> — a "DataLoader" collects all the message lookups in one tick and issues a single batched query. Knowing this failure mode (and its fix) is exactly the depth an interviewer wants when you say "GraphQL."</p>
+      </div>
+
+      <h3>Subscriptions: real-time push</h3>
+      <p>Beyond queries (read) and mutations (write), GraphQL defines <strong>subscriptions</strong> — a long-lived connection (typically over WebSockets) where the server <em>pushes</em> new data as it happens. A <code>messageReceived</code> subscription lets a chat client receive messages the instant they arrive instead of polling. That's your bridge from request/response into the real-time world of Module 10 — and a natural segue into WhatsApp below.</p>
+      <p>The cost of all this flexibility: caching is harder (you can't just cache a URL when every query is unique), a naive client can craft an expensive deep query (so you add depth limits and cost analysis), and you run a query engine. GraphQL earns its keep when you have <strong>many client shapes over a rich, connected graph</strong> — think a product app with dozens of screens — and is overkill for a simple CRUD service.</p>
+    </section>
+
+    <section id="grpc">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>gRPC &amp; Protocol Buffers</h2>
+      <p>gRPC (a Google RPC framework) optimizes for the opposite world from public web APIs: <strong>internal, high-volume, low-latency service-to-service traffic</strong>. Its pitch is that calling a remote service should look like calling a local method — you define the service once, and gRPC generates typed client and server stubs in a dozen languages.</p>
+
+      <h3>Protocol Buffers: the schema and the wire format</h3>
+      <p>You describe the service and its messages in a <code>.proto</code> file. Protocol Buffers (protobuf) then serialize messages to a <strong>compact binary format</strong> — far smaller and faster to parse than JSON, because the field <em>names</em> never travel on the wire, only their numeric tags do:</p>
+      <pre><code><span class="cmt">// chat.proto</span>
+syntax = "proto3";
+
+message Message {
+  string id     = 1;   <span class="cmt">// the number is the wire tag — never reuse it</span>
+  string body   = 2;
+  int64  sent_at = 3;
+  map&lt;string, string&gt; headers = 4;
+}
+
+service Chat {
+  rpc Send(Message) returns (Ack);                 <span class="cmt">// unary</span>
+  rpc Subscribe(SubReq) returns (stream Message);  <span class="cmt">// server streaming</span>
+  rpc Upload(stream Chunk) returns (Ack);          <span class="cmt">// client streaming</span>
+  rpc Connect(stream Event) returns (stream Event);<span class="cmt">// bidirectional</span>
+}</code></pre>
+      <p>Those field numbers are the key to <strong>schema evolution</strong>: add a field with a new number and old clients simply ignore it; never renumber or reuse a tag and old and new binaries stay compatible. It's the same "additive changes are safe" rule from versioning, enforced by the format itself — which is why gRPC services often avoid explicit API versions entirely.</p>
+
+      <h3>HTTP/2 and the four streaming modes</h3>
+      <p>gRPC rides on <strong>HTTP/2</strong>, which gives it multiplexed streams over one connection (no head-of-line blocking across calls), header compression, and — crucially — full-duplex <strong>streaming</strong>. That unlocks four call shapes you saw in the proto above:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Mode</th><th>Shape</th><th>Fits</th></tr></thead>
+          <tbody>
+            <tr><td>Unary</td><td>1 request → 1 response</td><td>Ordinary RPC; the REST-like default</td></tr>
+            <tr><td>Server streaming</td><td>1 request → N responses</td><td>Feeds, live subscriptions, large result sets</td></tr>
+            <tr><td>Client streaming</td><td>N requests → 1 response</td><td>File/metric upload, batched writes</td></tr>
+            <tr><td>Bidirectional</td><td>N ⇄ N, both directions at once</td><td>Chat, real-time sync, presence</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The catch: gRPC is <em>binary</em> and HTTP/2-native, so it's not friendly to browsers directly (you need gRPC-Web + a proxy) and you can't just <code>curl</code> and eyeball a response. That's fine for its home turf — the backend — and exactly why teams pair it with a REST or GraphQL edge for external clients while speaking gRPC internally.</p>
+    </section>
+
+    <section id="choosing">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>Choosing between them</h2>
+      <p>Put them side by side and the decision stops being about hype and starts being about your traffic profile. This is the table to be able to reproduce from memory:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Dimension</th><th>REST</th><th>GraphQL</th><th>gRPC</th></tr></thead>
+          <tbody>
+            <tr><td>Transport</td><td>HTTP/1.1+</td><td>HTTP (single endpoint)</td><td>HTTP/2</td></tr>
+            <tr><td>Payload</td><td>JSON (text)</td><td>JSON (text)</td><td>Protobuf (binary)</td></tr>
+            <tr><td>Data shape</td><td>Server-defined per endpoint</td><td>Client picks exact fields</td><td>Fixed by <code>.proto</code></td></tr>
+            <tr><td>Streaming</td><td>No (workarounds)</td><td>Subscriptions</td><td>Native, bi-directional</td></tr>
+            <tr><td>Caching</td><td>Excellent (HTTP/CDN)</td><td>Hard (one endpoint)</td><td>Manual</td></tr>
+            <tr><td>Browser-native</td><td>Yes</td><td>Yes</td><td>No (needs gRPC-Web)</td></tr>
+            <tr><td>Sweet spot</td><td>Public APIs, CRUD, caching</td><td>Rich/varied frontends</td><td>Internal microservices</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>A rule of thumb that holds up under pushback: <strong>REST at the public edge for its caching and universality, gRPC between internal services for its speed, and GraphQL when a diverse set of clients query a connected graph.</strong> These aren't mutually exclusive — a mature system runs all three: a GraphQL or REST gateway facing clients, gRPC humming between the services behind it.</p>
+      <div class="callout tool">
+        <p class="lbl">Play with it → your tool</p>
+        <p>Open the <a href="../tools/protocol-compare.html">🔌 Protocol Compare</a> tool, put REST, GraphQL, and gRPC head-to-head, and toggle a traffic profile — payload size, read-shape variety, streaming, browser reach. Watch which style each choice favors, and build the reflex to justify the pick from the <em>profile</em>, not from taste.</p>
+      </div>
+    </section>
+
+    <section id="gateway">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>The API gateway</h2>
+      <p>Once you have many services, you don't want clients talking to each one directly — that leaks your topology, duplicates auth in every service, and makes cross-cutting concerns a nightmare. An <strong>API gateway</strong> is a single front door: every external request lands there first, and it handles the concerns that <em>every</em> service would otherwise re-implement.</p>
+      <pre><code>            ┌──────────────────────────────────┐
+ clients ──▶ │            API GATEWAY           │
+  (web,      │  authn/z · rate-limit · routing  │
+   mobile)   │  TLS term · logging · aggregation│
+            └───────┬─────────┬─────────┬───────┘
+                    │         │         │
+                  gRPC      gRPC      gRPC   <span class="cmt">(internal, binary)</span>
+                    ▼         ▼         ▼
+                 [ Users ] [ Chat ]  [ Media ]</code></pre>
+      <p>The gateway's core jobs:</p>
+      <ul>
+        <li><strong>Routing</strong> — match the request path/host to the right upstream service, and often <strong>translate protocols</strong>: accept REST or GraphQL from the outside, speak gRPC to the services inside.</li>
+        <li><strong>Authentication &amp; authorization</strong> — validate the token (e.g. a JWT) once, at the edge, and pass a trusted identity downstream. Services no longer each re-check credentials.</li>
+        <li><strong>Rate limiting</strong> — protect the fleet from abuse and spikes with per-client quotas (token-bucket / leaky-bucket), returning <code>429</code> when a client exceeds its budget. This is your first line against a thundering herd.</li>
+        <li><strong>Cross-cutting glue</strong> — TLS termination, request/response logging and metrics, and sometimes <strong>aggregation</strong> (fan out to several services and compose one response, so a mobile client makes one call instead of five).</li>
+      </ul>
+      <p>The trade-off to name: a gateway is a shared choke point, so it must be <strong>highly available and horizontally scaled</strong> (it's stateless, like the REST services behind it, so it scales the same way), and you keep its logic thin — routing and policy, not business logic. Done well, it's the seam where all three API styles in this module meet: a clean public contract at the edge, fast binary RPC within.</p>
+    </section>
+
+    <section id="whatsapp">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Worked example: WhatsApp</h2>
+      <p>Let's run the 5-step framework on <em>"Design WhatsApp"</em>, keeping the lens on <strong>API and protocol decisions</strong> — the heart of this module. (The heavy real-time fan-out and delivery machinery is Module 10; here we decide how the bytes should move.)</p>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Functional:</strong> send and receive 1:1 messages; delivery/read receipts (sent → delivered → read); presence (online / last-seen); deliver messages that arrive while a user is offline. (Stretch: groups, media.)</li>
+        <li><strong>Non-functional:</strong> very low delivery latency, extreme scale (billions of messages/day), <strong>reliable, in-order</strong> per-conversation delivery (never lose or duplicate a message), works over flaky mobile networks, and is battery/bandwidth-frugal — the phone can't hammer the network.</li>
+        <li><strong>Out of scope (say it):</strong> end-to-end encryption internals, the media-storage pipeline, spam — keep the core message path tight.</li>
+      </ul>
+
+      <h3>② Estimate</h3>
+      <pre><code>~2B users, ~100B messages/day
+  100B ÷ 100,000 s   ≈ 1,000,000 msgs/s average
+  peak ×3            ≈ 3,000,000 msgs/s          <span class="cmt">→ writes AND pushes</span>
+message payload      ≈ 100 B text + envelope     <span class="cmt">→ protobuf, not JSON: ~5–10× smaller</span>
+concurrent devices   ≈ hundreds of millions online
+  → each holds ONE persistent connection         <span class="cmt">→ millions of live sockets per box</span></code></pre>
+      <p>Two estimates already forced two decisions: at millions of messages/second the <strong>envelope size matters</strong> → prefer a compact binary format (protobuf) over JSON; and hundreds of millions of <em>concurrent</em> devices means the design is about <strong>holding live connections</strong>, not serving stateless request/response.</p>
+
+      <h3>③ Interface — the pivotal choice</h3>
+      <p>This is where the module pays off. A message must be able to arrive <em>unprompted</em> — the server has to push to the recipient. Plain REST is request/response: the client would have to <strong>poll</strong> ("any new messages?") every second, which is a latency, battery, and bandwidth disaster at this scale. So the message path uses a <strong>persistent, bidirectional connection</strong> — a WebSocket, or gRPC bidirectional streaming — with protobuf frames:</p>
+      <pre><code><span class="cmt">// The hot path: a long-lived bidi stream, not a REST call</span>
+service Messaging {
+  rpc Connect(stream ClientFrame) returns (stream ServerFrame);
+}
+message ClientFrame { oneof body { SendMsg send = 1; Ack ack = 2; } }
+message ServerFrame { oneof body { Deliver deliver = 1; Receipt rcpt = 2; } }
+message SendMsg { string client_msg_id = 1; string to = 2; bytes body = 3; }
+
+<span class="cmt"># Everything NOT latency-critical stays plain REST/HTTP:</span>
+POST /v1/media          <span class="cmt"># get an upload URL</span>
+GET  /v1/users/42       <span class="cmt"># profile, last-seen</span></code></pre>
+      <p>That split is the senior move: <strong>persistent stream for the real-time message path, boring cacheable REST for everything else.</strong> A <code>client_msg_id</code> generated on the phone makes sends idempotent, so a retry after a dropped connection can't create a duplicate.</p>
+
+      <h3>④ High-level design</h3>
+      <pre><code>phone ──persistent stream──▶ [ Gateway / LB ]
+                                   │  (auth on connect, route)
+                                   ▼
+                            [ Connection service ]  ◀── holds the live socket
+                                   │                     for each online user
+                     writes msg    ▼
+              [ Chat service ] ──▶ session registry (Redis): user → which box?
+                     │                       │
+            recipient ONLINE?  ──yes──▶ push down their open stream ──▶ deliver
+                     │
+                    no ──▶ [ offline inbox / queue ] ──▶ flush on reconnect</code></pre>
+      <p>Flow: the phone opens one authenticated stream to a <strong>connection service</strong> (via the gateway, which validates the token on connect). To send, it pushes a <code>SendMsg</code> frame; the <strong>chat service</strong> persists it, looks up the recipient in a <strong>session registry</strong> (a Redis map of user → connection-server) and, if they're online, pushes a <code>Deliver</code> frame down <em>their</em> stream. If they're offline, the message lands in a per-user inbox and is flushed when they reconnect. Receipts (<code>delivered</code>, <code>read</code>) flow back over the same streams.</p>
+
+      <h3>⑤ Deep-dive &amp; scale</h3>
+      <ul>
+        <li><strong>Why a stream, not polling?</strong> Polling billions of idle phones every second wastes battery and bandwidth and still adds latency. One persistent connection delivers in milliseconds and stays quiet when idle — the decisive protocol call.</li>
+        <li><strong>Why protobuf on the wire?</strong> At 3M frames/s, a 100-byte protobuf frame vs a bloated JSON one is the difference between one datacenter and several. Binary framing also parses faster on a phone CPU.</li>
+        <li><strong>gRPC bidi stream vs raw WebSocket?</strong> gRPC gives you typed frames, codegen, and HTTP/2 multiplexing for free; raw WebSockets are simpler to terminate at the edge and friendlier to browsers. Many real systems use a custom protocol over WebSocket for the phone hop and gRPC <em>between</em> internal services — name the trade-off either way.</li>
+        <li><strong>Reliability &amp; ordering:</strong> at-least-once delivery + the client-generated <code>client_msg_id</code> for dedupe gives effectively-once; a per-conversation sequence number preserves order even if frames arrive out of turn.</li>
+        <li><strong>Scaling connections:</strong> the session registry lets any chat server find any user's connection box, so you add connection servers horizontally as concurrency grows — the same stateless-fleet story, now for sockets. (Group fan-out and the delivery pipeline: Module 10.)</li>
+      </ul>
+      <div class="callout">
+        <p class="lbl">The through-line</p>
+        <p>Every big decision here was an <strong>API/protocol decision</strong>: stream over poll, binary over text, persistent over stateless, REST kept for the cold path. That's this module's whole thesis — match the protocol to the traffic profile, and justify it out loud.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Your reps this week</h2>
+      <p>Reading is not learning — reps are. Do these, in order:</p>
+      <ol>
+        <li><strong>Design three contracts for one feature.</strong> Take "fetch a user's last 20 messages" and write it as (a) a REST endpoint, (b) a GraphQL query + schema, and (c) a gRPC <code>.proto</code> rpc. Feeling the same feature in three shapes is the fastest way to internalize their trade-offs.</li>
+        <li><strong>Whiteboard WhatsApp yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design it end-to-end with the 5-step framework, out loud, timed to ~35 minutes — <em>before</em> re-reading Section 08 or watching the videos. Force yourself to justify the protocol choice at Step 3.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your design against pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer running a system design interview. Give me the prompt: "Design WhatsApp." Then act as the interviewer — let me drive, ask clarifying and probing questions, and push hard on the API and protocol layer specifically: make me justify REST vs GraphQL vs gRPC, why (or why not) a persistent connection instead of polling, the wire format, how versioning and schema evolution work, and where an API gateway fits. Push back on anything hand-wavy and keep asking "why?". Do NOT give me the answer or lead me. After ~35 minutes (or when I say "done"), grade me 1–5 on each of: requirements gathering, capacity estimation, API/interface design, high-level design, deep-dives &amp; trade-offs, and communication — with specific feedback and what a strong candidate would have added.</div>
+      <ol start="4">
+        <li><strong>Compare the protocols in the tool.</strong> Run your three contracts through the <a href="../tools/protocol-compare.html">🔌 Protocol Compare</a> tool and check whether the profile it favors matches the choice you argued.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>Name the 4 Richardson Maturity levels · When gRPC over REST? · What is the GraphQL N+1 resolver problem and its fix? · Two API-versioning strategies and a downside of each · Why a persistent connection over REST polling for chat?</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the comparison and GraphQL ones <em>before</em> your reps; save the WhatsApp-adjacent gRPC deep-dive for when you want depth.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=I45eIDOSwlg" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>REST API vs GraphQL vs gRPC - The Complete Guide</b><div class="ch">Memi Lavi - The Software Architect <span class="dur">· ~20 min · comparison</span></div><p>The three styles head-to-head with an architect's decision lens. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=7-6F3b14baA" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>API Gateways in System Design Interviews w/ Ex-Meta Staff Engineer</b><div class="ch">Hello Interview <span class="dur">· ~20 min · API gateway</span></div><p>Exactly how to reason about a gateway when the interviewer probes the edge.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=Zg4XIpnLWQg" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Learn GraphQL in 7 Minutes For Beginners</b><div class="ch">PedroTech <span class="dur">· ~7 min · GraphQL</span></div><p>Fastest clean intro to schema, queries, and why GraphQL exists.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=u4LWEXDP7_M" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>This is why gRPC was invented</b><div class="ch">Hussein Nasser <span class="dur">· ~15 min · gRPC</span></div><p>The motivation and problems that led to gRPC — the "why" before the "how."</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=Yw4rkaTc0f8" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>gRPC Crash Course — Modes, Examples, Pros &amp; Cons and more</b><div class="ch">Hussein Nasser <span class="dur">· ~80 min · gRPC deep-dive</span></div><p>Protocol Buffers and all four streaming modes with real code. The deep cut.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=u6pYBP92l84" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>API Gateway: Key Features Explained in System Design</b><div class="ch">ByteMonk <span class="dur">· ~10 min · API gateway</span></div><p>Routing, auth, rate limiting, aggregation — the gateway's job list, tightly.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA Chapter 4 (Encoding and Evolution) — it covers Protocol Buffers, REST vs RPC, and forward/backward schema compatibility, the backbone of everything above. And the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> sections on APIs (REST vs RPC) — free.</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/10-realtime-async-apis.html">Next module →</a>
+    </div>
+
+    <footer>Module 9 of 24 · System Design Mastery · Phase 3 · Communication · Next up: Module 10 — Real-Time &amp; Async APIs (WebSockets, SSE, message queues, and the delivery/fan-out machinery behind the WhatsApp stream you just designed).</footer>
+  </div>
+</body>
+</html>

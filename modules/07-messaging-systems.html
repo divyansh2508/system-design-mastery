@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Messaging Systems | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#7048e8; --hue-soft:rgba(112,72,232,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#7048e8;--hue-soft:rgba(112,72,232,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#7048e8;--hue-soft:rgba(112,72,232,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#7048e8;--hue-soft:rgba(112,72,232,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+      <a href="../tools/message-queue.html">📨 Message Queue</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 3 · Communication</span><span class="sep">·</span><span>Module 7</span><span class="sep">·</span><span>Weeks 4-5 · ~13 hrs</span></p>
+      <h1>Messaging Systems</h1>
+      <p class="sub">The moment two services stop calling each other directly and start passing <strong>messages through a broker</strong>, you unlock decoupling, spike absorption, and independent scaling — and inherit duplicates, ordering, and delivery guarantees as the price. This module is how you wield that trade cleanly.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#async">Synchronous vs asynchronous</a></li>
+        <li><a href="#rabbit">RabbitMQ &amp; AMQP</a></li>
+        <li><a href="#kafka">Apache Kafka</a></li>
+        <li><a href="#queuelog">Queue vs log: choosing a broker</a></li>
+        <li><a href="#delivery">Delivery guarantees</a></li>
+        <li><a href="#dlq">Dead letter queues</a></li>
+        <li><a href="#idempotency">Idempotency patterns</a></li>
+        <li><a href="#tinder">Worked example: Tinder</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="async">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>Synchronous vs asynchronous</h2>
+      <p class="lead">Two services can communicate in two fundamentally different ways, and picking the wrong one is the source of a huge share of production outages.</p>
+      <p><strong>Synchronous</strong> is a direct request/response: service A calls service B and <em>blocks</em> until B answers. It's simple and you get an immediate result — but A and B are now <strong>temporally coupled</strong>. If B is slow, A is slow. If B is down, A's call fails. Chain five services synchronously and their failure probabilities and latencies <em>compound</em>: one slow dependency drags the whole request down, and a burst of traffic hits every hop at once.</p>
+      <p><strong>Asynchronous</strong> breaks that coupling. Instead of calling B, service A writes a <strong>message</strong> to a broker (a queue or a log) and moves on. B consumes it whenever it's ready. A doesn't wait, doesn't know or care whether B is up right now, and doesn't fall over when B does. The broker sits between them as a durable buffer.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Dimension</th><th>Synchronous (request/response)</th><th>Asynchronous (messaging)</th></tr></thead>
+          <tbody>
+            <tr><td>Coupling</td><td>Temporal — both must be up together</td><td>Decoupled in time and space</td></tr>
+            <tr><td>Result</td><td>Immediate, in-band</td><td>Deferred; caller gets an ack, not the answer</td></tr>
+            <tr><td>Traffic spikes</td><td>Hit the downstream directly</td><td>Buffered by the broker (load leveling)</td></tr>
+            <tr><td>Failure blast radius</td><td>Propagates up the call chain</td><td>Contained — consumer down ≠ producer down</td></tr>
+            <tr><td>Scaling</td><td>Coupled; slowest hop dominates</td><td>Producer &amp; consumer scale independently</td></tr>
+            <tr><td>Cost</td><td>Simple to reason about</td><td>Eventual consistency, duplicates, ordering to manage</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The three things async buys you, in the language interviewers reward: <strong>decoupling</strong> (deploy and scale producer and consumer on their own schedules), <strong>load leveling</strong> (a queue absorbs a 10× spike so the consumer drains it at a steady rate instead of crashing), and <strong>resilience</strong> (a downstream outage becomes a growing backlog, not a cascade of failed requests). You reach for it whenever work can happen <em>after</em> the response — sending email, encoding video, updating a search index, fanning out a notification.</p>
+
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>Async doesn't delete the work — it <strong>moves it off the request path</strong> and hands you a buffer. In exchange you accept eventual consistency and must design for <em>duplicate</em> and <em>out-of-order</em> messages. Everything else in this module is about paying that price on purpose.</p>
+      </div>
+    </section>
+
+    <section id="rabbit">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>RabbitMQ &amp; AMQP</h2>
+      <p><strong>RabbitMQ</strong> is the classic message broker — a <em>smart broker, dumb consumer</em> system that speaks <strong>AMQP</strong> (Advanced Message Queuing Protocol, 0-9-1). Its whole job is to accept messages and route them to the right queues, then push them to consumers. The routing intelligence lives in the broker.</p>
+      <p>The AMQP model has four moving parts you must be able to name:</p>
+      <ul>
+        <li><strong>Producer</strong> — publishes a message, but <em>never</em> directly to a queue. It publishes to an exchange with a <strong>routing key</strong>.</li>
+        <li><strong>Exchange</strong> — the router. It receives every message and decides which queues get a copy based on its type and the bindings attached to it.</li>
+        <li><strong>Binding</strong> — a rule linking an exchange to a queue, often carrying a routing-key pattern. Bindings are the routing table.</li>
+        <li><strong>Queue</strong> — the buffer that holds messages until a consumer acknowledges them. When multiple consumers attach to one queue, they <em>compete</em> — each message goes to exactly one of them (the competing-consumers pattern, i.e. a work queue).</li>
+      </ul>
+
+      <h3>Exchange types — the routing vocabulary</h3>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Exchange type</th><th>Routes by</th><th>Use it for</th></tr></thead>
+          <tbody>
+            <tr><td>Direct</td><td>Exact routing-key match</td><td>Point-to-point / severity routing (e.g. <code>order.created</code>)</td></tr>
+            <tr><td>Topic</td><td>Wildcard pattern (<code>*</code> one word, <code>#</code> many)</td><td>Flexible pub/sub (<code>payments.*.eu</code>)</td></tr>
+            <tr><td>Fanout</td><td>Ignores the key — copies to every bound queue</td><td>Broadcast (cache invalidation, notify all)</td></tr>
+            <tr><td>Headers</td><td>Message header attributes, not the key</td><td>Multi-attribute routing when keys are too rigid</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Here's a topic exchange fanning one publish out to the queues whose bindings match — and dropping it for those that don't:</p>
+      <pre><code>publish  routing_key = "order.eu.created"
+                     │
+             ┌───────▼─────────┐   exchange: "orders" (topic)
+             │   bindings:     │
+             │  order.eu.*  ───┼──▶ [ eu-fulfilment queue ]   <span class="cmt">match ✓</span>
+             │  order.#     ───┼──▶ [ audit-log queue ]        <span class="cmt">match ✓</span>
+             │  order.us.*  ───┼──▶ [ us-fulfilment queue ]    <span class="cmt">no match ✗ — dropped</span>
+             └─────────────────┘</code></pre>
+
+      <p><strong>Acknowledgements &amp; prefetch.</strong> RabbitMQ <em>pushes</em> messages to consumers. A consumer processes a message and sends an <code>ack</code>; only then does the broker delete it. If the consumer dies before acking, RabbitMQ redelivers to another consumer — that's how it gives you at-least-once. <code>prefetch</code> caps how many un-acked messages a consumer may hold, which is your flow-control knob so a fast broker doesn't bury a slow worker.</p>
+      <p>RabbitMQ shines when you need <strong>rich routing</strong>, per-message priorities, request/reply (RPC) over a queue, and a "do this task once" work-queue model. Its weakness is throughput ceiling and the fact that an acked message is <em>gone</em> — there is no rewind.</p>
+    </section>
+
+    <section id="kafka">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Apache Kafka</h2>
+      <p>Kafka flips the RabbitMQ philosophy on its head: it is a <em>dumb broker, smart consumer</em> system. At its core Kafka is not a queue at all — it's a <strong>distributed, append-only commit log</strong>. Producers append events to the end; consumers read forward at their own pace and track their own position. The broker does almost no routing and never decides who has "finished" a message.</p>
+
+      <h3>Topics, partitions &amp; offsets</h3>
+      <p>A <strong>topic</strong> is a named stream of events. Each topic is split into one or more <strong>partitions</strong>, and a partition is the real unit of everything: it's an ordered, immutable sequence of messages, each stamped with a monotonically increasing <strong>offset</strong> (0, 1, 2, …). Two guarantees follow directly and you must state them precisely:</p>
+      <ul>
+        <li><strong>Ordering is per-partition, not per-topic.</strong> Kafka guarantees order <em>within</em> a partition and makes no promise across partitions. If two events must be processed in order, they must land in the same partition.</li>
+        <li><strong>Partition is chosen by key.</strong> Producers hash the message key to pick a partition (<code>hash(key) % numPartitions</code>). Same key → same partition → preserved order. No key → round-robin for balance, order sacrificed.</li>
+      </ul>
+      <p><strong>Retention, not consumption.</strong> Unlike a queue, reading a Kafka message does <em>not</em> remove it. Messages live for a configured retention window (say 7 days) or size cap, regardless of who has read them. This is the superpower: consumers can <strong>replay</strong> history, a new consumer can read from offset 0, and multiple independent teams can read the same stream without stepping on each other.</p>
+
+      <h3>Consumer groups</h3>
+      <p>A <strong>consumer group</strong> is how Kafka does both work-sharing and pub/sub with one mechanism. The rule: <em>within a group, each partition is consumed by exactly one consumer.</em> So you scale a workload by adding consumers up to the partition count — <strong>partitions are the ceiling on parallelism</strong>. Add more consumers than partitions and the extras sit idle. Meanwhile, <em>different</em> groups each get their own full copy of the stream and their own offsets — that's pub/sub across teams.</p>
+
+      <pre><code>topic "swipes"  (4 partitions, key = userId)
+
+  P0: [o0][o1][o2][o3]───▶            group "match-service"          group "analytics"
+  P1: [o0][o1][o2]──────▶   consumerA ⟵ P0,P1                        consumerX ⟵ P0,P1,P2,P3
+  P2: [o0][o1][o2][o3]──▶   consumerB ⟵ P2,P3                        (separate offsets,
+  P3: [o0][o1]──────────▶                                             replays independently)
+
+  • each partition → exactly one consumer *within* a group
+  • parallelism of a group is capped at 4 (the partition count)
+  • the two groups read the same data at their own offsets  ← pub/sub</code></pre>
+
+      <p>Consumers commit their offsets (stored in the internal <code>__consumer_offsets</code> topic). Commit <em>after</em> processing and a crash replays the last batch — at-least-once. Commit <em>before</em> processing and a crash skips it — at-most-once. That single choice is the whole delivery-guarantee story, which is Section 05. Under the hood each partition is replicated to a leader + followers (the in-sync replica set) so a broker failure doesn't lose data.</p>
+      <p>Kafka is the tool when you need <strong>high throughput</strong> (millions of msgs/s), <strong>replay</strong>, event sourcing, or one stream fanned to many independent consumers. Its cost: no per-message routing, no priorities, and ordering only if you partition deliberately.</p>
+    </section>
+
+    <section id="queuelog">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>Queue vs log: choosing a broker</h2>
+      <p>Most "RabbitMQ or Kafka?" confusion dissolves once you hold the one mental-model difference: a <strong>queue deletes on consume</strong>, a <strong>log retains and lets consumers track a position</strong>. Everything else is downstream of that.</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Aspect</th><th>RabbitMQ (queue / broker)</th><th>Kafka (distributed log)</th></tr></thead>
+          <tbody>
+            <tr><td>Core model</td><td>Smart broker routes; message removed on ack</td><td>Dumb log; message retained, consumer tracks offset</td></tr>
+            <tr><td>Delivery</td><td>Push to consumer</td><td>Pull by consumer</td></tr>
+            <tr><td>Replay</td><td>No — once acked it's gone</td><td>Yes — re-read any offset within retention</td></tr>
+            <tr><td>Ordering</td><td>Per-queue (weakens with competing consumers)</td><td>Strict per-partition</td></tr>
+            <tr><td>Throughput</td><td>Tens of thousands msg/s</td><td>Millions msg/s</td></tr>
+            <tr><td>Routing</td><td>Rich (direct/topic/fanout/headers, priorities)</td><td>Minimal — partition by key, consumers filter</td></tr>
+            <tr><td>Best for</td><td>Task queues, RPC, complex routing, "do once"</td><td>Event streaming, replay, many consumers, analytics</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The interview-grade heuristic: pick <strong>RabbitMQ</strong> when the message is a <em>command</em> — a unit of work you want done once and then forgotten, with routing logic ("send this to the EU fulfilment worker"). Pick <strong>Kafka</strong> when the message is an <em>event</em> — a fact that happened, that several independent systems will want to read now and possibly re-read later. Commands to a queue; events to a log. Say that sentence in an interview and you sound senior.</p>
+    </section>
+
+    <section id="delivery">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Delivery guarantees</h2>
+      <p>Every messaging system makes one of three promises about how many times a message reaches its consumer. The choice is a trade between <em>losing</em> data and <em>duplicating</em> it, and it comes down to <strong>when you acknowledge relative to when you process</strong>.</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Guarantee</th><th>Mechanism</th><th>Failure mode</th><th>Use when</th></tr></thead>
+          <tbody>
+            <tr><td>At-most-once</td><td>Ack / commit offset <em>before</em> processing</td><td>Message can be lost on crash</td><td>Metrics, logs — a dropped one is harmless</td></tr>
+            <tr><td>At-least-once</td><td>Ack / commit offset <em>after</em> processing</td><td>Message can be duplicated on retry</td><td>The default for almost everything</td></tr>
+            <tr><td>Exactly-once</td><td>At-least-once + idempotency / transactions</td><td>Complex, narrower scope than it sounds</td><td>Money movement, dedup-critical pipelines</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>At-least-once is the workhorse.</strong> You process the message, <em>then</em> acknowledge. If you crash between the two, the broker redelivers and you handle it again. That means duplicates are not an edge case — they are guaranteed to happen eventually — so an at-least-once consumer <em>must</em> be idempotent (Section 07). This is the design most real systems actually run.</p>
+
+      <div class="callout tip">
+        <p class="lbl">The exactly-once truth</p>
+        <p>Exactly-once <em>delivery</em> across an unreliable network is <strong>impossible in the general case</strong> — a sender that gets no ack can't tell whether the message was lost or the ack was lost, so it must either risk losing it or risk resending it. What engineers actually build is exactly-once <em>processing</em>: <strong>at-least-once delivery + an idempotent consumer</strong> (or deduplication). The message may arrive twice; its <em>effect</em> lands once.</p>
+      </div>
+
+      <p><strong>What Kafka's "exactly-once semantics" (EOS) actually covers.</strong> Kafka can give you exactly-once for a <em>read-process-write loop that stays inside Kafka</em>, via two pieces working together:</p>
+      <ul>
+        <li><strong>Idempotent producer</strong> — Kafka assigns each producer a Producer ID and a per-partition sequence number, so a retried send is de-duplicated by the broker and written to the log only once.</li>
+        <li><strong>Transactions</strong> — a producer can atomically write to multiple partitions <em>and</em> commit its input offsets in one transaction, so a consume-transform-produce step is all-or-nothing.</li>
+      </ul>
+      <p>The load-bearing caveat, and the thing a senior interviewer will probe: <strong>EOS does not extend to external side effects.</strong> If your consumer reads Kafka and then writes a row to Postgres, charges a card, or sends an SMS, Kafka cannot roll those back. For anything that touches the outside world, you are back to at-least-once + idempotency. Don't oversell exactly-once — name its boundary.</p>
+
+      <div class="callout tool">
+        <p class="lbl">Play with it → your tool</p>
+        <p>Open the <a href="../tools/message-queue.html">📨 Message Queue Simulator</a> and watch these guarantees become concrete: enqueue faster than the consumer drains and see the backlog build (load leveling); kill a consumer mid-process and watch the un-acked message <strong>redeliver</strong> (at-least-once → a visible duplicate); then flip on an idempotency key and see the duplicate get swallowed. Change one knob at a time and build the muscle memory.</p>
+      </div>
+    </section>
+
+    <section id="dlq">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>Dead letter queues</h2>
+      <p>At-least-once has a nasty failure mode: a <strong>poison message</strong>. Suppose one message can never be processed — malformed payload, a referenced record that was deleted, a bug that always throws. The consumer fails, the broker redelivers, it fails again… forever. That single message blocks the queue behind it and burns CPU in an infinite retry loop.</p>
+      <p>A <strong>dead letter queue (DLQ)</strong> is the release valve. After a message fails a bounded number of times, instead of redelivering it endlessly you <em>route it aside</em> to a separate queue (or topic). The main flow keeps moving; the failed message is preserved — not dropped — for inspection, alerting, and later replay once you've shipped a fix.</p>
+      <p>A message typically dead-letters when it is: <strong>rejected/nacked</strong> past a retry limit, <strong>expired</strong> (TTL elapsed), or the queue hit a <strong>length limit</strong>. The healthy pattern is bounded retries <em>with backoff</em>, then DLQ:</p>
+      <pre><code>consume ─▶ process ──ok──▶ ack ✓
+   ▲            │
+   │          fail
+   │            ▼
+   └── retry (attempt &lt; N, exponential backoff: 1s, 4s, 16s…)
+                │
+          attempt == N
+                ▼
+        ┌──────────────┐   route aside, DON'T redeliver
+        │  dead letter  │   → alert on depth, inspect, fix, replay
+        └──────────────┘</code></pre>
+      <p><strong>How each broker does it.</strong> RabbitMQ has first-class support: configure a <em>dead-letter-exchange</em> (DLX) on a queue and rejected/expired messages are republished there automatically. Kafka has <em>no native DLQ</em> — you implement one by having your consumer (or Kafka Connect / Kafka Streams) catch the failure and produce the bad record to a dedicated <code>&lt;topic&gt;.DLT</code> topic, usually with headers recording the original topic, offset, and exception.</p>
+      <div class="callout">
+        <p class="lbl">Operational rule</p>
+        <p>A DLQ is worthless if nobody watches it. <strong>Alert on DLQ depth &gt; 0.</strong> A growing dead-letter queue is your earliest, cleanest signal that a downstream contract broke — treat it like a page, not a log.</p>
+      </div>
+    </section>
+
+    <section id="idempotency">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Idempotency patterns</h2>
+      <p>Because at-least-once <em>will</em> hand you duplicates, the reliability of an async system rests on one property: an operation is <strong>idempotent</strong> if applying it many times has the same effect as applying it once. Idempotency is what turns "the message may arrive twice" into "who cares." Here are the patterns, from simplest to most robust:</p>
+      <ul>
+        <li><strong>Idempotency key.</strong> The producer stamps each logical operation with a unique key (a UUID, or a natural key like <code>(userId, targetId)</code>). The consumer records processed keys and short-circuits a repeat. This is the workhorse — it's how Stripe's API dedupes retried payments.</li>
+        <li><strong>Natural / semantic idempotency.</strong> Design the write so repeating it is a no-op. Prefer <em>SET to a value</em> or <em>UPSERT with a deterministic ID</em> over <em>INCREMENT</em> or blind <em>INSERT</em>. "Set status = shipped" is idempotent; "add 1 to count" is not.</li>
+        <li><strong>Dedup store.</strong> Keep a set of seen message IDs (Redis with a TTL, or a unique DB constraint). Check-then-apply; a duplicate hits the constraint and is dropped. The TTL bounds the memory to your retry window.</li>
+        <li><strong>Optimistic concurrency.</strong> Attach a version number and use compare-and-set (<code>UPDATE … WHERE version = N</code>). A stale duplicate updates 0 rows and is safely ignored — this also protects against concurrent writers.</li>
+        <li><strong>Transactional outbox.</strong> Solves the <em>dual-write problem</em> — the trap of "write to my DB, then publish to Kafka," where a crash between the two loses or fabricates an event. Instead, write the state change <em>and</em> an <code>outbox</code> row in one local transaction; a separate relay reads the outbox and publishes. The publish becomes at-least-once and consumers dedup on the outbox row's ID.</li>
+      </ul>
+      <p>A minimal idempotent consumer, spelling out the check-apply-record cycle:</p>
+      <pre><code>def handle(msg):
+    key = msg.idempotency_key          <span class="cmt"># e.g. (user_id, target_id) or a UUID</span>
+    if dedup_store.exists(key):        <span class="cmt"># seen it → this is a duplicate</span>
+        ack(msg); return               <span class="cmt"># swallow, effect already applied</span>
+
+    with db.transaction():             <span class="cmt"># apply + record atomically</span>
+        apply_effect(msg)              <span class="cmt"># the real work (upsert, not blind insert)</span>
+        dedup_store.add(key, ttl=24h)  <span class="cmt"># remember within the retry window</span>
+
+    ack(msg)                           <span class="cmt"># ack AFTER work → at-least-once</span></code></pre>
+      <p>Note the ordering: apply-and-record inside one transaction, <em>then</em> ack. If you crash before the ack, the broker redelivers, the dedup check catches it, and the effect stays singular. That single discipline — at-least-once delivery wrapped in an idempotent consumer — is exactly-once processing, built from parts you can actually reason about.</p>
+    </section>
+
+    <section id="tinder">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Worked example: Tinder</h2>
+      <p>Let's run the five-step framework on <em>"Design Tinder"</em>, keeping the lens on the messaging spine — swipes, matches, chat, and notifications — because that's where this module's ideas earn their keep.</p>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Functional:</strong> swipe on a profile (like / pass); detect a <em>match</em> when two users like each other; deliver a real-time <em>chat</em> between matched users; push a <em>notification</em> on a new match or message. (Out of scope, say it: recommendation/ranking of the deck, geolocation search, media uploads.)</li>
+        <li><strong>Non-functional:</strong> enormous write volume (swipes dwarf everything); low-latency match notification (feels instant); chat must be <strong>reliable and ordered per conversation</strong>; high availability; eventual consistency is fine for the deck, but a chat message must never be silently lost.</li>
+      </ul>
+
+      <h3>② Estimate</h3>
+      <pre><code>50M DAU × ~100 swipes/day  = 5B swipes/day
+5B ÷ 100,000 (s/day)       ≈ 50k swipes/s avg   <span class="cmt">peak ×3 ≈ ~150k/s</span>
+matches ≈ ~1% of swipes    ≈ 500/s of match events
+chat: 10M msgs/day         ≈ 100 msgs/s avg     <span class="cmt">peak ×5 ≈ ~500/s</span></code></pre>
+      <p>Verdict: swipes are a <strong>firehose of small events</strong> → a partitioned log (Kafka) built for throughput and replay, not a per-message-routing broker. Match and chat volumes are modest — the hard part there is <em>correctness and ordering</em>, not raw scale.</p>
+
+      <h3>③ Interface</h3>
+      <pre><code>POST /api/v1/swipes
+  header: Idempotency-Key: &lt;uuid&gt;              <span class="cmt"># dedupe double-taps / client retries</span>
+  body:   { "targetUserId": "...", "action": "like" | "pass" }
+  returns 202 Accepted   { "matched": false }  <span class="cmt"># match resolves async</span>
+
+GET  /api/v1/matches
+POST /api/v1/matches/{matchId}/messages
+  body:   { "clientMsgId": "...", "text": "..." }   <span class="cmt"># clientMsgId = dedup key</span>
+WS   /ws  → live match + message push</code></pre>
+
+      <h3>④ High-level design</h3>
+      <pre><code>              ┌── Swipe Svc ──▶ Kafka "swipes" (key = userId, N partitions)
+ client ─LB─▶ API GW           │
+              │                └─▶ Match Worker (consumer group)
+              │                       │  reciprocal like in store?
+              │                       └─yes─▶ Kafka "matches" ──┬─▶ Notification Svc ─▶ push
+              │                                                 └─▶ Chat Svc (opens conversation)
+              └── Chat Svc ◀─WS─▶ client
+                     └─▶ msgs → queue → deliver + persist (shard by conversationId)</code></pre>
+      <p>Swipes are accepted fast (202) and dropped onto Kafka; a match-worker consumer group does the reciprocal-like check off the hot path; a match emits an event that fans out to notifications and chat.</p>
+
+      <h3>⑤ Deep-dive &amp; scale — where this module pays off</h3>
+      <ul>
+        <li><strong>Idempotent swipes (Section 07).</strong> Double-taps and client retries are constant on mobile. The write is an <em>upsert</em> keyed on <code>(userId, targetUserId)</code> plus the <code>Idempotency-Key</code> — a second identical swipe is a no-op, so we never fabricate a phantom like or a duplicate match.</li>
+        <li><strong>Match detection over a partitioned stream (Section 03).</strong> Partition <code>swipes</code> by <code>userId</code> so one user's actions are ordered and one consumer owns them. The worker records the like and checks for the reciprocal in the likes store; on a hit it emits to <code>matches</code>. Scale throughput by adding partitions and consumers together — remember partitions cap parallelism.</li>
+        <li><strong>Delivery guarantee for chat (Section 05).</strong> Choose <strong>at-least-once</strong> for messages — losing a text is unacceptable, a rare duplicate is not. Make the message store idempotent via <code>clientMsgId</code> (unique constraint), and preserve per-conversation order by partitioning/sharding on <code>conversationId</code>. That's exactly-once <em>processing</em> without pretending we have exactly-once <em>delivery</em>.</li>
+        <li><strong>DLQ for notifications (Section 06).</strong> Push delivery fails routinely — stale device tokens, APNs/FCM hiccups. Retry with backoff, then route failures to a <code>notifications.DLT</code> topic and alert on its depth; a bad token shouldn't wedge the notification consumer or drown a healthy user in retries.</li>
+        <li><strong>Don't oversell exactly-once.</strong> We never claim a push is sent exactly once — the network won't allow it. We make the notification consumer idempotent (dedup on notification ID) so a redelivery doesn't double-buzz the phone. Naming that boundary is the senior move.</li>
+      </ul>
+      <div class="callout">
+        <p class="lbl">See it move</p>
+        <p>The redelivery-and-dedupe behavior your chat pipeline depends on is exactly what the <a href="../tools/message-queue.html">📨 Message Queue Simulator</a> makes visible — kill a consumer mid-message and watch at-least-once produce the duplicate that your <code>clientMsgId</code> constraint then swallows.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Your reps this week</h2>
+      <p>Reading is not learning — reps are. Do these, in order:</p>
+      <ol>
+        <li><strong>Whiteboard Tinder's messaging spine yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design the swipe → match → chat → notification flow end-to-end using the 5-step framework, out loud, timed to ~35 minutes — <em>before</em> re-reading Section 08. Force yourself to name a delivery guarantee and an idempotency strategy for every arrow.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your design against pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer running a system design interview. Give me the prompt: "Design Tinder — focus on the swipe, match, and chat/messaging pipeline." Then act as the interviewer — let me drive, ask clarifying and probing questions, push back on anything hand-wavy, and keep asking "why?". Probe specifically on: how I make swipe writes idempotent, how match detection works over a partitioned event stream, which delivery guarantee I pick for chat and why, where a dead letter queue belongs, and whether my "exactly-once" claim survives external side effects. Do NOT give me the answer or lead me. After ~35 minutes (or when I say "done"), grade me 1–5 on each of: requirements gathering, capacity estimation, API design, high-level design, deep-dives &amp; trade-offs, and communication — with specific feedback and what a strong candidate would have added.</div>
+      <ol start="3">
+        <li><strong>Break it in the simulator.</strong> In the <a href="../tools/message-queue.html">📨 Message Queue Simulator</a>, reproduce all three behaviors by hand: build a backlog (load leveling), force a redelivery (at-least-once duplicate), and dead-letter a poison message. If you can't cause each on demand, you don't understand it yet.</li>
+        <li><strong>Explain it back.</strong> Teach a rubber duck (or me) the queue-vs-log distinction and why exactly-once delivery is impossible — without notes. Gaps you can't explain are gaps you don't have yet.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>Sync vs async — one thing async buys you, one it costs? · Which RabbitMQ exchange type broadcasts to every bound queue? · In Kafka, what is guaranteed ordered — a topic or a partition? · Why is exactly-once delivery impossible, and what do we build instead? · What sends a message to a DLQ, and why not retry forever?</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the Kafka primer and the queue-vs-log comparison <em>before</em> your reps; save the deep dives for when you want depth.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=HZklgPkboro" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>System Design: Apache Kafka In 3 Minutes</b><div class="ch">ByteByteGo <span class="dur">· ~4 min · Kafka primer</span></div><p>The fastest correct mental model of topics, partitions, and consumers. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=PQHf_IzmUXE" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Kafka vs RabbitMQ: The Best Message Queue Explained</b><div class="ch">The Coding Gopher <span class="dur">· ~13 min · queue vs log</span></div><p>Side-by-side on the push-vs-pull and delete-vs-retain difference from Section 04.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=Cie5v59mrTg" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>RabbitMQ Crash Course</b><div class="ch">Hussein Nasser <span class="dur">· ~43 min · RabbitMQ tutorial</span></div><p>AMQP, exchanges, bindings, and acks — hands-on with Docker. The RabbitMQ half of this module.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=iJLL-KPqBpM" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>System Design Interview - Distributed Message Queue</b><div class="ch">System Design Interview <span class="dur">· ~55 min · delivery guarantees</span></div><p>Walks at-most/at-least/exactly-once and dead letter queues from first principles — the core of Sections 05–06.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=DU8o-OTeoCc" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Kafka System Design Deep Dive w/ a Ex-Meta Staff Engineer</b><div class="ch">Hello Interview <span class="dur">· ~35 min · interview deep dive</span></div><p>How to actually wield Kafka in an interview — partitions, consumer groups, trade-offs. Watch before your Tinder rep.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA Chapter 11, "Stream Processing" (message brokers, partitioned logs, and delivery guarantees — the canonical treatment of everything above). And the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> section on asynchronism &amp; message queues (free).</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/08-event-driven-cqrs.html">Next module →</a>
+    </div>
+
+    <footer>Module 7 of 24 · System Design Mastery · Phase 3 · Communication · Next up: Module 8 — Event-Driven Architecture &amp; CQRS.</footer>
+  </div>
+</body>
+</html>

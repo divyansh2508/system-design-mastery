@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG Systems &amp; Context-Aware AI | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#1098ad; --hue-soft:rgba(16,152,173,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#1098ad;--hue-soft:rgba(16,152,173,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#1098ad;--hue-soft:rgba(16,152,173,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#1098ad;--hue-soft:rgba(16,152,173,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+      <a href="../tools/rag-pipeline.html">🧠 RAG Pipeline</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Track B · GenAI Development</span><span class="sep">·</span><span>Module B4</span><span class="sep">·</span><span>Weeks 13+ · ~13 hrs</span></p>
+      <h1>RAG Systems &amp; Context-Aware AI</h1>
+      <p class="sub">How to give a language model the <strong>right facts at the right moment</strong> — retrieval-augmented generation, embeddings, vector search, and the failure modes that separate a slick demo from a production developer assistant your team actually trusts.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#what">What RAG is &amp; why it exists</a></li>
+        <li><a href="#pipeline">The RAG pipeline end-to-end</a></li>
+        <li><a href="#embeddings">Embeddings &amp; semantic search</a></li>
+        <li><a href="#vectordb">Vector databases &amp; indexing</a></li>
+        <li><a href="#retrieval">Chunking &amp; retrieval strategy</a></li>
+        <li><a href="#codebase">Connecting AI to your code &amp; docs</a></li>
+        <li><a href="#assistant">Worked example: a dev assistant</a></li>
+        <li><a href="#failures">Limitations &amp; failure modes</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="what">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>What RAG is &amp; why it exists</h2>
+      <p class="lead"><strong>Retrieval-Augmented Generation (RAG)</strong> is the pattern of <em>fetching relevant text at query time and pasting it into the model's prompt</em> so the model answers from that grounded context instead of from memory alone.</p>
+      <p>A base LLM has three structural gaps that no amount of prompting fixes. It has a <strong>knowledge cutoff</strong> — it never saw your last sprint's decisions or last night's incident. It has <strong>no access to private data</strong> — your codebase, your wiki, your customer records were never in its training set. And it will <strong>hallucinate</strong> — when it doesn't know, it produces fluent, confident, wrong text, because it was trained to be plausible, not to abstain. RAG attacks all three at once: retrieve the actual passage, hand it to the model, and ask it to answer <em>from that</em>.</p>
+      <p>The mental model that keeps you honest: an LLM is a brilliant reasoner with <strong>amnesia</strong>; RAG is the open-book exam. You don't retrain the student for every new fact — you let them look it up. Fine-tuning teaches <em>behaviour and style</em>; RAG supplies <em>knowledge</em>. They solve different problems, and RAG is almost always the cheaper, faster, more auditable way to make a model current.</p>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>RAG doesn't make the model smarter — it makes the model <strong>informed and citable</strong>. Every answer can point at the source passage it used, which is what turns an AI toy into something a senior engineer will actually ship.</p>
+      </div>
+      <p>The payoff beyond accuracy is <strong>trust and freshness</strong>. Because the answer is grounded in a retrieved chunk, you can show the citation, and because knowledge lives in an index you own, updating a doc updates the model's answers instantly — no retraining, no redeploy. That property alone is why RAG became the default architecture for internal assistants, support bots, and code companions.</p>
+    </section>
+
+    <section id="pipeline">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>The RAG pipeline end-to-end</h2>
+      <p>RAG splits cleanly into two phases: an <strong>offline indexing</strong> phase that runs when your data changes, and an <strong>online query</strong> phase that runs on every request. Almost every production bug lives in one of these six steps — knowing the seams is how you debug them.</p>
+
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>Ingest &amp; chunk <span class="ft">offline</span></b><p>Pull in the source corpus (docs, wikis, code, tickets), split each document into passages of a few hundred tokens with some overlap. Chunking is the single highest-leverage decision in the whole pipeline.</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>Embed <span class="ft">offline</span></b><p>Run every chunk through an embedding model to get a vector — a list of numbers that encodes meaning. Same model must be used at query time; mixing embedding models silently breaks retrieval.</p></div></div>
+        <div class="fstep"><span class="fn">3</span><div><b>Index <span class="ft">offline</span></b><p>Store the vectors (plus metadata: source, path, timestamp) in a vector database with an approximate-nearest-neighbour index so similarity search is fast at millions of chunks.</p></div></div>
+        <div class="fstep"><span class="fn">4</span><div><b>Retrieve <span class="ft">online</span></b><p>Embed the user's query with the <em>same</em> model, ask the index for the top-k most similar chunks. Optionally filter by metadata (this repo, this team, docs newer than X).</p></div></div>
+        <div class="fstep"><span class="fn">5</span><div><b>Augment <span class="ft">online</span></b><p>Assemble a prompt: system instructions + the retrieved chunks (with their sources) + the user question. This "context stuffing" is where the R meets the G.</p></div></div>
+        <div class="fstep"><span class="fn">6</span><div><b>Generate <span class="ft">online</span></b><p>The LLM writes the answer grounded in the supplied context, ideally citing which chunk each claim came from. You return the answer <em>and</em> its sources.</p></div></div>
+      </div>
+
+      <p>Read the flow in one line: <strong>chunk → embed → index</strong> (offline), then <strong>embed query → retrieve → stuff → generate</strong> (online). The G step gets all the attention, but in practice the quality of a RAG system is dominated by the <strong>R</strong> — if retrieval hands the model the wrong passages, no model can save the answer.</p>
+
+      <div class="callout tool">
+        <p class="lbl">Play with it → your tool</p>
+        <p>Open the <a href="../tools/rag-pipeline.html">🧠 RAG Pipeline</a> and watch a query flow through all six stages — see how a chunk gets embedded, how top-k similarity picks passages, and how changing chunk size or <code>k</code> changes what lands in the prompt. Break retrieval on purpose and watch the answer degrade; that intuition is the whole module.</p>
+      </div>
+    </section>
+
+    <section id="embeddings">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Embeddings &amp; semantic search</h2>
+      <p>An <strong>embedding</strong> is a function that turns a piece of text into a fixed-length vector of floating-point numbers — commonly 384, 768, or 1536 dimensions. The magic is <em>where</em> the vector lands: the model is trained so that texts with similar meaning end up close together in that high-dimensional space, even when they share no words. "How do I reset my password?" and "steps to recover account access" have almost no keyword overlap, but their vectors nearly touch.</p>
+      <p>That's the leap from keyword search to <strong>semantic search</strong>. Classic search (BM25, Elasticsearch's default) matches <em>tokens</em>; it's precise for exact terms and hopeless for synonyms and paraphrase. Semantic search matches <em>meaning</em> by measuring the distance between vectors. The usual distance is <strong>cosine similarity</strong> — the angle between two vectors, from 1.0 (identical direction) to −1.0 (opposite) — because we care about direction, not magnitude.</p>
+
+      <pre><code><span class="cmt"># The whole idea in five lines of pseudo-code</span>
+v_query = embed("how do I revoke an API key?")   <span class="cmt"># -> [0.02, -0.11, ...]  (768 floats)</span>
+for chunk in corpus:
+    score = cosine(v_query, chunk.vector)          <span class="cmt"># nearness of meaning</span>
+top_k = sort_by(score, desc)[:5]                   <span class="cmt"># the 5 most relevant passages</span></code></pre>
+
+      <p>A few properties worth carrying into interviews. <strong>Dimensions are a trade-off:</strong> more dims capture more nuance but cost more storage and slower search — 768 is a sane default, 1536 for richer corpora. <strong>The embedding model is a hard dependency:</strong> you must embed queries and documents with the <em>same</em> model, and if you upgrade the model you must re-embed the entire corpus. And embeddings are <strong>lossy</strong> — they compress a paragraph into a point, so fine-grained facts (a specific number, a negation) can wash out. That lossiness is the seed of several failure modes in Section 08.</p>
+      <p>Which model? For most teams a strong open model (the BGE or nomic families) run locally, or a hosted embedding API, both work well; the differentiator is rarely the model and almost always your <em>chunking and retrieval strategy</em> (Section 05). Pick a decent embedder, then spend your energy on the pipeline around it.</p>
+    </section>
+
+    <section id="vectordb">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>Vector databases &amp; indexing</h2>
+      <p>Once you have millions of chunk vectors, the core operation is: <em>given a query vector, find its nearest neighbours.</em> Doing that exactly means comparing the query to every stored vector — <code>O(n)</code> per query, fine for 10k chunks, ruinous at 10M. A <strong>vector database</strong> exists to make that search sub-linear by building an <strong>Approximate Nearest Neighbour (ANN)</strong> index — trading a sliver of recall for orders-of-magnitude speed.</p>
+      <p>The dominant ANN index is <strong>HNSW</strong> (Hierarchical Navigable Small World) — a layered graph you greedily walk from a coarse top layer down to fine-grained local neighbourhoods, reaching the nearest vectors in roughly logarithmic hops. The other common family is <strong>IVF</strong> (inverted-file), which clusters vectors and searches only the nearest clusters; often paired with <strong>PQ</strong> (product quantization) to compress vectors and shrink memory. The knobs (HNSW's <code>ef</code>/<code>M</code>, IVF's <code>nprobe</code>) all dial the same trade-off: <strong>recall vs. latency vs. memory</strong>.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Option</th><th>Shape</th><th>Reach for it when</th></tr></thead>
+          <tbody>
+            <tr><td>pgvector</td><td>Postgres extension</td><td>You already run Postgres and want vectors next to your relational data — no new system</td></tr>
+            <tr><td>FAISS</td><td>In-process library</td><td>You need a fast, embeddable index and will manage persistence/serving yourself</td></tr>
+            <tr><td>Qdrant / Weaviate / Milvus</td><td>Dedicated vector DB</td><td>Large corpora, rich metadata filtering, horizontal scale as a first-class concern</td></tr>
+            <tr><td>Pinecone</td><td>Managed service</td><td>You want zero index ops and will trade cost/lock-in for it</td></tr>
+            <tr><td>Elasticsearch / OpenSearch</td><td>Search engine + vectors</td><td>You want dense <em>and</em> keyword search in one place (hybrid, Section 05)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The feature that matters most in practice isn't raw speed — it's <strong>metadata filtering</strong>. Real queries are "find similar chunks <em>from this repo, on the main branch, updated this quarter, that this user is allowed to see</em>." A vector DB that filters efficiently <em>during</em> the ANN walk (not by over-fetching then discarding) is what makes multi-tenant, access-controlled RAG viable. Weigh that as heavily as benchmark QPS.</p>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>Don't default to a shiny dedicated vector DB. If the corpus is under a few million chunks and you already run Postgres, <strong>pgvector is often the senior answer</strong> — one fewer system to operate, transactional consistency with your source data, and HNSW support built in. Name the scale threshold at which you'd graduate to a dedicated store.</p>
+      </div>
+    </section>
+
+    <section id="retrieval">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Chunking &amp; retrieval strategy</h2>
+      <p>This is the section that separates working RAG from a demo, and it's the part beginners skip. The embedding model and vector DB are commodities; your <strong>chunking and retrieval strategy</strong> is where the quality actually comes from.</p>
+
+      <h3>Chunking</h3>
+      <p>You split documents because a whole file is too big to embed meaningfully and too big to stuff into a prompt. But <em>how</em> you split decides what can ever be retrieved. Chunk too large and a single vector blurs several topics, so precision collapses; chunk too small and you sever the context a fact needs to make sense. Good defaults: <strong>a few hundred tokens per chunk with ~10–20% overlap</strong>, and — crucially — <strong>split on natural boundaries</strong> (headings, paragraphs, function definitions) rather than blindly every N characters. Attach metadata to every chunk (title, section, source path) so retrieval can filter and the model can cite.</p>
+
+      <h3>Retrieval quality</h3>
+      <ul>
+        <li><strong>Hybrid search.</strong> Dense (semantic) retrieval is great at paraphrase but can miss exact identifiers — an error code, a function name, a SKU. Combine it with sparse keyword search (BM25) and fuse the rankings. Hybrid beats either alone on almost every real corpus.</li>
+        <li><strong>Reranking.</strong> Retrieve a wide net (top-20 to top-50) cheaply, then run a <strong>cross-encoder reranker</strong> that scores each candidate against the query with full attention, and keep the best 3–5. This two-stage "retrieve wide, rerank narrow" is the highest-ROI upgrade you can make.</li>
+        <li><strong>Tune <code>k</code> deliberately.</strong> Too few chunks and you starve the model of context; too many and you drown the answer in noise and pay for tokens. Start at k≈5 <em>after</em> reranking and measure.</li>
+        <li><strong>Query transformation.</strong> Rewrite vague or multi-part questions before retrieving — expand acronyms, split compound questions, or generate a hypothetical answer to embed (HyDE). Small step, real recall gains on messy queries.</li>
+      </ul>
+      <p>The through-line: <strong>garbage retrieval → garbage answer</strong>, and no model fixes bad retrieval. Spend your engineering budget here before you reach for a bigger LLM.</p>
+    </section>
+
+    <section id="codebase">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>Connecting AI to your code, docs &amp; internal data</h2>
+      <p>Grounding a model in <em>your</em> world — the codebase, the runbooks, the design docs, the ticket history — is where RAG earns its keep for engineering teams. The pipeline is the same; the details of ingestion are what change.</p>
+      <ul>
+        <li><strong>Code needs code-aware chunking.</strong> Don't split source by character count — split on structure. Chunk by function, method, or class using the language's syntax (a tree-sitter/AST parse), and carry the signature, file path, and symbol name as metadata. A chunk that stops mid-function is worse than useless.</li>
+        <li><strong>Docs split on headings.</strong> Markdown and Confluence pages have a natural hierarchy — respect it. Keep a heading trail ("Auth › Token rotation › Revocation") in metadata so retrieval can filter and answers can cite the exact section.</li>
+        <li><strong>Incremental, not full, re-indexing.</strong> Codebases and wikis change constantly. Re-embedding everything nightly is wasteful and stale; hash each chunk and re-embed only what changed, wired to a commit hook or a webhook. Freshness is a feature.</li>
+        <li><strong>Access control is not optional.</strong> Retrieval must respect who is allowed to see what. Stamp every chunk with its ACL (team, repo, visibility) and filter at query time. A RAG bot that surfaces a private repo's secrets to the wrong user is a security incident, not a bug.</li>
+        <li><strong>Structured data is different.</strong> For rows in a database, embedding raw records rarely beats letting the model write a query (text-to-SQL) or calling an API. RAG shines on <em>unstructured</em> text; know when a different tool fits better.</li>
+      </ul>
+      <p>This is also the boundary where RAG starts shading into <em>agents</em>: once the assistant can choose <em>which</em> source to retrieve from, or decide to run a tool instead of retrieving, you're one step from Module B5. RAG is the retrieval substrate agents stand on.</p>
+    </section>
+
+    <section id="assistant">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Worked example: a developer assistant over your docs &amp; code</h2>
+      <p>Let's build the thing most teams actually want: <em>"Ask a question in Slack, get an answer grounded in our internal docs and codebase, with links to the source."</em> Read it once, then you'll design your own in the reps below.</p>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Corpus:</strong> one monorepo (~2M lines) + a Confluence space (~4k pages) + closed Jira tickets.</li>
+        <li><strong>Query:</strong> natural-language questions from engineers — "how does token rotation work?", "where do we validate webhook signatures?"</li>
+        <li><strong>Must-haves:</strong> answers cite their sources, respect repo/space access, and stay fresh within a day of a merge or doc edit.</li>
+      </ul>
+
+      <h3>② Indexing pipeline (offline)</h3>
+      <pre><code><span class="cmt"># Docs: split on heading hierarchy, keep the trail + ACL</span>
+for page in confluence:
+    for section in split_by_headings(page):
+        store(embed(section.text),
+              meta={source:"confluence", url:page.url,
+                    trail:section.heading_path, acl:page.space})
+
+<span class="cmt"># Code: AST-chunk by function; carry signature + path as metadata</span>
+for file in repo.changed_since(last_index):        <span class="cmt"># incremental!</span>
+    for fn in ast_functions(file):
+        store(embed(fn.signature + "\n" + fn.body),
+              meta={source:"code", path:file.path,
+                    symbol:fn.name, repo:repo.name})</code></pre>
+
+      <h3>③ Query pipeline (online)</h3>
+      <pre><code>q = "how do we revoke a leaked API key?"
+v = embed(q)                                        <span class="cmt"># SAME embedder as indexing</span>
+cands = vectordb.search(v, k=30,
+          filter={acl: user.allowed_spaces})        <span class="cmt"># wide net + access control</span>
+cands = bm25_merge(cands, keyword_search(q))        <span class="cmt"># hybrid: catch "API key", "revoke"</span>
+top   = rerank(q, cands)[:5]                         <span class="cmt"># cross-encoder narrows to the best 5</span>
+answer = llm(prompt(system, context=top, question=q))</code></pre>
+
+      <h3>④ The prompt (where R meets G)</h3>
+      <pre><code>SYSTEM: You are an engineering assistant. Answer ONLY from the
+        provided context. Cite each claim as [source N]. If the
+        context does not contain the answer, say you don't know.
+
+CONTEXT:
+  [source 1] confluence · Auth › Key rotation › Revocation
+             "To revoke a key, POST /keys/{id}/revoke ..."
+  [source 2] code · services/auth/keys.py · revoke_key()
+             "def revoke_key(id): ... marks status=REVOKED ..."
+
+QUESTION: how do we revoke a leaked API key?</code></pre>
+      <p>Notice what the design buys you. The <strong>"say you don't know"</strong> instruction plus grounded context is your first line against hallucination. The <strong>citations</strong> make every answer auditable. The <strong>ACL filter</strong> keeps the blast radius safe. And <strong>incremental indexing</strong> means the answer reflects this morning's merge. None of that came from a bigger model — it came from the pipeline around it.</p>
+      <div class="callout">
+        <p class="lbl">See it move</p>
+        <p>The retrieve → rerank → stuff flow you just wrote is exactly what the <a href="../tools/rag-pipeline.html">🧠 RAG Pipeline</a> lets you run interactively. Feed it this question, watch the top-k change as you adjust chunk size and <code>k</code>, and see how reranking reorders the candidates before they hit the prompt.</p>
+      </div>
+    </section>
+
+    <section id="failures">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Limitations &amp; failure modes of RAG</h2>
+      <p>RAG is not "LLM + vector DB = done." It's an information-retrieval system bolted to a generator, and it fails in specific, diagnosable ways. Senior candidates name these failure modes and their fixes — that's what the "why RAG is hard" video in the next section is about.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Failure mode</th><th>What you see</th><th>The fix</th></tr></thead>
+          <tbody>
+            <tr><td>Retrieval miss</td><td>Right answer exists, model says "I don't know" or guesses</td><td>Hybrid search, better chunking, query rewriting, raise k then rerank</td></tr>
+            <tr><td>Bad chunking</td><td>Fact is split across two chunks; neither is retrievable alone</td><td>Split on structure, add overlap, right-size chunks</td></tr>
+            <tr><td>Lost in the middle</td><td>Correct chunk was retrieved but ignored — it sat mid-context</td><td>Rerank so the best chunk is first; shrink k; keep context tight</td></tr>
+            <tr><td>Grounded hallucination</td><td>Model contradicts or embellishes beyond the context</td><td>"Answer only from context / else abstain" prompt; verify citations</td></tr>
+            <tr><td>Stale index</td><td>Answer reflects last month's code/docs</td><td>Incremental re-indexing on merge/edit; timestamp + freshness filters</td></tr>
+            <tr><td>Context overflow / cost</td><td>Too many chunks blow the window, add latency and $</td><td>Rerank to a tight top-k; compress or summarize chunks</td></tr>
+            <tr><td>No evaluation</td><td>You can't tell if a change helped or hurt</td><td>Build an eval set; measure retrieval + answer quality (below)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Two structural truths to internalize. First, <strong>the bottleneck is almost always retrieval, not the LLM</strong> — when an answer is wrong, check what got retrieved <em>before</em> you blame the model. Second, <strong>RAG reduces hallucination but never eliminates it</strong>: the model can still ignore, misread, or over-extend the context, so grounding is a strong prior, not a guarantee — keep the citations and keep a human in the loop for high-stakes answers.</p>
+      <p>And you cannot improve what you don't measure. A real RAG system needs <strong>evaluation on two axes</strong>: <em>retrieval</em> quality (did the right chunk make the top-k? — recall@k, precision) and <em>generation</em> quality (is the answer faithful to the retrieved context, and does it actually answer the question?). Build a small labelled eval set of real questions early; it turns "the vibes are off" into a number you can move.</p>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Your reps this week</h2>
+      <p>Reading is not learning — reps are. Do these, in order:</p>
+      <ol>
+        <li><strong>Design a RAG dev-assistant yourself.</strong> Whiteboard the full pipeline for "answer questions over our docs + codebase with citations," end-to-end, out loud, timed to ~35 minutes — <em>before</em> re-reading Section 07. Name a choice and its trade-off at every box: chunking, embedder, vector store, hybrid + rerank, eval.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your design against pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff ML/platform engineer running a system design interview. Give me the prompt: "Design a RAG-powered developer assistant that answers questions over our internal docs and codebase, with citations." Then act as the interviewer — let me drive, ask clarifying and probing questions, and push hard on the parts candidates skip: chunking strategy, embedding-model choice and re-embedding cost, vector DB selection (pgvector vs a dedicated store) and the scale threshold between them, hybrid search vs pure semantic, reranking, top-k tuning, access control on retrieval, incremental indexing/freshness, evaluation (retrieval recall@k AND answer faithfulness), and the failure modes (retrieval miss, lost-in-the-middle, grounded hallucination, stale index). Do NOT give me the answer or lead me. After ~35 minutes (or when I say "done"), grade me 1-5 on each of: problem framing, retrieval design, embeddings &amp; vector store, chunking &amp; ranking, evaluation &amp; failure-mode awareness, and communication — with specific feedback and what a strong candidate would have added.</div>
+      <ol start="3">
+        <li><strong>Break it in the tool.</strong> In the <a href="../tools/rag-pipeline.html">🧠 RAG Pipeline</a>, deliberately mis-size chunks and drop <code>k</code> to 1 — watch the answer degrade, then fix it. Feeling retrieval fail is worth more than reading about it.</li>
+        <li><strong>Explain it back.</strong> Teach "why is retrieval the bottleneck, not the model?" and "why does RAG reduce but not eliminate hallucination?" to a rubber duck (or me) without notes. Gaps you can't explain are gaps you don't have yet.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>Why does RAG reduce but not eliminate hallucination? · Dense vs. sparse (BM25) retrieval — when hybrid? · What does HNSW trade, and for what? · Why does chunk size matter, and what is "lost in the middle"? · What two axes must a RAG eval measure?</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the RAG and embeddings explainers <em>before</em> your reps; save the failure-modes one for <em>after</em> you've designed your own pipeline.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=T-D1OfcDW1M" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>What is Retrieval-Augmented Generation (RAG)?</b><div class="ch">IBM Technology <span class="dur">· ~7 min · RAG explained</span></div><p>The clearest short intro to the retrieve-then-generate loop and why it beats a bare LLM. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=gQddtTdmG_8" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Vectoring Words (Word Embeddings)</b><div class="ch">Computerphile <span class="dur">· ~16 min · embeddings</span></div><p>Builds real intuition for how meaning becomes geometry — why similar text lands nearby in vector space.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=viZrOnJclY0" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Word Embedding and Word2Vec, Clearly Explained!!!</b><div class="ch">StatQuest with Josh Starmer <span class="dur">· ~16 min · embeddings</span></div><p>The mechanics under semantic search, at a gentle pace. Great second take on embeddings.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=t9IDoenf-lo" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>What is a Vector Database?</b><div class="ch">IBM Technology <span class="dur">· ~9 min · vector DB</span></div><p>What a vector store is, why similarity search needs one, and where it sits in a RAG stack.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=chz74Mtd1AA" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Vector Search &amp; Approximate Nearest Neighbors (ANN) | FAISS (HNSW &amp; IVF)</b><div class="ch">Mustafa Zaki <span class="dur">· ~15 min · indexing deep cut</span></div><p>How ANN indexes actually work — the HNSW vs. IVF trade-off behind every vector DB. Optional depth.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=j0d68suEaS4" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Why RAG Fails in Production — And How To Actually Fix It</b><div class="ch">CodeRash with Gaurav <span class="dur">· ~12 min · failure modes</span></div><p>The gap between a demo and a system that survives real traffic. Watch AFTER your own design attempt.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA Chapter 3 (Storage &amp; Retrieval) for the indexing intuition that HNSW/IVF build on — same nearest-neighbour problem, higher dimensions. For the pattern itself, the original <em>Retrieval-Augmented Generation</em> paper (Lewis et al., 2020, free on arXiv) is the primary source, and the free <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> covers the caching/serving scaffolding a production RAG service still needs.</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/b5-ai-agents-mcp.html">Next module →</a>
+    </div>
+
+    <footer>Module B4 · System Design Mastery · Track B · GenAI Development · Next up: Module B5 — AI Agents &amp; MCP (giving the model tools, memory, and the Model Context Protocol to act, not just retrieve).</footer>
+  </div>
+</body>
+</html>

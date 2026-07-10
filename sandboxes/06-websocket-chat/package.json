@@ -1,0 +1,14 @@
+{
+  "name": "ws-chat-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimal WebSocket chat with Redis pub/sub fan-out across two instances.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "redis": "^4.7.0",
+    "ws": "^8.18.0"
+  }
+}

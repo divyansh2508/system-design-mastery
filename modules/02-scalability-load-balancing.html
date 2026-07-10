@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scalability &amp; Load Balancing | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#4263eb; --hue-soft:rgba(66,99,235,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#6a8bff;--hue-soft:rgba(106,139,255,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#4263eb;--hue-soft:rgba(66,99,235,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#6a8bff;--hue-soft:rgba(106,139,255,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 1 · Foundations</span><span class="sep">·</span><span>Module 2</span><span class="sep">·</span><span>Week 1 · ~13 hrs</span></p>
+      <h1>Scalability &amp; Load Balancing</h1>
+      <p class="sub">One server always dies first. This module is about the two moves that let a system outgrow that single box — <strong>adding more machines</strong> and <strong>spreading traffic across them</strong> — and the discipline that makes both actually work.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#scaling">Vertical vs horizontal scaling</a></li>
+        <li><a href="#stateless">Stateless architecture</a></li>
+        <li><a href="#lb">Load balancers: what &amp; where</a></li>
+        <li><a href="#algos">Load-balancing algorithms</a></li>
+        <li><a href="#sticky">Sticky sessions &amp; their failures</a></li>
+        <li><a href="#autoscale">Auto-scaling policies</a></li>
+        <li><a href="#geo">Going global: multi-region</a></li>
+        <li><a href="#cost">Cost vs performance</a></li>
+        <li><a href="#dropbox">Worked example: Dropbox</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="scaling">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>Vertical vs horizontal scaling</h2>
+      <p class="lead">Scalability is a system's ability to <strong>handle more load by adding resources</strong> — and ideally to do it in proportion, so twice the machines get you roughly twice the throughput. There are exactly two directions to add those resources.</p>
+      <p><strong>Vertical scaling (scale up)</strong> means making one machine bigger: more CPU cores, more RAM, faster disks. It's the path of least resistance — no code changes, no new failure modes, your single database just gets a beefier box. Start here. A surprising number of real systems never need anything else.</p>
+      <p><strong>Horizontal scaling (scale out)</strong> means adding <em>more</em> machines and splitting the work across them. This is how every internet-scale system is actually built, because it removes the two ceilings that eventually stop vertical scaling cold: the biggest box money can buy, and the fact that one box is still a <strong>single point of failure</strong>.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Dimension</th><th>Vertical (scale up)</th><th>Horizontal (scale out)</th></tr></thead>
+          <tbody>
+            <tr><td>How</td><td>Bigger machine</td><td>More machines</td></tr>
+            <tr><td>Ceiling</td><td>Hard — largest box exists</td><td>Effectively none</td></tr>
+            <tr><td>Fault tolerance</td><td>Single point of failure</td><td>Survives node loss</td></tr>
+            <tr><td>Cost curve</td><td>Super-linear (top-end HW is pricey)</td><td>Roughly linear (commodity boxes)</td></tr>
+            <tr><td>Complexity</td><td>Low — no app changes</td><td>High — needs a load balancer, stateless app, distributed data</td></tr>
+            <tr><td>Downtime to scale</td><td>Usually a reboot</td><td>Zero — add nodes live</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The two aren't rivals; real architectures use both. You scale a single node up until the price-per-unit-of-work gets ugly or you can't tolerate it being a single point of failure, <em>then</em> you scale out. The interesting engineering — and everything else in this module — lives in the horizontal column, because scaling out only works if the machines are interchangeable. Which brings us to the one prerequisite that makes it all possible.</p>
+
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>Vertical scaling buys you time; horizontal scaling buys you a future. The senior move is knowing <strong>which ceiling you're about to hit</strong> — capacity or availability — and scaling in that direction, not reflexively reaching for a cluster on day one.</p>
+      </div>
+    </section>
+
+    <section id="stateless">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>Stateless architecture</h2>
+      <p>Horizontal scaling has one hard requirement: the machines behind your load balancer must be <strong>interchangeable</strong>. Any request can land on any server and get an identical, correct response. That property is called being <strong>stateless</strong>, and it is the single most important architectural habit in this entire module.</p>
+      <p>A server is <strong>stateful</strong> when it keeps request-relevant data in its own local memory — a user's session, an upload's progress, a shopping cart. The moment it does, that user is <em>tied</em> to that specific box. If the box dies, the state is gone; if the load balancer sends the next request elsewhere, the new server has no idea who the user is. You can no longer freely add or remove machines, which quietly kills horizontal scaling.</p>
+      <p>A <strong>stateless</strong> server keeps <em>no</em> per-client state between requests. Everything it needs either arrives <em>in</em> the request (a token, an ID) or lives in <strong>shared external storage</strong> every server can reach — a database, a Redis cache, an object store. The server itself becomes a pure, disposable compute unit.</p>
+
+      <pre><code><span class="cmt"># Stateful — session lives in THIS server's RAM (does not scale)</span>
+login()      -> server A stores session in local memory
+next request -> LB routes to server B -> "who are you?" -> 401
+
+<span class="cmt"># Stateless — session lives in shared store (scales freely)</span>
+login()      -> write session to Redis, return signed token to client
+next request -> ANY server -> read token / Redis -> authorized</code></pre>
+
+      <p>The payoff is enormous. Stateless servers can be added, removed, restarted, or killed by a crash with <em>zero</em> user impact — the load balancer just stops routing to the dead one. This is what makes auto-scaling, rolling deploys, and cheap fault tolerance possible. When an interviewer asks "how do you scale the application tier?", the first sentence out of your mouth should be <em>"keep it stateless and put a load balancer in front."</em></p>
+
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>"Where does the state live?" is the question that separates a design that scales from one that doesn't. Push every piece of state <em>out</em> of your app servers — into a database, a cache, or the request itself — and say so explicitly. It signals you understand <em>why</em> horizontal scaling works, not just that it does.</p>
+      </div>
+    </section>
+
+    <section id="lb">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Load balancers: what &amp; where</h2>
+      <p>A <strong>load balancer (LB)</strong> is the traffic cop that sits in front of your pool of servers and decides which one handles each request. It gives you three things at once: it <strong>distributes load</strong> so no single server drowns, it provides <strong>fault tolerance</strong> by routing around servers that fail health checks, and it hands clients a <strong>single stable address</strong> so the fleet behind it can grow, shrink, and get replaced invisibly.</p>
+      <p>That last point matters more than it looks: the LB decouples "the address clients talk to" from "the machines that do the work." Clients hit <code>api.example.com</code> forever, while you swap the ten boxes behind it for fifty without anyone noticing.</p>
+
+      <h3>Layer 4 vs Layer 7</h3>
+      <p>Load balancers operate at one of two levels of the network stack, and the distinction comes up constantly:</p>
+      <ul>
+        <li><strong>Layer 4 (transport)</strong> balances on TCP/UDP — it sees only IP addresses and ports, never the actual content. It just forwards packets to a chosen backend. Extremely fast and cheap because it doesn't inspect anything, but it also can't make content-aware decisions.</li>
+        <li><strong>Layer 7 (application)</strong> balances on the HTTP request itself — it can read the URL path, headers, cookies, and method. That lets it route <code>/api/*</code> to one pool and <code>/images/*</code> to another, terminate TLS, and do sticky sessions by cookie. More CPU per request, far more flexible. Most web systems use L7.</li>
+      </ul>
+
+      <pre><code>                          ┌──▶ app server 1  (stateless)
+   clients ──▶  LOAD       ├──▶ app server 2  (stateless)
+               BALANCER    ├──▶ app server 3  (stateless)
+   (single address)        └──▶ app server N  (stateless)
+                              ▲
+                health checks ┘  drop any server that fails,
+                                 route only to healthy ones</code></pre>
+
+      <p>One caution: the load balancer itself is now a single point of failure. In production you run it <strong>redundantly</strong> (an active–passive pair, or a managed offering like AWS ELB that's internally replicated across availability zones), so the thing protecting your fleet doesn't become the thing that takes it all down.</p>
+    </section>
+
+    <section id="algos">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>Load-balancing algorithms</h2>
+      <p>Once the LB has a pool of healthy servers, it needs a rule for <em>which</em> one gets the next request. The three you must be able to compare on sight are round-robin, least-connections, and IP hash. Each optimizes for a different assumption about your traffic.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Algorithm</th><th>How it picks</th><th>Best when</th><th>Weakness</th></tr></thead>
+          <tbody>
+            <tr><td>Round-robin</td><td>Next server in a rotating cycle</td><td>Requests are uniform &amp; servers are equal</td><td>Ignores that some requests are heavy — a slow one still gets its turn</td></tr>
+            <tr><td>Weighted round-robin</td><td>Rotation biased by server capacity</td><td>Mixed hardware (big + small boxes)</td><td>Weights are static; doesn't react to live load</td></tr>
+            <tr><td>Least-connections</td><td>Server with fewest active connections</td><td>Requests vary wildly in duration</td><td>Slightly more state to track per server</td></tr>
+            <tr><td>Least response time</td><td>Fastest-responding healthy server</td><td>You care about tail latency</td><td>Needs live latency probing</td></tr>
+            <tr><td>IP hash</td><td>hash(client IP) → fixed server</td><td>You need the same client on the same server</td><td>Uneven spread; breaks when the pool changes</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>Round-robin</strong> is the sensible default: dead simple, no per-server bookkeeping, and if requests are roughly uniform it spreads load evenly. Its blind spot is duration — it hands out turns in strict rotation even if one server is stuck on a 30-second request while another is idle.</p>
+      <p><strong>Least-connections</strong> fixes exactly that. By routing to whichever server currently has the fewest open connections, it naturally steers traffic away from a box that's bogged down with long-running requests. When request cost is uneven — some cheap, some expensive — this is usually the better choice.</p>
+      <p><strong>IP hash</strong> is different in kind: it's <em>deterministic</em>. It hashes the client's IP and always maps that client to the same server, which is how you pin a user to one machine without a cookie. That determinism is also its curse — if the server pool changes size, the hash remaps and clients scatter to new servers (a foreshadowing of the sticky-session failure mode in the next section, and of consistent hashing in Module&nbsp;5).</p>
+
+      <div class="callout tool">
+        <p class="lbl">Play with it → your tool</p>
+        <p>Open the <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer Simulator</a> and flip between <strong>round-robin</strong> and <strong>least-connections</strong> while sending a mix of fast and slow requests. Watch a heavy request pile up on one server under round-robin, then vanish under least-connections. Then kill a server mid-stream and see the LB route around it via health checks — the whole point of this module, on one screen.</p>
+      </div>
+    </section>
+
+    <section id="sticky">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Sticky sessions &amp; their failure modes</h2>
+      <p>A <strong>sticky session</strong> (session affinity) is when the load balancer deliberately routes a given user to the <em>same</em> backend server for the whole session — usually by setting a cookie (L7) or hashing the source IP (L4). Teams reach for it as a shortcut: if a server keeps a user's session in local memory, stickiness makes sure the user keeps coming back to the server that has it.</p>
+      <p>It works, and it's tempting, because it lets you skip building shared session storage. But it's a shortcut that quietly re-introduces the exact statefulness you worked to eliminate — and it fails in ways that bite in production:</p>
+      <ul>
+        <li><strong>Lost sessions on server death.</strong> If a sticky server crashes, every user pinned to it loses their in-memory state and gets logged out. You've re-created the single point of failure per user.</li>
+        <li><strong>Uneven load ("hot" servers).</strong> Stickiness pins load, not just users. A server that happened to catch a burst of heavy users stays overloaded while freshly added servers sit idle — the LB can't rebalance existing sessions.</li>
+        <li><strong>Scaling friction.</strong> Add servers and only <em>new</em> sessions use them; the old ones are stuck. Remove a server and you forcibly evict its users. Auto-scaling and rolling deploys turn ugly.</li>
+      </ul>
+
+      <div class="callout">
+        <p class="lbl">The clean alternative</p>
+        <p>Don't make servers sticky — make them <strong>stateless</strong> and move the session to a <strong>shared store</strong> (Redis, or a signed token the client carries). Now any server can serve any user, the LB is free to balance perfectly, and a dying server takes zero sessions with it. Reach for sticky sessions only as a deliberate, temporary trade-off — never as your scaling strategy.</p>
+      </div>
+    </section>
+
+    <section id="autoscale">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>Auto-scaling policies</h2>
+      <p>Once your app tier is stateless and load-balanced, you can let the fleet <strong>size itself</strong>. Auto-scaling adds servers when load rises and removes them when it falls, so you pay for roughly what you use instead of provisioning for peak 24/7. There are three common policies:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Policy</th><th>Trigger</th><th>Good for</th></tr></thead>
+          <tbody>
+            <tr><td>Target-tracking (reactive)</td><td>Keep a metric at a target, e.g. CPU ≈ 60%</td><td>The default — smooth, self-correcting</td></tr>
+            <tr><td>Step / threshold</td><td>Add N servers when CPU &gt; 80% for 5 min</td><td>Coarse, explicit control</td></tr>
+            <tr><td>Scheduled (predictive)</td><td>Scale up at 8am, down at midnight</td><td>Known daily/weekly patterns</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Two details separate a real answer from a naive one. First, <strong>scale out fast, scale in slow.</strong> Adding capacity late means dropped requests; removing it too eagerly means thrashing (add, remove, add again). A <em>cooldown</em> after each action prevents oscillation. Second, new servers aren't instant — there's a <strong>warm-up lag</strong> (boot, deploy, cache-fill) before a fresh box is useful, so reactive scaling always trails a spike. For sharp, predictable spikes (a product launch, a 9am rush), pre-scale on a schedule instead of waiting for the metric to catch up.</p>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>Auto-scaling is only possible <em>because</em> the tier is stateless — mention that link explicitly. And name what you scale <strong>on</strong>: CPU is the easy default, but a queue-backed worker should scale on <em>queue depth</em>, and a latency-sensitive API on <em>p99 latency</em>. Picking the right metric is the senior signal.</p>
+      </div>
+    </section>
+
+    <section id="geo">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Going global: multi-region distribution</h2>
+      <p>Adding servers scales your <em>capacity</em>, but it does nothing for a user in Sydney hitting a datacenter in Virginia — physics still charges them ~150&nbsp;ms per round trip (recall the latency table from Module&nbsp;1). To fix <em>latency</em> and to survive a whole datacenter failing, you distribute across <strong>multiple geographic regions</strong>.</p>
+      <p>The moves stack from cheapest to most involved:</p>
+      <ul>
+        <li><strong>CDN / edge caching.</strong> Push static and cacheable content (images, video, JS) to edge locations near users. The single highest-leverage latency win, and it offloads huge traffic from your origin. (Deep dive in Module&nbsp;6.)</li>
+        <li><strong>GeoDNS / global load balancing.</strong> DNS resolves each user to their <em>nearest</em> healthy region, so requests enter the network close to home and route around a region that's down.</li>
+        <li><strong>Multi-region compute + data.</strong> Run the full stateless app tier in several regions, each with a local load balancer. Straightforward for compute. The <em>data</em> is the hard part: replicating a database across regions forces the CAP trade-off (Module&nbsp;1) — do you serve possibly-stale reads locally (AP) or pay a cross-region hop for strong consistency (CP)? Common shapes are active-passive (one write region, others read) and active-active (writes anywhere, plus conflict resolution).</li>
+      </ul>
+      <div class="callout">
+        <p class="lbl">Rule of thumb</p>
+        <p>Distributing <strong>stateless compute</strong> across regions is easy; distributing <strong>state</strong> is the entire hard problem. Reach for a CDN and GeoDNS long before you take on multi-region <em>writes</em> — and when you do, be explicit about the consistency model you're buying.</p>
+      </div>
+    </section>
+
+    <section id="cost">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Cost vs performance</h2>
+      <p>Every scaling lever you've met costs money, and the senior skill is spending it where it moves an NFR — not everywhere. A few trade-offs worth saying out loud in an interview:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Lever</th><th>Buys you</th><th>Costs you</th></tr></thead>
+          <tbody>
+            <tr><td>Vertical scale</td><td>Simplicity, no app changes</td><td>Super-linear price at the top end; a ceiling; an SPOF</td></tr>
+            <tr><td>Horizontal scale</td><td>Near-limitless capacity, fault tolerance</td><td>LB + orchestration complexity; distributed-data headaches</td></tr>
+            <tr><td>Over-provisioning</td><td>Headroom for spikes</td><td>Idle machines you pay for 24/7</td></tr>
+            <tr><td>Auto-scaling</td><td>Pay ≈ what you use</td><td>Warm-up lag; risk of under-serving a sudden spike</td></tr>
+            <tr><td>Multi-region</td><td>Low global latency + DR</td><td>Duplicated infra + cross-region replication/egress bills</td></tr>
+            <tr><td>Caching / CDN</td><td>Huge latency + origin-load win</td><td>Staleness + invalidation complexity</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The two cost traps that catch people: <strong>over-provisioning</strong> (renting for a peak that's rare, paying for idle boxes all night) and, in the cloud, <strong>data egress</strong> — moving bytes between regions or out to the internet is often billed more than the compute itself, which is exactly why a CDN that keeps bytes at the edge pays for itself. There's no universally right answer; there's the point on the cost/performance curve your NFRs justify, stated as a deliberate choice.</p>
+    </section>
+
+    <section id="dropbox">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Worked example: Design Dropbox / file-sync</h2>
+      <p>Let's run the 5-step framework from Module&nbsp;1 on a file-sync service like Dropbox, using it to exercise everything above — stateless tiers, load balancing, auto-scaling, multi-region, and the cost trade-offs. Read it once, then you'll do it yourself in the reps.</p>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Functional:</strong> upload a file; download a file; <em>sync</em> a folder across a user's devices so an edit on the laptop appears on the phone; share a file/folder with other users.</li>
+        <li><strong>Non-functional:</strong> extreme <strong>durability</strong> (never, ever lose a file — this dominates everything), high availability, low sync latency (changes propagate in seconds), huge and growing storage, and a very read-heavy download pattern. It is also <strong>bandwidth-heavy</strong>, which makes it different from Bitly.</li>
+        <li><strong>Out of scope (say it):</strong> real-time collaborative editing (that's Google Docs), a permissions/ACL deep-dive, and versioning internals — keep the core sync tight.</li>
+      </ul>
+
+      <h3>② Estimate</h3>
+      <pre><code>50M DAU, avg 100 files each, avg file 1 MB
+storage:  50M users × 100 files × 1 MB      = 5 PB   <span class="cmt">(× replication → plan to tier & dedup)</span>
+uploads:  50M × 5 files/day ÷ 100k s        ≈ 2.5k writes/s  <span class="cmt">peak ×3 ≈ ~8k/s</span>
+downloads/sync: ~10× uploads                ≈ 25k reads/s    <span class="cmt">read-heavy, bandwidth-bound</span>
+bandwidth: 25k reads/s × 1 MB               ≈ 25 GB/s egress <span class="cmt">→ CDN is not optional</span></code></pre>
+      <p>Verdict: the numbers say this is a <strong>storage- and bandwidth-bound</strong> system, not a QPS-bound one. That reframes the whole design — the hard parts are moving bytes cheaply (dedup, chunking, CDN) and never losing them (replication), not raw request throughput.</p>
+
+      <h3>③ Interface</h3>
+      <pre><code><span class="cmt"># Chunked upload — files are split client-side into blocks</span>
+POST /api/v1/files/{fileId}/chunks
+  body:    { chunkId, index, hash, bytes }
+  returns: 200 { received: true }   <span class="cmt">// skip if hash already stored (dedup)</span>
+
+<span class="cmt"># Download / sync</span>
+GET  /api/v1/files/{fileId}/manifest   -> ordered list of chunk hashes
+GET  /api/v1/chunks/{hash}             -> chunk bytes (served from CDN/edge)
+
+<span class="cmt"># Sync — client learns about remote changes</span>
+GET  /api/v1/sync?since={cursor}       -> changes; long-poll or WebSocket push</code></pre>
+
+      <h3>④ High-level design</h3>
+      <pre><code>                          ┌─▶ metadata service ─▶ Metadata DB (file tree,
+                          │      (stateless)          chunk lists, versions)
+ devices ─▶ LB ─▶ API ────┤
+            (L7)  tier    ├─▶ block service ─────▶ Object store (S3-like,
+          (stateless)     │     (stateless)         replicated, the chunks)
+                          └─▶ notification svc ──▶ push "you changed" to a
+                                                    user's other devices
+
+ downloads/chunks served from  CDN / edge  (offload the 25 GB/s)</code></pre>
+      <p>Note the split every senior answer makes: <strong>metadata</strong> (small, structured, transactional — who owns what, which chunks make a file) lives in a database; the <strong>file blocks</strong> (huge, immutable blobs) live in an object store built for durability and cheap bytes. Never put file bytes in your primary DB.</p>
+
+      <h3>⑤ Deep-dive &amp; scale</h3>
+      <ul>
+        <li><strong>Stateless API tier + load balancer.</strong> Every API server is stateless — an upload's progress lives in the object store and metadata DB, not local memory — so an L7 load balancer spreads requests with <strong>least-connections</strong> (uploads vary wildly in size, so duration-aware beats round-robin here). Any server can resume any client's upload; a dying server drops zero work. This is Sections 02–04 applied directly.</li>
+        <li><strong>No sticky sessions for sync.</strong> The long-poll/WebSocket sync connection is tempting to pin, but we keep it stateless: connection state (which user, which cursor) lives in a shared store, so we can add sync servers and rebalance freely (Section 05).</li>
+        <li><strong>Chunking + dedup = the bandwidth win.</strong> Splitting files into content-hashed blocks means an edit re-uploads only the changed chunk, and identical chunks across all users are stored once. This is what makes the 5 PB and 25 GB/s estimates survivable.</li>
+        <li><strong>Auto-scaling on the right metric.</strong> The API tier auto-scales, but on <strong>bandwidth / connection count</strong>, not CPU — this workload is I/O-bound, so CPU would under-scale it during a big-file storm (Section 06).</li>
+        <li><strong>CDN + multi-region.</strong> Chunk downloads are served from the edge so a user pulls bytes from nearby, slashing latency and origin egress. The stateless tier runs in multiple regions via GeoDNS; the object store replicates across regions for durability and disaster recovery (Sections 07–08).</li>
+        <li><strong>Cost.</strong> Cold files move to cheaper storage tiers; dedup shrinks the footprint; the CDN keeps egress bills sane. Each is a deliberate cost/performance choice, not a default.</li>
+      </ul>
+
+      <div class="callout">
+        <p class="lbl">See it move</p>
+        <p>That stateless API tier behind a least-connections LB — with servers you can kill mid-upload — is exactly what the <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer Simulator</a> lets you stress. Send big "uploads," compare algorithms, and drop a node to watch the fleet absorb it.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Your reps this week</h2>
+      <p>Reading is not learning — reps are. Do these, in order:</p>
+      <ol>
+        <li><strong>Break a load balancer on purpose.</strong> Open the <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer Simulator</a>, send a mix of fast and slow requests under round-robin until one server is clearly hot, then switch to least-connections and watch it self-correct. Now kill a server mid-stream. Narrate what the health check does. Build the muscle memory before the mock.</li>
+        <li><strong>Whiteboard Dropbox yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design file-sync end-to-end with the 5-step framework, out loud, timed to ~35 minutes — <em>before</em> re-reading Section 09 or watching the videos. Force yourself to say where state lives and why the app tier is stateless.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your design against pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer running a system design interview. Give me the prompt: "Design a file-sync service like Dropbox." Then act as the interviewer — let me drive, ask clarifying and probing questions, and push hard on scalability specifically: make me justify vertical vs horizontal scaling, prove my app tier is stateless (ask "where does the session/upload state live?"), defend my load-balancing algorithm choice, and interrogate sticky sessions, auto-scaling metrics, and multi-region data. Do NOT give me the answer or lead me. Keep asking "why?". After ~35 minutes (or when I say "done"), grade me 1–5 on each of: requirements gathering, capacity estimation, API design, high-level design, scalability &amp; load-balancing depth, and communication — with specific feedback and what a strong candidate would have added.</div>
+      <ol start="4">
+        <li><strong>Defend your numbers</strong> in the <a href="../tools/capacity-estimator.html">🧮 Capacity Estimator</a> — did your Dropbox storage and bandwidth estimates hold up? Bandwidth is the one people miss.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>When does vertical scaling hit a wall — capacity or availability? · Why must app servers be stateless to scale horizontally, and where does the state go instead? · Round-robin vs least-connections — which for uneven request durations, and why? · Name two failure modes of sticky sessions. · What should Dropbox's upload tier auto-scale on, and why not CPU?</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">11 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the scaling and load-balancing basics <em>before</em> your reps; save the interview-framing one for when you're consolidating.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=xpDnVSmNFX0" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>System Design BASICS: Horizontal vs. Vertical Scaling</b><div class="ch">Gaurav Sen <span class="dur">· ~8 min · scaling</span></div><p>The clearest intuition for scale-up vs scale-out and when each hits its ceiling. Start here.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=dvRFHG2-uYs" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Vertical Vs Horizontal Scaling: Key Differences You Should Know</b><div class="ch">ByteByteGo <span class="dur">· ~4 min · scaling</span></div><p>Tight, animated recap of the two axes — great to lock the comparison in your head.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=K0Ta65OqQkY" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>What is LOAD BALANCING? ⚖️</b><div class="ch">Gaurav Sen <span class="dur">· ~6 min · load balancing</span></div><p>What a load balancer is and why it's the front door to any horizontally-scaled system.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=dBmxNsS3BGE" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Top 6 Load Balancing Algorithms Every Developer Should Know</b><div class="ch">ByteByteGo <span class="dur">· ~5 min · algorithms</span></div><p>Round-robin, weighted, least-connections, hash, and more — exactly the table in Section 04, animated.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=QDiPjMWeVC0" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Stateful vs Stateless Architecture Explained with Real-World Examples</b><div class="ch">ByteMonk <span class="dur">· ~8 min · stateless</span></div><p>Why statelessness is the prerequisite for horizontal scale — the core idea of Section 02.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=chyZRNT7eEo" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Load Balancers for System Design Interviews</b><div class="ch">Exponent <span class="dur">· ~9 min · interview framing</span></div><p>How to talk about load balancing under interview pressure. Watch while consolidating.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA Chapter 1 — the "Describing Load" and "Approaches for Coping with Load" sections give you the precise vocabulary (throughput, load parameters, scaling up vs out) for everything above. And the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> sections on <em>load balancing</em> and <em>horizontal scaling</em> (free).</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/03-database-fundamentals.html">Next module →</a>
+    </div>
+
+    <footer>Module 2 of 24 · System Design Mastery · Scalability &amp; Load Balancing — the 🚦 Load Balancer Simulator is live. Next up: Module 3 — Database Fundamentals.</footer>
+  </div>
+</body>
+</html>

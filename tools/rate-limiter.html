@@ -1,0 +1,891 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rate Limiter Algorithms — System Design</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b1016;
+    --panel:#121a23;
+    --panel-2:#0e151d;
+    --border:#223140;
+    --border-soft:#1a2530;
+    --text:#cdd9e5;
+    --muted:#7d8fa1;
+    --faint:#54626f;
+    --accent:#34d3e0;
+    --accent-dim:rgba(52,211,224,.14);
+    --ok:#3fb950;
+    --warn:#e3b341;
+    --crit:#f85149;
+    --water:#5aa9ff;
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1100px 600px at 82% -8%, rgba(52,211,224,.06), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 56px}
+
+  /* topnav */
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(11,16,22,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:30}
+  .topnav .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .topnav .navlinks{display:flex;gap:6px;flex-wrap:wrap}
+  .topnav .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;transition:color .12s,background .12s}
+  .topnav .navlinks a:hover{color:var(--accent);background:var(--accent-dim)}
+
+  /* header */
+  header{margin-bottom:22px}
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 10px;display:flex;align-items:center;gap:9px;
+  }
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  h1{
+    font-family:var(--mono);font-weight:600;font-size:clamp(26px,4.4vw,40px);
+    letter-spacing:-.01em;margin:0 0 10px;text-wrap:balance;
+  }
+  .lede{max-width:68ch;color:var(--muted);font-size:15.5px;margin:0}
+  .lede b{color:var(--text);font-weight:600}
+
+  /* layout */
+  .grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:24px}
+  @media(min-width:900px){.grid{grid-template-columns:1.55fr 1fr}}
+
+  .panel{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--border);border-radius:14px;
+  }
+  .stage{position:relative;min-height:400px;overflow:hidden}
+  @media(min-width:900px){.stage{min-height:472px}}
+  canvas#mech{display:block;width:100%;height:100%;position:absolute;inset:0}
+
+  .legend{
+    position:absolute;left:14px;bottom:12px;display:flex;gap:14px;flex-wrap:wrap;
+    font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.04em;
+    background:rgba(11,16,22,.55);padding:6px 10px;border-radius:8px;border:1px solid var(--border-soft);
+    backdrop-filter:blur(3px);
+  }
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:8px;height:8px;border-radius:2px;display:inline-block}
+
+  .side{display:flex;flex-direction:column;gap:16px}
+
+  /* metrics */
+  .metrics{padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border-soft);border-radius:14px;overflow:hidden}
+  .metric{background:var(--panel);padding:13px 14px}
+  .metric .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:0 0 4px}
+  .metric .v{font-family:var(--mono);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .metric .v small{font-size:12px;color:var(--muted);font-weight:400;margin-left:3px}
+  .metric.wide{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .metric.wide .sub{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin:3px 0 0}
+  .v.ok{color:var(--ok)} .v.warn{color:var(--warn)} .v.crit{color:var(--crit)} .v.accent{color:var(--accent)}
+  canvas#spark{width:118px;height:38px;display:block}
+
+  /* coaching */
+  .coach{padding:15px 16px;border:1px solid var(--border);border-radius:14px;background:var(--panel);border-left:3px solid var(--accent)}
+  .coach .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+  .coach p{margin:0;font-size:14px;color:var(--text)}
+
+  /* timeline */
+  .timeline{grid-column:1/-1;padding:14px 16px}
+  .timeline .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 9px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .timeline .lbl b{color:var(--muted);font-weight:600}
+  .timeline .lbl .tags{display:flex;gap:12px}
+  .timeline .lbl .tags span{display:inline-flex;align-items:center;gap:5px;color:var(--muted)}
+  .timeline .lbl .tags i{width:8px;height:8px;border-radius:2px;display:inline-block}
+  canvas#timeline{display:block;width:100%;height:56px}
+
+  /* controls */
+  .controls{grid-column:1/-1;padding:18px;display:flex;flex-wrap:wrap;gap:22px;align-items:flex-end}
+  .ctrl{display:flex;flex-direction:column;gap:8px}
+  .ctrl>label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .ctrl.dim{opacity:.4}
+  .ctrl .note{font-family:var(--mono);font-size:10px;color:var(--faint)}
+
+  .seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px;flex-wrap:wrap}
+  .seg button{
+    font-family:var(--mono);font-size:12px;color:var(--muted);background:transparent;border:0;
+    padding:7px 11px;border-radius:6px;cursor:pointer;transition:background .12s,color .12s;white-space:nowrap;
+  }
+  .seg button:hover{color:var(--text)}
+  .seg button[aria-pressed="true"]{background:var(--accent-dim);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(52,211,224,.35)}
+
+  .slider{display:flex;align-items:center;gap:12px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:172px;height:4px;background:var(--border);border-radius:3px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px rgba(52,211,224,.5)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--accent);cursor:pointer}
+  input[type=range]:disabled{opacity:.5;cursor:not-allowed}
+  .val-out{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--accent);min-width:72px;font-variant-numeric:tabular-nums}
+
+  .switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+  .switch input{position:absolute;opacity:0;width:0;height:0}
+  .track{width:42px;height:24px;background:var(--border);border-radius:12px;position:relative;transition:background .16s;flex-shrink:0}
+  .track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--muted);transition:transform .16s,background .16s}
+  .switch input:checked+.track{background:var(--accent-dim);box-shadow:inset 0 0 0 1px var(--accent)}
+  .switch input:checked+.track::after{transform:translateX(18px);background:var(--accent)}
+  .switch .txt{font-family:var(--mono);font-size:12px;color:var(--text)}
+
+  .btn{font-family:var(--mono);font-size:12px;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(52,211,224,.35);border-radius:9px;padding:9px 15px;cursor:pointer;transition:background .12s,box-shadow .12s;font-weight:600}
+  .btn:hover{background:rgba(52,211,224,.24);box-shadow:0 0 14px rgba(52,211,224,.22)}
+  .ghost{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:9px 14px;cursor:pointer;transition:color .12s,border-color .12s}
+  .ghost:hover{color:var(--crit);border-color:var(--crit)}
+
+  /* experiments */
+  .labcard{grid-column:1/-1;padding:20px 22px;border:1px solid var(--border);border-radius:14px;background:
+    linear-gradient(180deg,rgba(52,211,224,.03),transparent),var(--panel)}
+  .labcard h2{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  .labs{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:640px){.labs{grid-template-columns:1fr 1fr}}
+  .lab{display:flex;gap:12px;align-items:flex-start}
+  .lab .n{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(52,211,224,.3);width:24px;height:24px;border-radius:6px;display:grid;place-items:center;flex-shrink:0}
+  .lab p{margin:0;font-size:13.5px;color:var(--muted)}
+  .lab p b{color:var(--text);font-weight:600}
+
+  footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.03em}
+  footer b{color:var(--muted);font-weight:600}
+
+  button:focus-visible,input:focus-visible,.switch input:focus-visible+.track{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+  }
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <a class="brand" href="../index.html">◇ SD Mastery</a>
+  <div class="navlinks">
+    <a href="../index.html">Home</a>
+    <a href="../roadmap-dashboard.html">Roadmap</a>
+    <a href="../modules/12-advanced-microservices.html">Module 12 notes</a>
+    <a href="load-balancer-simulator.html">Load Balancer</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow"><span class="dot"></span>System Design · Module 12 — Advanced Microservices</p>
+    <h1>Rate Limiter Algorithms</h1>
+    <p class="lede">Four ways to answer one question: <b>"is this request allowed right now?"</b> Feed a stream of requests into a limiter, fire bursts at it, and watch each algorithm decide. See <b>Token Bucket</b> permit bursts, <b>Leaky Bucket</b> smooth output to a flat rate, <b>Fixed Window</b> leak 2× at the boundary, and <b>Sliding Window</b> close that hole. Every request is either admitted (green) or throttled with a <b>429</b> (red).</p>
+  </header>
+
+  <div class="grid">
+    <!-- mechanism stage -->
+    <div class="panel stage" aria-label="Live diagram: requests flowing into the selected rate-limiting mechanism, then either admitted or throttled.">
+      <canvas id="mech"></canvas>
+      <div class="legend" aria-hidden="true">
+        <span><i style="background:#7fe9f1"></i>incoming</span>
+        <span><i style="background:#3fb950"></i>admitted</span>
+        <span><i style="background:#f85149"></i>throttled (429)</span>
+        <span><i style="background:#5aa9ff"></i>queued</span>
+      </div>
+    </div>
+
+    <!-- side -->
+    <div class="side">
+      <div class="metrics" role="group" aria-label="Live metrics">
+        <div class="metric"><p class="k">Incoming</p><p class="v accent" id="m-in">6<small>req/s</small></p></div>
+        <div class="metric"><p class="k">Admitted</p><p class="v ok" id="m-allow">0<small>/s</small></p></div>
+        <div class="metric"><p class="k">Throttled</p><p class="v" id="m-throt">0<small>/s</small></p></div>
+        <div class="metric"><p class="k">Admit rate</p><p class="v" id="m-rate">100<small>%</small></p></div>
+        <div class="metric wide">
+          <div>
+            <p class="k">Max admitted · any rolling 1s</p>
+            <p class="v" id="m-peak">0<small>req</small></p>
+            <p class="sub" id="m-peak-sub">vs limit — this is what separates the algorithms</p>
+          </div>
+          <canvas id="spark" aria-hidden="true"></canvas>
+        </div>
+      </div>
+
+      <div class="coach">
+        <p class="lbl">What's happening</p>
+        <p id="coach" aria-live="polite">Token Bucket starts full. It refills at the limit rate and hands out one token per request — a burst can drain it instantly, then throttling kicks in until it refills.</p>
+      </div>
+    </div>
+
+    <!-- timeline -->
+    <div class="panel timeline">
+      <p class="lbl">
+        <span>Request timeline <b id="tl-note">newest on the right</b></span>
+        <span class="tags"><span><i style="background:#3fb950"></i>admitted</span><span><i style="background:#f85149"></i>429</span></span>
+      </p>
+      <canvas id="timeline" aria-label="Recent requests, admitted in green and throttled in red, scrolling right to left."></canvas>
+    </div>
+
+    <!-- controls -->
+    <div class="panel controls">
+      <div class="ctrl">
+        <label id="algo-lbl">Algorithm</label>
+        <div class="seg" role="group" aria-labelledby="algo-lbl" id="algo">
+          <button data-a="token" aria-pressed="true">Token Bucket</button>
+          <button data-a="leaky" aria-pressed="false">Leaky Bucket</button>
+          <button data-a="fixed" aria-pressed="false">Fixed Window</button>
+          <button data-a="sliding" aria-pressed="false">Sliding Window</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label for="limit">Limit (rate)</label>
+        <div class="slider">
+          <input type="range" id="limit" min="1" max="30" step="1" value="8">
+          <span class="val-out" id="limit-out">8 req/s</span>
+        </div>
+      </div>
+
+      <div class="ctrl" id="cap-ctrl">
+        <label for="cap">Burst / capacity</label>
+        <div class="slider">
+          <input type="range" id="cap" min="1" max="40" step="1" value="12">
+          <span class="val-out" id="cap-out">12</span>
+        </div>
+        <span class="note" id="cap-note">bucket size</span>
+      </div>
+
+      <div class="ctrl">
+        <label for="rate">Incoming rate</label>
+        <div class="slider">
+          <input type="range" id="rate" min="0" max="60" step="1" value="6">
+          <span class="val-out" id="rate-out">6 req/s</span>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>Auto-bursts</label>
+        <label class="switch">
+          <input type="checkbox" id="autoburst">
+          <span class="track"></span>
+          <span class="txt">off</span>
+        </label>
+      </div>
+
+      <div class="ctrl">
+        <label>&nbsp;</label>
+        <button class="btn" id="burst">⚡ Send burst</button>
+      </div>
+
+      <div class="ctrl">
+        <label>&nbsp;</label>
+        <button class="ghost" id="reset">↺ Reset</button>
+      </div>
+    </div>
+
+    <!-- experiments -->
+    <div class="labcard">
+      <h2>◆ Run these experiments</h2>
+      <div class="labs">
+        <div class="lab"><span class="n">1</span><p><b>Bursts pass, then don't.</b> On <b>Token Bucket</b>, keep incoming below the limit (admit rate ~100%). Hit <b>Send burst</b>: the whole burst is admitted at once — up to the bucket size — then requests throttle until the bucket refills at the limit. That's the burst allowance token bucket is famous for.</p></div>
+        <div class="lab"><span class="n">2</span><p><b>Spiky in, smooth out.</b> Switch to <b>Leaky Bucket</b> and push incoming <i>above</i> the limit. Input is jagged, but watch the <b>output drip</b> leave at a constant rate — the queue fills, overflow gets 429'd, and downstream sees a perfectly flat stream. This is traffic shaping.</p></div>
+        <div class="lab"><span class="n">3</span><p><b>The boundary leak.</b> On <b>Fixed Window</b>, watch the countdown to the reset line. <b>Send burst</b> just before it hits 0, then again just after. Read <b>"Max admitted · rolling 1s"</b> — it jumps to ~2× your limit. The per-window counter reset let a double dose slip through the seam.</p></div>
+        <div class="lab"><span class="n">4</span><p><b>The fix.</b> Switch to <b>Sliding Window</b> and repeat the same two bursts. No matter how you time them, "Max admitted · rolling 1s" never exceeds the limit — the rolling log checks the true last second, so the boundary hole is gone.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>interactive simulator &nbsp;·&nbsp; pairs with <b>Module 12 notes</b></footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var el = function(id){ return document.getElementById(id); };
+
+  // ---- config / state ----
+  var algo = "token";      // token | leaky | fixed | sliding
+  var limit = 8;           // req/s (refill rate / drain rate / per-window cap)
+  var cap = 12;            // bucket capacity (token & leaky only)
+  var inRate = 6;          // incoming req/s
+  var autoburst = false;
+
+  // mechanism state
+  var tokens = cap;        // token bucket: available tokens
+  var level = 0;           // leaky bucket: queued water (requests)
+  var drainCarry = 0;      // leaky: fractional drain accumulator -> output particles
+  var curWin = 0;          // fixed window: current integer-second index
+  var winCount = 0;        // fixed window: admits this window
+  var prevCount = 0;       // fixed window: admits last window
+  var stamps = [];         // sliding window: admit timestamps within last 1s
+
+  // sim bookkeeping
+  var clock = 0, spawnCarry = 0, autoBurstTimer = 0;
+  var admitTotalAcc = 0, throtTotalAcc = 0;   // per-second accumulators
+  var admitPerSec = 0, throtPerSec = 0, admitRate = 100;
+  var admitLog = [];       // timestamps of every admit (any algo) -> rolling-1s peak
+  var peak1s = 0;
+  var sparkData = [];
+  var timeline = [];       // {ok:bool} newest pushed to end
+  var particles = [];
+  var rateAcc = 0, coachAcc = 0;
+
+  function isBucket(){ return algo === "token" || algo === "leaky"; }
+
+  function resetMechanism(){
+    tokens = cap; level = 0; drainCarry = 0;
+    curWin = Math.floor(clock); winCount = 0; prevCount = 0;
+    stamps = []; admitLog = []; peak1s = 0;
+    timeline = []; particles = [];
+    admitTotalAcc = 0; throtTotalAcc = 0;
+    admitPerSec = 0; throtPerSec = 0; admitRate = 100;
+    sparkData = [];
+  }
+  function fullReset(){
+    clock = 0; spawnCarry = 0; autoBurstTimer = 0; rateAcc = 0; coachAcc = 0;
+    resetMechanism();
+    updateMetrics(); updateCoach();
+  }
+
+  // ---- canvas setup ----
+  var cv = el("mech"), ctx = cv.getContext("2d");
+  var stage = cv.parentElement, W = 0, H = 0, dpr = 1;
+  function resize(){
+    var r = stage.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    W = r.width; H = r.height;
+  }
+  function mono(){ return "ui-monospace,Menlo,Consolas,monospace"; }
+  function rrect(x, y, w, h, r){
+    r = Math.min(r, w/2, h/2);
+    ctx.beginPath(); ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath();
+  }
+
+  // ---- geometry ----
+  function gateX(){ return W * 0.40; }
+  function centerY(){ return H * 0.5; }
+  function bucketBox(){
+    var bw = Math.min(150, W*0.24), bh = Math.min(196, H*0.54);
+    return { x: W*0.52 - bw/2, y: centerY() - bh/2 - 4, w: bw, h: bh };
+  }
+
+  // ---- request spawning ----
+  function spawnRequest(){
+    var cy = centerY();
+    var spread = Math.min(120, H*0.34);
+    particles.push({
+      x: 26, y: cy + (Math.random()*2-1)*spread,
+      vx: (gateX() - 26) / 0.5,
+      r: 2.7, state: "in", decided: false, life: 1, blue: false
+    });
+  }
+  function spawnOutput(){ // leaky bucket steady drip
+    var b = bucketBox();
+    particles.push({
+      x: b.x + b.w*0.72, y: b.y + b.h - 6,
+      vx: (W - (b.x+b.w*0.72)) / 0.55,
+      r: 2.7, state: "out", decided: true, life: 1, blue: false
+    });
+  }
+  function fireBurst(){
+    var n = isBucket() ? Math.round(cap) + Math.ceil(limit*0.5) : Math.round(limit);
+    n = Math.max(6, n);
+    // A burst is instantaneous: decide every request NOW, at click time, against the
+    // current clock. That keeps the "RESET IN Xs" countdown an honest aiming cue for the
+    // fixed-window boundary experiment, and makes the mechanism respond to the click at once.
+    // Particles are after-the-fact visuals that carry the decision already made.
+    flash = 0.4;
+    for(var i=0;i<n;i++){
+      var ok = decide();
+      if(reduceMotion) continue;
+      var cy = centerY(), spread = Math.min(90, H*0.26);
+      particles.push({
+        x: 26 - Math.random()*40, y: cy + (Math.random()*2-1)*spread,
+        vx: (gateX() - 26) / 0.30,
+        r: 2.9, state: "in", decided: false, life: 1, blue: false,
+        pre: true, outcome: ok
+      });
+    }
+  }
+
+  // ---- the decision: is this request admitted? (atomic, at decision time) ----
+  function decide(){
+    var admitted;
+    if(algo === "token"){
+      admitted = tokens >= 1;
+      if(admitted) tokens -= 1;
+    } else if(algo === "leaky"){
+      admitted = level < cap;
+      if(admitted) level += 1;
+    } else if(algo === "fixed"){
+      var w = Math.floor(clock);
+      if(w !== curWin){ prevCount = winCount; winCount = 0; curWin = w; }
+      admitted = winCount < limit;
+      if(admitted) winCount += 1;
+    } else { // sliding window log
+      while(stamps.length && stamps[0] <= clock - 1) stamps.shift();
+      admitted = stamps.length < limit;
+      if(admitted) stamps.push(clock);
+    }
+    if(admitted){ admitTotalAcc++; admitLog.push(clock); }
+    else throtTotalAcc++;
+    timeline.push({ ok: admitted });
+    if(timeline.length > 400) timeline.shift();
+    return admitted;
+  }
+
+  // ---- update loop ----
+  var flash = 0;
+  function update(dt){
+    clock += dt;
+
+    // continuous mechanism evolution
+    if(algo === "token"){
+      tokens = Math.min(cap, tokens + limit*dt);
+    } else if(algo === "leaky"){
+      var drained = Math.min(level, limit*dt);
+      level -= drained; drainCarry += drained;
+      while(drainCarry >= 1){ drainCarry -= 1; if(!reduceMotion) spawnOutput(); }
+    } else if(algo === "fixed"){
+      var w = Math.floor(clock);
+      if(w !== curWin){ prevCount = winCount; winCount = 0; curWin = w; }
+    } else {
+      while(stamps.length && stamps[0] <= clock - 1) stamps.shift();
+    }
+
+    // spawn incoming
+    spawnCarry += inRate * dt;
+    var guard = 0;
+    while(spawnCarry >= 1 && guard < 80){
+      spawnCarry -= 1; guard++;
+      if(reduceMotion){ decide(); } else { spawnRequest(); }
+    }
+
+    // gentle, gated auto-bursts (never fires while incoming sits below the limit,
+    // so the "below limit -> zero throttling" invariant stays intact)
+    if(autoburst){
+      autoBurstTimer -= dt;
+      if(autoBurstTimer <= 0){
+        autoBurstTimer = 3.5 + Math.random()*3;
+        if(inRate >= limit) fireBurst();
+      }
+    }
+
+    // advance particles
+    if(!reduceMotion){
+      var gx = gateX(), b = bucketBox(), bcx = b.x + b.w*0.5, bcy = b.y + b.h*0.62;
+      for(var i=particles.length-1;i>=0;i--){
+        var p = particles[i];
+        if(p.state === "in"){
+          p.x += p.vx*dt;
+          if(!p.decided && p.x >= gx){
+            p.decided = true;
+            var ok = p.pre ? p.outcome : decide();
+            if(ok){
+              if(algo === "leaky"){ p.state = "absorb"; p.blue = true; }
+              else { p.state = "pass"; }
+            } else { p.state = "rej"; p.vy = 40 + Math.random()*60; p.vx *= 0.35; p.life = 1; }
+          }
+        } else if(p.state === "pass"){
+          p.x += p.vx*dt;
+          if(p.x > W + 12) particles.splice(i,1);
+        } else if(p.state === "out"){
+          p.x += p.vx*dt;
+          if(p.x > W + 12) particles.splice(i,1);
+        } else if(p.state === "absorb"){
+          p.x += (bcx - p.x)*Math.min(1, dt*7);
+          p.y += (bcy - p.y)*Math.min(1, dt*7);
+          p.life -= dt*2.2; p.r *= (1 - Math.min(1,dt*3));
+          if(p.life <= 0) particles.splice(i,1);
+        } else if(p.state === "rej"){
+          p.x += p.vx*dt; p.y += (p.vy||0)*dt; p.vy = (p.vy||0) + 220*dt;
+          p.life -= dt*1.4;
+          if(p.life <= 0 || p.y > H + 20) particles.splice(i,1);
+        }
+      }
+    }
+    if(flash > 0) flash -= dt;
+
+    // per-second rollups
+    rateAcc += dt;
+    if(rateAcc >= 1){
+      rateAcc -= 1;
+      admitPerSec = admitTotalAcc; throtPerSec = throtTotalAcc;
+      var tot = admitPerSec + throtPerSec;
+      admitRate = tot > 0 ? Math.round(admitPerSec/tot*100) : 100;
+      admitTotalAcc = 0; throtTotalAcc = 0;
+      computePeak();
+      sparkData.push(admitPerSec); if(sparkData.length > 48) sparkData.shift();
+      updateMetrics();
+    }
+
+    coachAcc += dt;
+    if(coachAcc >= 0.5){ coachAcc = 0; updateCoach(); }
+  }
+
+  // rolling-1s peak over admit log (two-pointer). This is the discriminator:
+  // fixed window -> ~2x limit at boundary; sliding window -> never exceeds limit.
+  function computePeak(){
+    while(admitLog.length && admitLog[0] < clock - 8) admitLog.shift();
+    var mx = 0, l = 0;
+    for(var r=0;r<admitLog.length;r++){
+      while(admitLog[r] - admitLog[l] >= 1) l++;
+      var win = r - l + 1;
+      if(win > mx) mx = win;
+    }
+    peak1s = mx;
+  }
+
+  // ---- rendering ----
+  function color(){ return { in:"#7fe9f1", ok:"#3fb950", rej:"#f85149", water:"#5aa9ff" }; }
+  function render(){
+    ctx.clearRect(0,0,W,H);
+    drawInflow();
+    if(isBucket()) drawBucket(); else drawWindow();
+    drawParticles();
+  }
+
+  function drawInflow(){
+    ctx.fillStyle = "#7d8fa1"; ctx.font = "10px "+mono(); ctx.textAlign = "left";
+    ctx.fillText("REQUESTS", 22, centerY() - Math.min(120,H*0.34) - 14);
+    ctx.fillStyle = "#54626f"; ctx.font = "10px "+mono();
+    ctx.fillText(Math.round(inRate)+" req/s in", 22, centerY() - Math.min(120,H*0.34) - 1);
+  }
+
+  function drawBucket(){
+    var b = bucketBox(), c = color();
+    var frac = algo === "token" ? (tokens/cap) : (level/cap);
+    frac = Math.max(0, Math.min(1, frac));
+    var fillCol = algo === "token" ? c.ok : c.water;
+
+    // title
+    ctx.textAlign = "center"; ctx.fillStyle = "#cdd9e5"; ctx.font = "600 12px "+mono();
+    ctx.fillText(algo === "token" ? "TOKEN BUCKET" : "LEAKY BUCKET", b.x + b.w/2, b.y - 14);
+    ctx.fillStyle = "#7d8fa1"; ctx.font = "10px "+mono();
+    if(algo === "token") ctx.fillText("refills "+limit+"/s · cap "+cap, b.x + b.w/2, b.y - 1);
+    else ctx.fillText("drains "+limit+"/s · cap "+cap, b.x + b.w/2, b.y - 1);
+
+    // glow on burst
+    if(flash > 0){ ctx.shadowColor = fillCol; ctx.shadowBlur = 18*(flash/0.4); }
+
+    // bucket body
+    rrect(b.x, b.y, b.w, b.h, 12);
+    ctx.fillStyle = "#0e151d"; ctx.fill(); ctx.shadowBlur = 0;
+
+    // fill (clipped to body)
+    ctx.save();
+    rrect(b.x+2, b.y+2, b.w-4, b.h-4, 10); ctx.clip();
+    var fh = (b.h-6) * frac;
+    var fy = b.y + b.h - 3 - fh;
+    var grad = ctx.createLinearGradient(0, fy, 0, b.y+b.h);
+    grad.addColorStop(0, fillCol);
+    grad.addColorStop(1, algo === "token" ? "rgba(63,185,80,.35)" : "rgba(90,169,255,.35)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(b.x+2, fy, b.w-4, fh+4);
+    // surface line
+    ctx.fillStyle = "rgba(255,255,255,.35)";
+    if(frac > 0.01 && frac < 0.995) ctx.fillRect(b.x+2, fy, b.w-4, 1.5);
+    ctx.restore();
+
+    // outline
+    rrect(b.x, b.y, b.w, b.h, 12);
+    ctx.strokeStyle = "rgba(52,211,224,.5)"; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // numeric readout centered
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#e6eef6"; ctx.font = "600 22px "+mono();
+    var shown = algo === "token" ? Math.floor(tokens) : Math.ceil(level);
+    ctx.fillText(shown + " / " + cap, b.x + b.w/2, b.y + b.h/2 + 2);
+    ctx.fillStyle = "#7d8fa1"; ctx.font = "10px "+mono();
+    ctx.fillText(algo === "token" ? "tokens available" : "queued requests", b.x + b.w/2, b.y + b.h/2 + 18);
+
+    // leaky spout + downstream label
+    if(algo === "leaky"){
+      var sx = b.x + b.w*0.72, sy = b.y + b.h;
+      ctx.fillStyle = "#5aa9ff";
+      ctx.fillRect(sx-3, sy, 6, 7);
+      ctx.textAlign = "left"; ctx.fillStyle = "#7d8fa1"; ctx.font = "10px "+mono();
+      ctx.fillText("output → steady "+limit+"/s", W - 168, centerY() + Math.min(120,H*0.34) + 6);
+    } else {
+      ctx.textAlign = "right"; ctx.fillStyle = "#7d8fa1"; ctx.font = "10px "+mono();
+      ctx.fillText("admitted →", W - 20, centerY() - Math.min(120,H*0.34) - 1);
+    }
+  }
+
+  function drawWindow(){
+    var c = color();
+    var cy = centerY();
+    var tx0 = W*0.30, tx1 = Math.min(W - 22, W*0.80), tw = tx1 - tx0;
+    var wh = 78, wy = cy - wh/2;
+
+    ctx.textAlign = "center"; ctx.fillStyle = "#cdd9e5"; ctx.font = "600 12px "+mono();
+    ctx.fillText(algo === "fixed" ? "FIXED WINDOW · 1s buckets" : "SLIDING WINDOW · rolling 1s", tx0 + tw/2, wy - 16);
+    ctx.fillStyle = "#7d8fa1"; ctx.font = "10px "+mono();
+    ctx.fillText("cap " + limit + " req / second", tx0 + tw/2, wy - 3);
+
+    if(algo === "fixed"){
+      var midX = tx0 + tw*0.5;
+      // previous window (faded) | current window (active), boundary between
+      drawWinBox(tx0, wy, tw*0.5, wh, prevCount, limit, false, -1);
+      drawWinBox(midX, wy, tw*0.5, wh, winCount, limit, true, (clock - curWin));
+      // boundary line
+      ctx.strokeStyle = "#34d3e0"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(midX, wy-8); ctx.lineTo(midX, wy+wh+8); ctx.stroke();
+      var remain = Math.max(0, (curWin + 1) - clock);
+      ctx.fillStyle = "#34d3e0"; ctx.font = "600 10px "+mono(); ctx.textAlign = "center";
+      ctx.fillText("RESET IN " + remain.toFixed(1) + "s", midX, wy + wh + 22);
+      ctx.fillStyle = "#54626f"; ctx.font = "9px "+mono();
+      ctx.fillText("last window", tx0 + tw*0.25, wy + wh + 22);
+    } else {
+      // sliding: single rolling track [now-1 .. now] with ticks per admit stamp
+      rrect(tx0, wy, tw, wh, 10);
+      ctx.fillStyle = "#0e151d"; ctx.fill();
+      ctx.strokeStyle = "rgba(52,211,224,.4)"; ctx.lineWidth = 1.5; ctx.stroke();
+      // grid ticks
+      ctx.strokeStyle = "rgba(255,255,255,.05)"; ctx.lineWidth = 1;
+      for(var g=1; g<10; g++){ var gx = tx0 + tw*(g/10); ctx.beginPath(); ctx.moveTo(gx, wy+6); ctx.lineTo(gx, wy+wh-6); ctx.stroke(); }
+      // admit stamps
+      var full = stamps.length >= limit;
+      for(var i=0;i<stamps.length;i++){
+        var frac = (stamps[i] - (clock - 1)); if(frac < 0) frac = 0; if(frac > 1) frac = 1;
+        var x = tx0 + frac*tw;
+        ctx.fillStyle = full ? "#e3b341" : "#3fb950";
+        ctx.fillRect(x-1.5, wy+8, 3, wh-16);
+      }
+      // edges labels
+      ctx.fillStyle = "#54626f"; ctx.font = "9px "+mono();
+      ctx.textAlign = "left"; ctx.fillText("now − 1s", tx0, wy + wh + 16);
+      ctx.textAlign = "right"; ctx.fillText("now", tx1, wy + wh + 16);
+      // counter
+      ctx.textAlign = "center";
+      ctx.fillStyle = full ? "#e3b341" : "#e6eef6"; ctx.font = "600 22px "+mono();
+      ctx.fillText(stamps.length + " / " + limit, tx0 + tw/2, wy + wh/2 + 8);
+      ctx.fillStyle = "#7d8fa1"; ctx.font = "10px "+mono();
+      ctx.fillText("in the last second", tx0 + tw/2, wy + wh/2 + 24);
+    }
+
+    ctx.textAlign = "right"; ctx.fillStyle = "#7d8fa1"; ctx.font = "10px "+mono();
+    ctx.fillText("admitted →", W - 20, cy - Math.min(120,H*0.34) - 1);
+  }
+
+  function drawWinBox(x, y, w, h, count, lim, active, prog){
+    rrect(x+2, y, w-4, h, 9);
+    ctx.fillStyle = active ? "#0e151d" : "#0c1219"; ctx.fill();
+    ctx.strokeStyle = active ? "rgba(52,211,224,.4)" : "rgba(255,255,255,.08)";
+    ctx.lineWidth = active ? 1.5 : 1; ctx.stroke();
+    // fill proportional to count/lim
+    var frac = Math.max(0, Math.min(1, lim > 0 ? count/lim : 0));
+    var full = count >= lim;
+    ctx.save(); rrect(x+3, y+1, w-6, h-2, 8); ctx.clip();
+    ctx.fillStyle = full ? "rgba(248,81,73,.25)" : (active ? "rgba(63,185,80,.22)" : "rgba(125,143,161,.14)");
+    ctx.fillRect(x+3, y + (h-2)*(1-frac) + 1, w-6, (h-2)*frac);
+    // sweep marker for active window
+    if(active && prog >= 0){
+      var sx = x + 3 + (w-6)*Math.max(0, Math.min(1, prog));
+      ctx.strokeStyle = "rgba(52,211,224,.55)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(sx, y+1); ctx.lineTo(sx, y+h-1); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.textAlign = "center";
+    ctx.fillStyle = full ? "#f85149" : (active ? "#e6eef6" : "#7d8fa1");
+    ctx.font = "600 20px "+mono();
+    ctx.fillText(count + "/" + lim, x + w/2, y + h/2 + 7);
+  }
+
+  function drawParticles(){
+    if(reduceMotion) return;
+    var c = color();
+    for(var i=0;i<particles.length;i++){
+      var p = particles[i], col, glow;
+      if(p.state === "in"){ col = c.in; glow = "#34d3e0"; }
+      else if(p.state === "pass" || p.state === "out"){ col = c.ok; glow = "#3fb950"; }
+      else if(p.state === "absorb"){ col = c.water; glow = "#5aa9ff"; }
+      else { col = c.rej; glow = "#f85149"; }
+      var a = (p.state === "rej" || p.state === "absorb") ? Math.max(0, p.life) : 1;
+      ctx.globalAlpha = a;
+      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0.5,p.r), 0, 6.2832);
+      ctx.fillStyle = col; ctx.shadowColor = glow; ctx.shadowBlur = 6;
+      ctx.fill(); ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---- metrics DOM ----
+  function updateMetrics(){
+    // INCOMING is the MEASURED arrival rate at the gate (= admitted + throttled over the
+    // last rolling second), not the raw slider target. This keeps the four readouts mutually
+    // consistent (incoming = admitted + throttled; admit-rate = admitted/incoming) instead of
+    // showing e.g. "6 in / 3 admitted / 100%" during the particle-travel transient. The slider
+    // has its own live value readout, so the dialed rate is still visible.
+    el("m-in").innerHTML = (admitPerSec + throtPerSec) + '<small>req/s</small>';
+    el("m-allow").innerHTML = admitPerSec + '<small>/s</small>';
+    var t = el("m-throt"); t.innerHTML = throtPerSec + '<small>/s</small>';
+    t.className = "v " + (throtPerSec > 0 ? "crit" : "");
+    var rEl = el("m-rate"); rEl.innerHTML = admitRate + '<small>%</small>';
+    rEl.className = "v " + (admitRate >= 99 ? "ok" : admitRate >= 70 ? "warn" : "crit");
+    var pEl = el("m-peak"); pEl.innerHTML = peak1s + '<small>req</small>';
+    // over the limit in a rolling second = leakage for windows, expected burst for buckets
+    pEl.className = "v " + (peak1s > limit + 0.5 ? "warn" : "ok");
+    var sub = el("m-peak-sub");
+    if(peak1s > limit + 0.5){
+      sub.textContent = peak1s + " admitted in one rolling second vs a limit of " + limit;
+    } else {
+      sub.textContent = "holding at or below the limit of " + limit;
+    }
+    drawSpark();
+  }
+
+  var sc = el("spark"), sctx = sc.getContext("2d");
+  function drawSpark(){
+    var w = 118, h = 38, d = Math.min(window.devicePixelRatio || 1, 2);
+    sc.width = w*d; sc.height = h*d; sctx.setTransform(d,0,0,d,0,0); sctx.clearRect(0,0,w,h);
+    if(sparkData.length < 2) return;
+    var max = Math.max(limit, Math.max.apply(null, sparkData), 1), n = sparkData.length;
+    // limit reference line
+    var ly = h - 3 - (limit/max)*(h-6);
+    sctx.strokeStyle = "rgba(227,179,65,.5)"; sctx.setLineDash([3,3]); sctx.lineWidth = 1;
+    sctx.beginPath(); sctx.moveTo(0, ly); sctx.lineTo(w, ly); sctx.stroke(); sctx.setLineDash([]);
+    // admitted/s line
+    sctx.beginPath();
+    for(var i=0;i<n;i++){ var x = i/(n-1)*w, y = h-3-(sparkData[i]/max)*(h-6); if(i===0) sctx.moveTo(x,y); else sctx.lineTo(x,y); }
+    sctx.strokeStyle = "#34d3e0"; sctx.lineWidth = 1.5; sctx.stroke();
+    sctx.lineTo(w,h); sctx.lineTo(0,h); sctx.closePath();
+    sctx.fillStyle = "rgba(52,211,224,.10)"; sctx.fill();
+  }
+
+  // ---- timeline strip ----
+  var tl = el("timeline"), tctx = tl.getContext("2d");
+  function drawTimeline(){
+    var r = tl.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 2);
+    var w = r.width, h = 56;
+    tl.width = Math.round(w*d); tl.height = Math.round(h*d);
+    tctx.setTransform(d,0,0,d,0,0); tctx.clearRect(0,0,w,h);
+    var cw = 6, gap = 2, slots = Math.floor(w/(cw+gap));
+    var start = Math.max(0, timeline.length - slots);
+    var shown = timeline.slice(start);
+    for(var i=0;i<shown.length;i++){
+      var x = w - (shown.length - i)*(cw+gap);
+      var it = shown[i];
+      tctx.fillStyle = it.ok ? "#3fb950" : "#f85149";
+      var bh = it.ok ? h*0.62 : h*0.92;
+      var y = h - bh - 3;
+      tctx.globalAlpha = it.ok ? 0.9 : 1;
+      tctx.beginPath();
+      var rr = 2, ww = cw;
+      tctx.moveTo(x+rr,y); tctx.arcTo(x+ww,y,x+ww,y+bh,rr); tctx.arcTo(x+ww,y+bh,x,y+bh,rr);
+      tctx.arcTo(x,y+bh,x,y,rr); tctx.arcTo(x,y,x+ww,y,rr); tctx.closePath(); tctx.fill();
+      tctx.globalAlpha = 1;
+    }
+    if(timeline.length === 0){
+      tctx.fillStyle = "#54626f"; tctx.font = "11px "+mono(); tctx.textAlign = "left";
+      tctx.fillText("waiting for requests…", 4, h/2 + 4);
+    }
+  }
+
+  // ---- coaching ----
+  function updateCoach(){
+    var c = el("coach"), msg;
+    var overLimit = peak1s > limit + 0.5;
+    if(algo === "token"){
+      if(throtPerSec > 0 && tokens < 1)
+        msg = "The token bucket is empty — the burst spent every token, so extra requests get 429'd until it refills at " + limit + "/s. This is exactly the burst-then-cap behaviour APIs want.";
+      else if(inRate < limit)
+        msg = "Traffic is under the limit, so the bucket stays near full and admits ~100%. Hit Send burst: up to " + cap + " requests pass at once, because the bucket had that many tokens saved up.";
+      else
+        msg = "Token bucket admits one request per token and refills at " + limit + "/s up to " + cap + ". Sustained rate is capped at the refill rate; short spikes ride on the saved-up tokens.";
+    } else if(algo === "leaky"){
+      if(level >= cap - 0.5 && throtPerSec > 0)
+        msg = "The queue is full (" + cap + ") — overflow requests are 429'd. But notice the output drip never speeds up: it leaves at a flat " + limit + "/s no matter how spiky the input is. That's traffic shaping.";
+      else if(inRate > limit)
+        msg = "Input is above the limit, so the queue fills and drains at a constant " + limit + "/s. Bursty in, smooth out — the downstream service sees a perfectly even stream.";
+      else
+        msg = "Leaky bucket queues admitted requests and leaks them at a steady " + limit + "/s. Under the limit the queue stays shallow; push incoming higher to watch it buffer and smooth the burst.";
+    } else if(algo === "fixed"){
+      if(overLimit)
+        msg = "Boundary leak caught: " + peak1s + " requests slipped through in one rolling second — about 2× your " + limit + " limit. A burst before the reset plus a burst after both counted, because the window counter zeroed at the seam.";
+      else if(throtPerSec > 0)
+        msg = "This 1s window hit its " + limit + "-request cap, so the rest are 429'd until the counter resets at the boundary. Time a burst across that reset to expose the classic 2× leak.";
+      else
+        msg = "Fixed window counts admits per 1-second bucket and resets on the boundary. Cheap and simple — but two bursts straddling a reset can push ~2× the limit through in one rolling second.";
+    } else {
+      if(throtPerSec > 0)
+        msg = "The rolling last second already holds " + limit + " admits, so new requests are 429'd until the oldest ages out. No matter how you time a burst, it can never exceed the limit in any 1-second span.";
+      else
+        msg = "Sliding-window log checks the true last second on every request, so admits in any rolling 1s stay at or below " + limit + ". This is the fix for the fixed-window boundary leak — at the cost of storing timestamps.";
+    }
+    if(c.textContent !== msg) c.textContent = msg;
+  }
+
+  // ---- control wiring ----
+  var algoBtns = document.querySelectorAll("#algo button");
+  algoBtns.forEach(function(b){
+    b.addEventListener("click", function(){
+      algo = b.getAttribute("data-a");
+      algoBtns.forEach(function(x){ x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      applyCapEnabled();
+      resetMechanism();
+      updateMetrics(); updateCoach();
+    });
+  });
+
+  function applyCapEnabled(){
+    var on = isBucket();
+    var capCtrl = el("cap-ctrl");
+    el("cap").disabled = !on;
+    capCtrl.classList.toggle("dim", !on);
+    el("cap-note").textContent = on ? "bucket size" : "n/a — window is fixed at 1s";
+  }
+
+  el("limit").addEventListener("input", function(e){
+    limit = +e.target.value; el("limit-out").textContent = limit + " req/s";
+    if(algo === "token" && tokens > cap) tokens = cap;
+    updateCoach();
+  });
+  el("cap").addEventListener("input", function(e){
+    cap = +e.target.value; el("cap-out").textContent = "" + cap;
+    if(tokens > cap) tokens = cap;
+    updateCoach();
+  });
+  el("rate").addEventListener("input", function(e){
+    inRate = +e.target.value; el("rate-out").textContent = inRate + " req/s";
+    el("m-in").innerHTML = inRate + '<small>req/s</small>';
+    updateCoach();
+  });
+  el("autoburst").addEventListener("change", function(e){
+    autoburst = e.target.checked;
+    e.target.parentElement.querySelector(".txt").textContent = autoburst ? "on" : "off";
+    autoBurstTimer = 2;
+  });
+  el("burst").addEventListener("click", function(){ fireBurst(); });
+  el("reset").addEventListener("click", function(){ fullReset(); });
+
+  // keyboard: spacebar on burst already works (button); allow "b" as a shortcut
+  document.addEventListener("keydown", function(e){
+    if(e.key === "b" && !/input|textarea/i.test((e.target.tagName||""))){ fireBurst(); }
+  });
+
+  // ---- boot ----
+  var ro = ("ResizeObserver" in window) ? new ResizeObserver(function(){ resize(); }) : null;
+  if(ro) ro.observe(stage); else window.addEventListener("resize", resize);
+  resize(); applyCapEnabled(); fullReset();
+
+  var last = 0;
+  function frame(ts){
+    if(!last) last = ts;
+    var dt = (ts - last)/1000; last = ts; if(dt > 0.05) dt = 0.05;
+    update(dt); render(); drawTimeline();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // reduced-motion: still animate mechanism state + metrics, just no particles.
+  if(reduceMotion){
+    // ensure timeline/metrics keep ticking (frame loop handles update); nothing extra needed.
+  }
+})();
+</script>
+</body>
+</html>

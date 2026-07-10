@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Module 1 — Design Thinking & Requirements | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#4263eb; --hue-soft:rgba(66,99,235,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#6a8bff;--hue-soft:rgba(106,139,255,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#4263eb;--hue-soft:rgba(66,99,235,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#6a8bff;--hue-soft:rgba(106,139,255,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 1 · Foundations</span><span class="sep">·</span><span>Module 1</span><span class="sep">·</span><span>Week 1 · ~13 hrs</span></p>
+      <h1>Design Thinking &amp; Requirements</h1>
+      <p class="sub">Before you learn a single database or cache, you need the <strong>method</strong> — how to walk into any design question and drive it from a blank page to a defensible architecture. This module is the operating system every other module runs on.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#what">What system design actually is</a></li>
+        <li><a href="#framework">The 5-step framework</a></li>
+        <li><a href="#requirements">Functional vs non-functional</a></li>
+        <li><a href="#estimation">Capacity estimation</a></li>
+        <li><a href="#api">API contracts</a></li>
+        <li><a href="#tradeoffs">The trade-off lens</a></li>
+        <li><a href="#bottlenecks">Finding the bottleneck</a></li>
+        <li><a href="#bitly">Worked example: Bitly</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="what">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>What system design actually is</h2>
+      <p class="lead">System design is the craft of deciding a system's <strong>components, its data, and how they communicate</strong> so it meets its requirements — not just today, but at scale and under failure.</p>
+      <p>Two altitudes get tested. <strong>High-Level Design (HLD)</strong> is the architecture: which services exist, which databases and caches and queues, and how a request flows through them. <strong>Low-Level Design (LLD)</strong> zooms into one service: its classes, method signatures, and design patterns. <em>This track is about HLD</em> — that's what senior and Forward-Deployed interviews probe, and it's the thinking that lets you actually architect real systems.</p>
+      <p>Here's the mindset shift that trips up strong coders: <strong>there is no single correct answer.</strong> A system design interview isn't a puzzle with one solution — it's a conversation where you're judged on how you handle ambiguity, how you reason about trade-offs, and whether you can justify every box you draw. The candidate who says <em>"I'll use Cassandra because writes dominate and we can tolerate eventual consistency"</em> beats the one who just says <em>"I'll use Cassandra"</em> — even if they draw the same diagram.</p>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>You are not graded on the diagram. You are graded on the <strong>reasoning that produced it</strong>. Narrate your trade-offs out loud — that's the whole game.</p>
+      </div>
+    </section>
+
+    <section id="framework">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>The 5-step framework</h2>
+      <p>The single most valuable thing you'll take from this entire track is a <strong>repeatable structure</strong> so you never freeze at a blank whiteboard. Interviewers call the popular ones <strong>RESHADED</strong> and <strong>PEDALS</strong>; they're the same idea. Here's the clean version to actually run, with rough timings for a 45-minute round:</p>
+
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>Scope <span class="ft">~5 min</span></b><p>Clarify what you're building. Nail down functional requirements (the features) and the 2–3 non-functional ones that matter (scale, availability, consistency, latency). Explicitly state what's out of scope.</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>Estimate <span class="ft">~5 min</span></b><p>Back-of-the-envelope the scale — QPS, storage, bandwidth — but <em>only the numbers that will change a design decision.</em> "Read-heavy at 100:1" justifies caching; "3 TB/year" justifies sharding.</p></div></div>
+        <div class="fstep"><span class="fn">3</span><div><b>Interface <span class="ft">~5 min</span></b><p>Define the API — the contract between client and system. This forces clarity on inputs and outputs before you touch internals.</p></div></div>
+        <div class="fstep"><span class="fn">4</span><div><b>Design the happy path <span class="ft">~10 min</span></b><p>Sketch the data model, then draw the core components and trace one request end-to-end. Keep it simple and correct first — no premature scaling.</p></div></div>
+        <div class="fstep"><span class="fn">5</span><div><b>Deep-dive &amp; scale <span class="ft">~15 min</span></b><p>Find where it breaks first, then evolve it to satisfy the NFRs — add caching, replicas, sharding, queues — naming the trade-off at every step. This is where senior candidates separate themselves.</p></div></div>
+      </div>
+
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>Say the framework out loud as you start: <em>"Let me clarify requirements, do a quick estimate, define the API, sketch the high-level design, then deep-dive."</em> It signals seniority in the first 30 seconds and buys you a map.</p>
+      </div>
+    </section>
+
+    <section id="requirements">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Functional vs non-functional</h2>
+      <p><strong>Functional requirements</strong> are what the system <em>does</em> — its features. For a URL shortener: "shorten a long URL," "redirect a short URL to the original," "show click analytics." They're the verbs.</p>
+      <p><strong>Non-functional requirements (NFRs)</strong> are the <em>qualities</em> the system must have. These are what actually shape your architecture — two systems with identical features but different NFRs get completely different designs. Your job in Step 1 is to pin down the 2–3 that dominate.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>NFR</th><th>The question to ask</th><th>What it drives</th></tr></thead>
+          <tbody>
+            <tr><td>Scalability</td><td>How many users / QPS, and growth?</td><td>Horizontal scaling, sharding, caching</td></tr>
+            <tr><td>Availability</td><td>What uptime? 99.9%? 99.99%?</td><td>Redundancy, replication, failover</td></tr>
+            <tr><td>Latency</td><td>How fast must a request feel (p99)?</td><td>Caching, CDNs, data locality</td></tr>
+            <tr><td>Consistency</td><td>Must all users see the same data instantly?</td><td>Strong vs eventual; SQL vs NoSQL</td></tr>
+            <tr><td>Durability</td><td>Is losing data catastrophic?</td><td>Replication, backups, write guarantees</td></tr>
+            <tr><td>Cost</td><td>What's the budget per request?</td><td>Storage tier, compute choices</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Availability and consistency are often in tension (you'll meet the CAP theorem below and again in Module 3). A URL shortener wants <strong>high availability</strong> — redirects must always work — and can tolerate a fresh link taking a second to propagate. A bank wants <strong>strong consistency</strong> — you must never see a stale balance. Same-looking systems, opposite designs. That's the power of nailing NFRs early.</p>
+    </section>
+
+    <section id="estimation">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>Capacity estimation</h2>
+      <p>Back-of-the-envelope math rattles people in the opening minutes — but it's the most learnable part of the whole interview, because it's just a handful of formulas and aggressive rounding. You estimate to <strong>justify design decisions</strong>: do we need a cache? How many servers? Shard or not?</p>
+      <p>The one constant to memorize: <strong>a day has ~86,400 seconds — round it to 100,000 (10⁵).</strong> Everything flows from <code>QPS = daily actions ÷ 100,000</code>.</p>
+
+      <h3>The five quantities</h3>
+      <ul>
+        <li><strong>QPS</strong> — split reads and writes; compute average, then multiply by a <strong>peak factor</strong> (2–10×) for the real load.</li>
+        <li><strong>Storage</strong> — writes/day × bytes/write × replication × 365 × retention years.</li>
+        <li><strong>Bandwidth</strong> — QPS × payload size.</li>
+        <li><strong>Cache memory</strong> — the hot working set, usually the classic "80% of traffic hits 20% of data."</li>
+        <li><strong>Servers</strong> — peak QPS ÷ what one server handles (~1,000 QPS is a fine default assumption).</li>
+      </ul>
+
+      <p>A quick worked example — 1M DAU, each doing 10 reads + 1 write per day:</p>
+      <pre><code>writes/day = 1M × 1  = 1,000,000   <span class="cmt">→ ÷ 100k ≈ 10 writes/s avg</span>
+reads/day  = 1M × 10 = 10,000,000  <span class="cmt">→ ÷ 100k ≈ 100 reads/s avg  (10:1 read-heavy)</span>
+peak (×3)  ≈ 330 QPS total         <span class="cmt">→ tiny; one beefy server + a cache handles this</span></code></pre>
+      <p>That estimate already made a design decision for you: <em>it's read-heavy and small, so a single database with a cache is plenty — no sharding yet.</em> That's the point. Round hard, powers of ten (1 KB=10³ B, 1 MB=10⁶, 1 GB=10⁹, 1 TB=10¹²); a back-of-envelope answer only needs to be right within an order of magnitude.</p>
+
+      <div class="callout tool">
+        <p class="lbl">Play with it → your tool</p>
+        <p>Open the <a href="../tools/capacity-estimator.html">🧮 Capacity Estimator</a>, hit the <strong>URL Shortener</strong> preset, and watch QPS, storage, bandwidth, cache, and server count fall out — with the arithmetic shown. Change one input at a time and build the intuition for how scale moves.</p>
+      </div>
+    </section>
+
+    <section id="api">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>API contracts</h2>
+      <p>The API is the contract between the client and your system. Defining it early forces you to be concrete about inputs and outputs before you get lost in internals. Keep it boring and clear: sensible resources, correct HTTP verbs and status codes, versioning, pagination for lists.</p>
+      <pre><code><span class="cmt"># Create a short URL</span>
+POST /api/v1/urls
+  body:    { "longUrl": "https://...", "alias": "optional", "expiresAt": "optional" }
+  returns: 201 { "shortUrl": "https://sho.rt/aB3xK9" }
+
+<span class="cmt"># Redirect (the hot path — must be blazing fast)</span>
+GET /{shortCode}
+  returns: 302 Found, Location: &lt;longUrl&gt;</code></pre>
+      <p>Notice the write and the read have wildly different profiles: creating a link is rare and can be a little slow; the redirect is ~100× more frequent and must be instant. Spotting that asymmetry in the API is what drives you to cache the read path — and you found it before drawing a single box.</p>
+    </section>
+
+    <section id="tradeoffs">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>The trade-off lens</h2>
+      <p>Every real decision is a trade-off: SQL vs NoSQL, strong vs eventual consistency, cache freshness vs load, normalization vs read speed. There is no free lunch — only choices you can defend.</p>
+      <p>The famous one is the <strong>CAP theorem</strong>: when the network partitions (nodes can't talk), a distributed system must choose between <strong>C</strong>onsistency (everyone sees the same data) and <strong>A</strong>vailability (every request still gets a response). You can't have both <em>during a partition</em>. Most consumer web systems pick <strong>AP</strong> — stay up, accept eventual consistency; systems like payments pick <strong>CP</strong> — refuse rather than serve stale. (Much more in Module 3; for now, just carry the intuition.)</p>
+
+      <h3>Latency numbers worth internalizing</h3>
+      <p>Good architecture comes from knowing what's fast and what's slow. The exact figures don't matter — the <strong>1,000× jumps</strong> do:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Operation</th><th>Rough latency</th><th>Intuition</th></tr></thead>
+          <tbody>
+            <tr><td>Read from RAM</td><td class="num">~100 ns</td><td>Effectively free</td></tr>
+            <tr><td>SSD random read</td><td class="num">~150 µs</td><td>~1,000× slower than RAM</td></tr>
+            <tr><td>Network round-trip (same datacenter)</td><td class="num">~500 µs</td><td>Cheap within a region</td></tr>
+            <tr><td>Disk (HDD) seek</td><td class="num">~10 ms</td><td>~100,000× slower than RAM</td></tr>
+            <tr><td>Network round-trip (cross-continent)</td><td class="num">~150 ms</td><td>The internet is far away</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>This one table explains <em>why</em> we cache (avoid disk and network), why we replicate data close to users (avoid cross-continent hops), and why "just add a database call" isn't free. Keep it in your head and half of system design becomes obvious.</p>
+    </section>
+
+    <section id="bottlenecks">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Finding the bottleneck</h2>
+      <p>Step 5 of the framework asks "where does this break first?" Trained eyes look for two things: <strong>single points of failure</strong> (one server, one database — kill it and everything stops) and the <strong>component that saturates first</strong> as traffic climbs (usually the database under read load, or a hot key).</p>
+      <p>Almost every design evolves along the same story, and knowing it lets you scale on demand instead of guessing:</p>
+      <pre><code>single server ──▶ split app &amp; database
+             ──▶ add a cache (kill repeated DB reads)
+             ──▶ add read replicas (scale reads)
+             ──▶ shard the database (scale writes &amp; storage)
+             ──▶ add a queue (absorb spikes, decouple work)</code></pre>
+      <p>You don't jump to the end. You start simple and add each piece <em>only when an NFR or your estimate forces it</em> — narrating the trade-off each time.</p>
+    </section>
+
+    <section id="bitly">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Worked example: Bitly</h2>
+      <p>Let's run all five steps on the classic opener — <em>"Design a URL shortener like Bitly."</em> Read this once, then you'll do it yourself in the reps below.</p>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Functional:</strong> create a short URL from a long one; redirect a short URL to the original. (Stretch: custom alias, expiry, click analytics.)</li>
+        <li><strong>Non-functional:</strong> very high availability (redirects must always work), low-latency redirects, extremely read-heavy (~100:1), durable mappings (never lose a link), scale to billions of URLs.</li>
+        <li><strong>Out of scope (say it):</strong> user accounts, full analytics dashboards — keep the core tight.</li>
+      </ul>
+
+      <h3>② Estimate</h3>
+      <pre><code>100M new URLs / month ≈ 40 writes/s          <span class="cmt">(100M ÷ 30 days ÷ 86,400)</span>
+read:write 100:1      ≈ 4,000 reads/s         <span class="cmt">peak ×2–3 ≈ ~10k reads/s</span>
+storage: 100M/mo × 12 × 5yr = 6B URLs
+         × ~500 B/row ≈ 3 TB (× replication)  <span class="cmt">→ fits, but plan to shard</span></code></pre>
+      <p>Verdict: read-heavy and durable → <strong>cache aggressively, use read replicas</strong>; storage is large but manageable → shard later, not now.</p>
+
+      <h3>③ Interface</h3>
+      <p>Exactly the API from Section 05 — <code>POST /urls</code> and <code>GET /{shortCode}</code>.</p>
+
+      <h3>④ Happy-path design</h3>
+      <pre><code>Data model (one table):
+  urls( short_code PK, long_url, created_at, expires_at? )
+
+Read path:   client → LB → app server → cache(short_code) ─hit─▶ 302 redirect
+                                              └─miss─▶ DB → warm cache → 302
+Write path:  client → LB → app server → generate short_code → store in DB</code></pre>
+
+      <h3>⑤ Deep-dive: how do we generate the short code?</h3>
+      <p>This is the heart of the problem, and a perfect trade-off discussion:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Approach</th><th>Upside</th><th>Downside</th></tr></thead>
+          <tbody>
+            <tr><td>Hash(longUrl), take 7 chars</td><td>Same URL → same code (dedupe)</td><td>Collisions to handle</td></tr>
+            <tr><td>Auto-increment counter → Base62</td><td>Dead simple, no collisions</td><td>Single point of coordination; guessable</td></tr>
+            <tr><td>Distributed ID (Snowflake) → Base62</td><td>Scales across servers, unique</td><td>Slightly more infra</td></tr>
+            <tr><td>Pre-generated key service (KGS)</td><td>Fast, no collision at write time</td><td>Extra service to run</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>Why 7 characters?</strong> Base62 (a–z, A–Z, 0–9) with 7 chars = 62⁷ ≈ <strong>3.5 trillion</strong> combinations — comfortably more than our 6B URLs. That's the kind of number you compute live to justify the choice.</p>
+      <p><strong>Scaling the reads</strong> (the dominant path): a Redis cache in front absorbs the hot links; read replicas take the misses; a CDN/edge can serve the most popular redirects globally. <strong>Scaling storage:</strong> when the table gets huge, shard by <code>short_code</code>. Each move is triggered by the estimate — not guessed.</p>
+
+      <div class="callout">
+        <p class="lbl">See it move</p>
+        <p>The read path you just drew — LB → app servers → cache/DB — is exactly what the <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer Playground</a> (Module 2) lets you stress and break. You'll build that intuition next.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Your reps this week</h2>
+      <p>Reading is not learning — reps are. Do these, in order:</p>
+      <ol>
+        <li><strong>Whiteboard Bitly yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design it end-to-end using the 5-step framework, out loud, timed to ~35 minutes — <em>before</em> re-reading Section 08 or watching the video. Struggling is the point.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your design against pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer running a system design interview. Give me the prompt: "Design a URL shortener like Bitly." Then act as the interviewer — let me drive, ask clarifying and probing questions, push back on anything hand-wavy, and keep asking "why?". Do NOT give me the answer or lead me. After ~35 minutes (or when I say "done"), grade me 1–5 on each of: requirements gathering, capacity estimation, API design, high-level design, deep-dives &amp; trade-offs, and communication — with specific feedback and what a strong candidate would have added.</div>
+      <ol start="3">
+        <li><strong>Defend your numbers</strong> in the <a href="../tools/capacity-estimator.html">🧮 Capacity Estimator</a> — did your estimate match? Where were you off by an order of magnitude?</li>
+        <li><strong>Explain it back.</strong> Teach the 5-step framework and functional-vs-non-functional to a rubber duck (or me) without notes. Gaps you can't explain are gaps you don't have yet.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>When AP over CP? · Why cache the read path in Bitly? · Why 7 Base62 chars? · Seconds in a day for estimation? · One reason to shard vs. add a replica?</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the framework and estimation ones <em>before</em> your reps; save the Bitly walkthrough for <em>after</em> your own attempt.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=i7twT3x5yv8" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>System Design Interview: A Step-By-Step Guide</b><div class="ch">ByteByteGo <span class="dur">· ~25 min · framework</span></div><p>The canonical 4-step structure to open any interview. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=0myM0k1mjZw" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Capacity Planning and Estimation: How much data does YouTube store daily?</b><div class="ch">Gaurav Sen <span class="dur">· ~13 min · estimation</span></div><p>A full DAU → QPS → storage estimation worked end-to-end.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=UC5xf8FbdJc" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Back-Of-The-Envelope Estimation / Capacity Planning</b><div class="ch">ByteByteGo <span class="dur">· ~10 min · estimation</span></div><p>Tight primer on the estimation method as a reusable checklist.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=4JSN0VpEv2I" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Latency Numbers Every Programmer Should Know</b><div class="ch">Gaurav Sen <span class="dur">· ~10 min · fundamentals</span></div><p>Builds intuition for the 1,000× jumps that drive every trade-off.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=qSJAvd5Mgio" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Design a URL Shortener (Bitly) — System Design Interview</b><div class="ch">NeetCodeIO <span class="dur">· ~24 min · Bitly walkthrough</span></div><p>Clean full walkthrough. Watch AFTER your own attempt.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=xFeWVugaouk" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Design a URL Shortener (TinyURL, Bit.ly)</b><div class="ch">Jordan has no life <span class="dur">· ~18 min · deeper cut</span></div><p>Depth on ID generation collisions and sharding — optional second take.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA Chapter 1 (reliability, scalability, maintainability) — the vocabulary for everything above. And the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> intro + its back-of-the-envelope section (free).</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../tools/capacity-estimator.html">Open the Estimator →</a>
+    </div>
+
+    <footer>Module 1 of 24 · System Design Mastery · Next up: Module 2 — Scalability &amp; Load Balancing (notes coming; the 🚦 tool is already built).</footer>
+  </div>
+</body>
+</html>

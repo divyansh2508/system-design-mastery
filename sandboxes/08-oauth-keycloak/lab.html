@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OAuth 2.0 with Keycloak — Sandbox Lab</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#d97b2e; --hue-soft:rgba(217,123,46,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.15);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.15);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout p + p{margin-top:10px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.mono{font-family:var(--mono);font-size:12px;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+  .obs{font-size:13.5px;color:var(--muted);border-left:3px solid var(--teal);background:var(--teal-soft);border-radius:0 8px 8px 0;padding:10px 14px;margin:14px 0 22px}
+  .obs b{color:var(--teal);font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:4px}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../../index.html">Home</a>
+      <a href="../../roadmap-dashboard.html">Roadmap</a>
+      <a href="../../modules/15-security-architecture.html">Module 15 notes</a>
+      <a href="../../tools/oauth-flow.html">🔐 the simulator</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Sandbox Lab</span><span class="sep">·</span><span>Module 15 — Security</span></p>
+      <h1>OAuth 2.0 with Keycloak</h1>
+      <p class="sub">Spin up a real identity provider, mint your own access token from the OIDC token endpoint with <code>curl</code>, then crack the JWT open and read the exact claims — <code>iss</code>, <code>sub</code>, <code>exp</code>, <code>scope</code> — that the simulator only drew for you.</p>
+    </header>
+
+    <div class="callout tip">
+      <p class="lbl">Prerequisites</p>
+      <p><strong>Docker Desktop must be running.</strong> Open a terminal and <code>cd</code> into this folder before you run anything:</p>
+      <p><code>cd "System Design/sandboxes/08-oauth-keycloak"</code></p>
+    </div>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this lab</h2>
+      <ol>
+        <li><a href="#build">What you'll build</a></li>
+        <li><a href="#stack">The stack</a></li>
+        <li><a href="#up">Bring it up</a></li>
+        <li><a href="#exercises">The exercises</a></li>
+        <li><a href="#teardown">Teardown</a></li>
+        <li><a href="#taught">What this taught you</a></li>
+      </ol>
+    </nav>
+
+    <section id="build">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>What you'll build</h2>
+      <p class="lead">One container: <strong>Keycloak</strong>, an open-source, production-grade OAuth 2.0 Authorization Server and OpenID Connect Provider. No database to wire up, no app code — you configure everything through its admin console, then talk to the standard OIDC endpoints yourself.</p>
+      <p>The goal is to make the abstract concrete. In the <a href="../../tools/oauth-flow.html">OAuth Flow Visualizer</a> you watched a token get <em>issued</em> and saw its claims in a panel. Here you'll actually <strong>request one</strong> from a live token endpoint and <strong>decode the JWT with your own hands</strong> — the same <code>iss</code>, <code>sub</code>, <code>exp</code>, and <code>scope</code> fields, now coming off a real server on your machine.</p>
+      <pre><code>            YOUR TERMINAL (curl acts as the OAuth "client")
+                              │
+   ①  POST /realms/demo/protocol/openid-connect/token
+      grant_type=password · client_id · client_secret · username · password · scope
+                              │
+                              ▼
+   ┌──────────────────────────────────────────────────────────────┐
+   │   KEYCLOAK  ·  http://localhost:8080   ·  start-dev           │
+   │                                                              │
+   │     realm:   demo                                            │
+   │     client:  demo-client   (confidential · direct grants on) │
+   │     user:    alice / alice                                   │
+   │                                                              │
+   │     Authorization Server  ·  OpenID Connect Provider         │
+   │     admin console:  /admin     token endpoint:  /realms/…     │
+   └──────────────────────────────────────────────────────────────┘
+                              │
+   ②  200 OK  →  { "access_token": "&lt;JWT&gt;", "expires_in": 300, ... }
+                              │
+                              ▼
+   ③  base64url-decode the JWT's middle segment
+        →  read the claims:  iss · sub · exp · scope · preferred_username</code></pre>
+    </section>
+
+    <section id="stack">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>The stack</h2>
+      <p>A deliberately tiny <code>docker-compose.yml</code> — a single, official Keycloak image in dev mode. Read the comments; every line earns its place.</p>
+      <pre><code><span class="cmt"># OAuth 2.0 / OpenID Connect sandbox — a single Keycloak identity provider.</span>
+<span class="cmt"># `start-dev` gives you an in-memory H2 DB, plain HTTP, and relaxed hostname</span>
+<span class="cmt"># checks — perfect for a throwaway local lab. No custom code anywhere.</span>
+<span class="cmt">#   Bring up:  docker compose up -d      Tear down: docker compose down -v</span>
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest   <span class="cmt"># official Keycloak (Quarkus) image</span>
+    container_name: sd-keycloak
+    command: ["start-dev"]
+    environment:
+      <span class="cmt"># First-boot admin for the master realm / admin console. Keycloak 26+</span>
+      <span class="cmt"># renamed these to KC_BOOTSTRAP_ADMIN_*; we set BOTH pairs so the lab</span>
+      <span class="cmt"># works whether `latest` is a pre-26 or a 26+ release.</span>
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+    ports:
+      - "8080:8080"   <span class="cmt"># admin console + OIDC endpoints, published to the host</span></code></pre>
+      <div class="callout">
+        <p class="lbl">Why no resource server?</p>
+        <p>We deliberately skip a protected API. The whole point of this lab is the <strong>token</strong> — how it's issued and what's inside it. Adding a resource server buys reliability problems, not learning. Keycloak alone gives you a real Authorization Server, which is the piece that actually matters here.</p>
+      </div>
+    </section>
+
+    <section id="up">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Bring it up</h2>
+      <p>Start the container in the background, then watch it boot:</p>
+      <pre><code>docker compose up -d
+docker compose logs -f keycloak</code></pre>
+      <div class="obs"><b>What to observe</b>Wait for a line like <code>Keycloak 26.x … started in 12.3s. Listening on: http://0.0.0.0:8080</code>. First boot pulls the image and can take a minute. Press <code>Ctrl-C</code> to stop following the logs (the container keeps running).</div>
+      <p>Confirm the OIDC endpoints are live before touching the console — every realm publishes a discovery document, and the built-in <code>master</code> realm is up immediately:</p>
+      <pre><code>curl -s http://localhost:8080/realms/master/.well-known/openid-configuration \
+  | python3 -m json.tool | head -n 12</code></pre>
+      <div class="obs"><b>What to observe</b>A JSON blob whose <code>issuer</code> is <code>http://localhost:8080/realms/master</code> and which lists a <code>token_endpoint</code>, <code>authorization_endpoint</code>, and <code>jwks_uri</code>. Note there is <strong>no</strong> <code>/auth</code> in these paths — the Quarkus-based Keycloak dropped that legacy prefix.</div>
+    </section>
+
+    <section id="exercises">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>The exercises</h2>
+      <p>Steps 1–3 happen in the <strong>admin console</strong> (point-and-click); steps 4–5 happen in your <strong>terminal</strong>. Do them in order.</p>
+
+      <h3>Exercise 1 — Log in and create the <code>demo</code> realm</h3>
+      <p>Open <a href="http://localhost:8080/admin" target="_blank" rel="noopener">http://localhost:8080/admin</a> and sign in with <code>admin</code> / <code>admin</code>. A <strong>realm</strong> is an isolated tenant — its own users, clients, and signing keys. Never build in <code>master</code>; it's for administering Keycloak itself.</p>
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>Open the realm switcher</b><p>Top-left dropdown (it currently reads <em>master</em>) → <strong>Create realm</strong>.</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>Name it <code>demo</code></b><p>Type <code>demo</code> in <em>Realm name</em>, leave <em>Enabled</em> on, click <strong>Create</strong>.</p></div></div>
+      </div>
+      <div class="obs"><b>What to observe</b>The switcher now reads <strong>demo</strong> and the URL is <code>/admin/master/console/#/demo</code>. Everything you do from here lives inside this realm. Its issuer will be <code>http://localhost:8080/realms/demo</code> — remember that; you'll see it in the token.</div>
+
+      <h3>Exercise 2 — Create a confidential client with Direct Access Grants</h3>
+      <p>A <strong>client</strong> is an application allowed to request tokens. "Confidential" means it authenticates with a secret; "Direct Access Grants" enables the password grant we'll use to fetch a token straight from <code>curl</code>.</p>
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>Clients → Create client</b><p>Client type <strong>OpenID Connect</strong>, <em>Client ID</em> = <code>demo-client</code>. Next.</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>Capability config</b><p>Turn <strong>Client authentication ON</strong> (this makes it confidential). Ensure <strong>Direct access grants</strong> is checked. Next → Save.</p></div></div>
+        <div class="fstep"><span class="fn">3</span><div><b>Grab the secret</b><p>Open the <strong>Credentials</strong> tab → copy the <em>Client secret</em>. You'll paste it in Exercise 4.</p></div></div>
+      </div>
+      <div class="obs"><b>What to observe</b>A <strong>Credentials</strong> tab only appears because you flipped on Client authentication — a <em>public</em> client (the kind the simulator uses) wouldn't have one. That secret is how a backend proves <em>which app</em> is asking, on top of proving <em>which user</em>.</div>
+
+      <h3>Exercise 3 — Create a test user</h3>
+      <p>You need a human to authenticate. Create <code>alice</code> and give her a <strong>permanent</strong> password.</p>
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>Users → Add user</b><p><em>Username</em> = <code>alice</code>. Click <strong>Create</strong>. (Email/name optional.)</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>Credentials → Set password</b><p>Set password <code>alice</code> (twice). <strong>Turn <em>Temporary</em> OFF</strong>, then <strong>Save</strong>.</p></div></div>
+      </div>
+      <div class="callout tip">
+        <p class="lbl">The #1 gotcha</p>
+        <p>If <em>Temporary</em> is left <strong>On</strong>, the very next step fails with <code>Account is not fully set up</code> — Keycloak insists the user reset the password interactively first, which <code>curl</code> can't do. Temporary <strong>Off</strong> is what makes the password grant work.</p>
+      </div>
+
+      <h3>Exercise 4 — Request an access token from the token endpoint</h3>
+      <p>Now the OAuth part. Paste your client secret, then hit the <code>demo</code> realm's token endpoint with the <strong>Resource Owner Password</strong> grant. This is the OAuth message the simulator labels <code>POST /token</code>:</p>
+      <pre><code><span class="cmt"># 1) Paste the Client secret you copied in Exercise 2:</span>
+export CLIENT_SECRET='PASTE_YOUR_CLIENT_SECRET_HERE'
+
+<span class="cmt"># 2) Ask Keycloak for a token, pretty-print the whole JSON response:</span>
+curl -s -X POST \
+  http://localhost:8080/realms/demo/protocol/openid-connect/token \
+  -d 'grant_type=password' \
+  -d 'client_id=demo-client' \
+  -d "client_secret=$CLIENT_SECRET" \
+  -d 'username=alice' \
+  -d 'password=alice' \
+  -d 'scope=openid profile email' \
+  | python3 -m json.tool</code></pre>
+      <div class="obs"><b>What to observe</b>A JSON object with <code>access_token</code> (a long <code>xxxxx.yyyyy.zzzzz</code> string — that's the JWT), <code>expires_in: 300</code> (5 minutes), a <code>refresh_token</code>, <code>token_type: "Bearer"</code>, and <code>scope: "openid profile email"</code>. If you get <code>{"error":"invalid_grant"}</code>, re-check Exercise 3 (Temporary Off); <code>invalid_client</code> means the secret is wrong.</div>
+      <p>Now capture just the access token into a variable so you can decode it next:</p>
+      <pre><code>export TOKEN=$(curl -s -X POST \
+  http://localhost:8080/realms/demo/protocol/openid-connect/token \
+  -d 'grant_type=password' \
+  -d 'client_id=demo-client' \
+  -d "client_secret=$CLIENT_SECRET" \
+  -d 'username=alice' \
+  -d 'password=alice' \
+  -d 'scope=openid profile email' \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')
+
+echo "$TOKEN"</code></pre>
+      <div class="obs"><b>What to observe</b>Three base64url chunks joined by dots: <code>header.payload.signature</code>. It only <em>looks</em> encrypted — a JWT is <strong>signed, not encrypted</strong>. Anyone can read it; only Keycloak's private key can forge one. You're about to prove that.</div>
+
+      <h3>Exercise 5 — Decode the JWT and read its claims</h3>
+      <p>The middle segment is the <strong>payload</strong> — the claims. Split on the dots, take chunk 2, and base64url-decode it. (JWT uses URL-safe base64 <em>without</em> padding, so the one-liner restores the padding before decoding.)</p>
+      <pre><code>echo "$TOKEN" | cut -d. -f2 | python3 -c '
+import sys, base64, json
+seg = sys.stdin.read().strip()
+seg += "=" * (-len(seg) % 4)          <span class="cmt"># restore base64url padding</span>
+claims = json.loads(base64.urlsafe_b64decode(seg))
+print(json.dumps(claims, indent=2))'</code></pre>
+      <div class="obs"><b>What to observe</b>The decoded claims — the same fields the simulator's token panel showed, now real:
+        <div class="tbl" style="margin-top:12px">
+          <table>
+            <thead><tr><th>Claim</th><th>What you'll see</th><th>Means</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">iss</td><td class="mono">http://localhost:8080/realms/demo</td><td>Who issued it — your realm</td></tr>
+              <tr><td class="mono">sub</td><td class="mono">a UUID</td><td>The subject — alice's stable user id</td></tr>
+              <tr><td class="mono">exp</td><td class="mono">a Unix timestamp</td><td>Expiry — ~300s after <code>iat</code></td></tr>
+              <tr><td class="mono">scope</td><td class="mono">openid profile email</td><td>What the token is allowed to do</td></tr>
+              <tr><td class="mono">azp</td><td class="mono">demo-client</td><td>Authorized party — which client asked</td></tr>
+              <tr><td class="mono">preferred_username</td><td class="mono">alice</td><td>Human-readable identity</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="callout tool">
+        <p class="lbl">Or paste it into a decoder</p>
+        <p>Run <code>echo "$TOKEN"</code>, copy the string, and paste it into <a href="https://jwt.io" target="_blank" rel="noopener">jwt.io</a> — the same claims render in a live panel, header and payload split out. (It decodes in-browser, but never paste a <em>production</em> token into a website.)</p>
+      </div>
+      <div class="callout">
+        <p class="lbl">Bonus — verify the exp is real</p>
+        <p>Wait five minutes, then re-run the decode of the <em>same</em> old <code>$TOKEN</code> against a protected call, or just compare <code>exp</code> to <code>date +%s</code>. Then fetch a fresh one with the Exercise 4 command — a new <code>exp</code>, a new signature. That short lifetime is why refresh tokens exist.</p>
+      </div>
+
+      <div class="callout tip">
+        <p class="lbl">Prefer the public-client path?</p>
+        <p>If you'd rather skip the secret: in Exercise 2 leave <strong>Client authentication OFF</strong> (a public client, like the simulator's). Then in Exercise 4 simply <strong>delete the <code>client_secret</code> line</strong> — everything else is identical.</p>
+      </div>
+    </section>
+
+    <section id="teardown">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Teardown</h2>
+      <p>One command removes the container and its ephemeral state. Because <code>start-dev</code> keeps everything in memory, your realm, client, and user vanish — a clean slate next time you bring it up.</p>
+      <pre><code>docker compose down -v</code></pre>
+      <div class="obs"><b>What to observe</b><code>Removing sd-keycloak … done</code>. Re-running <code>docker compose ps</code> shows nothing. The <code>-v</code> flag drops any volumes so no state survives.</div>
+    </section>
+
+    <section id="taught">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>What this taught you</h2>
+      <p>You stood up a real OAuth 2.0 Authorization Server, registered a client, created a user, and pulled a signed access token off the standard OIDC token endpoint — then decoded it and read every claim. The four abstractions on the simulator's canvas (<em>authorization server, client, token endpoint, JWT</em>) are now things you've operated by hand.</p>
+
+      <h3>How it pairs with the simulator</h3>
+      <p>Deliberate contrast — and it's the whole point. This lab used the <strong>Resource Owner Password grant</strong>: the user's password travels <em>through the client</em> to get a token. That's the legacy shortcut, and it's exactly what the <a href="../../tools/oauth-flow.html">🔐 OAuth Flow Visualizer</a> exists to eliminate. The simulator walks the <strong>Authorization Code flow with PKCE</strong>, where the password <em>never</em> reaches the app and a stolen authorization code is worthless without the verifier.</p>
+      <p>Same destination, two roads: <strong>identical token endpoint, identical JWT claims</strong> (<code>iss</code>, <code>sub</code>, <code>exp</code>, <code>scope</code>) — you just took the insecure-but-simple route here so you could see the token from a single <code>curl</code>. Now open the simulator and watch the secure route reach the same place, and you'll understand both what a token <em>is</em> and why modern OAuth goes to such lengths to issue one safely.</p>
+      <div class="callout tool">
+        <p class="lbl">Next → run the flow</p>
+        <p>Open the <a href="../../tools/oauth-flow.html">🔐 OAuth 2.0 Flow Visualizer</a>, step to move 5, and watch the token appear on the <em>back channel</em> only — never in a URL. Then flip on attacker mode and see PKCE turn a stolen code into a worthless string.</p>
+      </div>
+    </section>
+
+    <div class="nextnav">
+      <a href="../../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../../tools/oauth-flow.html">Open the simulator →</a>
+    </div>
+
+    <footer>Sandbox Lab · Module 15 — Security Architecture · System Design Mastery · Keycloak is real infra: what you ran here is the same server that guards production systems.</footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Observability &amp; Monitoring | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#d97b2e; --hue-soft:rgba(217,123,46,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+      <a href="../tools/slo-calculator.html">📉 SLO Calc</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 4 · Production-Grade</span><span class="sep">·</span><span>Module 14</span><span class="sep">·</span><span>Weeks 6-8 · ~13 hrs</span></p>
+      <h1>Observability &amp; Monitoring</h1>
+      <p class="sub">Once a system is live, the question stops being "will it work?" and becomes "how do I <strong>know</strong> it's working — and how fast can I find out when it isn't?" This module is the instrumentation layer every production architecture needs, and the language senior interviewers expect you to speak.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#pillars">The three pillars</a></li>
+        <li><a href="#metrics">Metrics &amp; time-series</a></li>
+        <li><a href="#logs">Structured logging &amp; correlation IDs</a></li>
+        <li><a href="#tracing">Distributed tracing &amp; OpenTelemetry</a></li>
+        <li><a href="#prom">Prometheus, Grafana &amp; alerting</a></li>
+        <li><a href="#slo">SLI / SLO / SLA &amp; error budgets</a></li>
+        <li><a href="#postmortem">The blameless post-mortem</a></li>
+        <li><a href="#facebook">Worked example: Facebook Live Comments</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="pillars">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>The three pillars</h2>
+      <p class="lead"><strong>Monitoring</strong> tells you <em>whether</em> a system is healthy against questions you thought to ask in advance. <strong>Observability</strong> is the property that lets you ask <em>new</em> questions — to explain behaviour you never predicted — without shipping new code. You get there by emitting three complementary kinds of telemetry: <strong>metrics, logs, and traces</strong>.</p>
+      <p>The distinction matters in an interview. Monitoring is dashboards and alerts on known failure modes ("CPU &gt; 90%"). Observability is the debugging superpower: a novel outage happens, and the data you already emit is rich enough to let you slice, filter, and correlate your way to the root cause. A system can be heavily monitored yet barely observable — walls of green dashboards while a subtle tail-latency regression quietly burns customers.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Pillar</th><th>What it is</th><th>Answers the question</th><th>Cost shape</th></tr></thead>
+          <tbody>
+            <tr><td>Metrics</td><td>Numeric measurements aggregated over time (counters, gauges, histograms)</td><td>Is something wrong, and how much?</td><td>Cheap — fixed cost per series</td></tr>
+            <tr><td>Logs</td><td>Timestamped, discrete event records (ideally structured)</td><td>What exactly happened?</td><td>Expensive — grows with volume</td></tr>
+            <tr><td>Traces</td><td>The end-to-end path of one request across services</td><td>Where did the time / error go?</td><td>Costly at full fidelity — sample it</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The mental model to carry into any design: <strong>metrics tell you <em>that</em> something is wrong, traces tell you <em>where</em>, and logs tell you <em>why</em>.</strong> You almost always start at a metric (an alert fired), pivot to a trace to localize the slow or failing hop, then read the logs for that exact span to see the stack trace or the bad input. Designing them to link together — so one click carries you from a spiking latency graph to the offending request's logs — is the real skill.</p>
+
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>Telemetry is not free. Metrics are cheap and always-on; logs and full-fidelity traces get expensive fast. Mature systems keep <strong>high-cardinality detail sampled</strong> and <strong>low-cardinality aggregates complete</strong> — and stitch them with shared IDs so you can drill from the cheap signal down to the expensive one on demand.</p>
+      </div>
+    </section>
+
+    <section id="metrics">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>Metrics &amp; time-series</h2>
+      <p>A metric is a name, a set of <strong>labels</strong> (dimensions), and a stream of numeric samples over time — a <em>time series</em>. <code>http_requests_total{route="/checkout", status="500"}</code> is one series; change any label value and you get a different series. Four metric types cover almost everything:</p>
+      <ul>
+        <li><strong>Counter</strong> — only goes up (requests served, errors, bytes). You read its <em>rate</em>, not its raw value.</li>
+        <li><strong>Gauge</strong> — goes up and down (in-flight requests, queue depth, memory used, temperature).</li>
+        <li><strong>Histogram</strong> — bucketed distribution of observations (request duration), letting you compute p50/p95/p99 later.</li>
+        <li><strong>Summary</strong> — like a histogram but with quantiles computed client-side; harder to aggregate across instances.</li>
+      </ul>
+
+      <h3>Percentiles, not averages</h3>
+      <p>Averages lie. If 99 requests take 10 ms and one takes 5 s, the mean is ~60 ms — a number no single user ever experienced, and it hides the customer who timed out. Always reason about <strong>tail latency</strong>: p95, p99, p99.9. At scale the tail is not an edge case — with 100 downstream calls per page, a p99 slow path is hit on the <em>majority</em> of page loads. This is why we store histograms: you can't average pre-computed averages back into a real percentile.</p>
+
+      <h3>Two recipes: RED and USE</h3>
+      <p>Don't invent metrics ad hoc. Two checklists cover services and resources:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Method</th><th>Use it for</th><th>Track</th></tr></thead>
+          <tbody>
+            <tr><td>RED</td><td>Request-driven services (APIs)</td><td><strong>R</strong>ate, <strong>E</strong>rrors, <strong>D</strong>uration</td></tr>
+            <tr><td>USE</td><td>Resources (CPU, disk, queues)</td><td><strong>U</strong>tilization, <strong>S</strong>aturation, <strong>E</strong>rrors</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Instrument every service with RED and every resource with USE and you will have covered the questions that matter before you ever draw a dashboard. The <strong>cardinality trap</strong> is the one thing to fear: putting a high-cardinality value (user ID, request ID, raw URL with IDs) into a metric label explodes the number of series and can take down your metrics backend. Keep labels bounded — route <em>templates</em> (<code>/users/{id}</code>), status classes, region — and push the high-cardinality detail into logs and traces where it belongs.</p>
+    </section>
+
+    <section id="logs">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Structured logging &amp; correlation IDs</h2>
+      <p>A log line written as free-form English (<code>User 42 failed to pay</code>) is fine for a human reading one server. Across hundreds of instances it's useless — you can't reliably filter, aggregate, or alert on prose. <strong>Structured logging</strong> emits each event as a machine-parseable object (usually JSON) with consistent, queryable fields.</p>
+
+      <pre><code><span class="cmt">// Unstructured — a dead end at scale</span>
+2026-07-07 14:03:11 ERROR payment failed for user 42 order 9987 after 3100ms
+
+<span class="cmt">// Structured — queryable, aggregatable, alertable</span>
+{
+  "ts": "2026-07-07T14:03:11Z",
+  "level": "error",
+  "service": "payment-svc",
+  "event": "charge_failed",
+  "user_id": "42",
+  "order_id": "9987",
+  "latency_ms": 3100,
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "error": "gateway_timeout"
+}</code></pre>
+
+      <p>Now you can ask: "count of <code>charge_failed</code> by <code>error</code> in the last hour," or "every log with <code>latency_ms &gt; 3000</code>." The same event that was invisible prose becomes a data point you can graph.</p>
+
+      <h3>Correlation IDs: the thread through the maze</h3>
+      <p>In a microservice architecture one user click fans out to a dozen services, each logging independently. Without a shared key those logs are a shuffled deck. A <strong>correlation ID</strong> (a.k.a. request ID) is a unique token minted at the edge — the API gateway — and <strong>propagated on every downstream call</strong>, typically via an HTTP header. Every service stamps it into every log line it writes for that request.</p>
+      <pre><code>client ──▶ gateway            <span class="cmt">mints request_id = "req-8f2c…"</span>
+             │  X-Request-Id: req-8f2c…
+             ├──▶ comment-svc   logs {request_id:"req-8f2c…", …}
+             ├──▶ fanout-svc     logs {request_id:"req-8f2c…", …}
+             └──▶ store-svc      logs {request_id:"req-8f2c…", …}
+
+<span class="cmt"># One outage, one filter across ALL services:</span>
+request_id = "req-8f2c…"   ──▶ the full story of that one request</code></pre>
+      <p>The <code>trace_id</code> from distributed tracing (next section) is the natural correlation ID — reuse it so a log field and a trace point to the same identity. That single decision is what lets you jump from "this trace was slow" to "here are exactly the log lines it produced," which is the whole game when you're paged at 3 a.m.</p>
+
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>When an interviewer asks "how would you debug this in production?", say the words <em>"structured logs keyed by a correlation ID that I propagate from the gateway, so I can reconstruct any single request across every service."</em> It signals you've actually operated systems, not just drawn them.</p>
+      </div>
+    </section>
+
+    <section id="tracing">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>Distributed tracing &amp; OpenTelemetry</h2>
+      <p>Metrics tell you the checkout p99 doubled. Logs are a haystack. <strong>Distributed tracing</strong> answers "where did the time go?" by recording a request's entire journey across services as a tree of timed operations.</p>
+      <ul>
+        <li>A <strong>trace</strong> is the whole request, identified by a <code>trace_id</code>.</li>
+        <li>A <strong>span</strong> is one unit of work within it (an HTTP handler, a DB query, a cache lookup) with a start time, duration, status, and attributes.</li>
+        <li>Spans nest via a <strong>parent span ID</strong>, forming a tree; laid out on a timeline it's a <em>flame graph / waterfall</em> that shows exactly which hop was slow or errored.</li>
+      </ul>
+
+      <pre><code>Trace 4bf9…  (total 1180ms)
+├─ span: POST /live/123/comments            [gateway]        1180ms
+│  ├─ span: auth.check                       [auth-svc]         12ms
+│  ├─ span: comment.write                    [comment-svc]      55ms
+│  │  └─ span: INSERT comments               [postgres]         41ms  <span class="cmt">✓</span>
+│  └─ span: fanout.publish                   [fanout-svc]     1090ms  <span class="cmt">◀ the culprit</span>
+│     └─ span: broker.publish (retry ×3)     [kafka]          1070ms  <span class="cmt">◀ retries!</span></code></pre>
+      <p>One glance and the story is obvious: the write was fine; the fan-out publish retried the broker three times and ate a full second. No amount of staring at averages gives you that — the <em>shape</em> of the waterfall does.</p>
+
+      <h3>Context propagation &amp; OpenTelemetry</h3>
+      <p>Tracing only works if <code>trace_id</code> and the current <code>span_id</code> travel with the request across process boundaries. That's <strong>context propagation</strong>, and the industry has standardized it: the <strong>W3C Trace Context</strong> <code>traceparent</code> header carries the IDs on every hop.</p>
+      <p><strong>OpenTelemetry (OTel)</strong> is the vendor-neutral CNCF standard that ties it all together — a single set of APIs, SDKs, and a wire protocol (OTLP) for metrics, logs, <em>and</em> traces. You instrument once (much of it auto-instrumented for common frameworks), ship telemetry to the <strong>OTel Collector</strong>, and fan it out to whatever backend you like — Jaeger, Tempo, Datadog, Honeycomb — without touching app code. That decoupling is the whole point: no vendor lock-in on your instrumentation.</p>
+      <pre><code><span class="cmt"># traceparent header — version-traceid-spanid-flags</span>
+traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+             │  │                                │                │
+          version  trace_id (16 bytes)        parent span_id   sampled?</code></pre>
+      <p><strong>Sampling</strong> is non-negotiable at scale: tracing every request would rival your production traffic in volume and cost. <em>Head-based</em> sampling decides at the start (keep 1%); <em>tail-based</em> sampling buffers spans and keeps the interesting ones (every error, every slow request) after the fact — more useful, more infrastructure. Either way, keep 100% of errors and a small slice of the happy path.</p>
+    </section>
+
+    <section id="prom">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Prometheus, Grafana &amp; alerting</h2>
+      <p>The de-facto open-source metrics stack: <strong>Prometheus</strong> collects and stores time-series, <strong>Grafana</strong> visualizes them, and <strong>Alertmanager</strong> routes the alerts. Knowing how the pieces fit is fair game in an interview.</p>
+
+      <h3>The Prometheus model: pull, not push</h3>
+      <p>Prometheus <strong>scrapes</strong> — it periodically pulls a <code>/metrics</code> HTTP endpoint that each service exposes. This inverts the usual push model, and the trade-off is worth stating: pull means Prometheus controls the load and instantly knows a target is <em>down</em> (a failed scrape is itself a signal), and targets don't need to know where to send data. The cost is service discovery — Prometheus must be told what to scrape (via Kubernetes API, Consul, static config). For short-lived batch jobs that vanish before a scrape, a <strong>Pushgateway</strong> bridges the gap.</p>
+      <pre><code><span class="cmt"># A service exposes plain text at /metrics; Prometheus scrapes it:</span>
+http_requests_total{route="/comments",method="POST",status="200"} 84213
+http_requests_total{route="/comments",method="POST",status="500"} 137
+request_duration_seconds_bucket{route="/comments",le="0.1"} 80122
+request_duration_seconds_bucket{route="/comments",le="0.5"} 83999
+
+<span class="cmt"># PromQL — error rate over the last 5 minutes:</span>
+sum(rate(http_requests_total{status="500"}[5m]))
+  / sum(rate(http_requests_total[5m]))
+
+<span class="cmt"># PromQL — p99 latency from the histogram:</span>
+histogram_quantile(0.99,
+  sum(rate(request_duration_seconds_bucket[5m])) by (le))</code></pre>
+      <p><strong>Grafana</strong> sits on top and queries Prometheus (and many other sources) to build dashboards — the RED panels per service, the USE panels per host. Good dashboards are opinionated: a handful of graphs that answer "is the service healthy?" at a glance, not a wall of 50 graphs nobody reads.</p>
+
+      <h3>Alerting that doesn't cause pager fatigue</h3>
+      <p>Alerts are defined as PromQL expressions with a duration ("error rate &gt; 2% <em>for</em> 5m"); Alertmanager deduplicates, groups, silences, and routes them to PagerDuty/Slack. The cardinal rule from Google's SRE practice: <strong>alert on symptoms, not causes</strong>. Page a human when <em>users are hurting</em> (latency SLO burning, error rate up) — not on every high-CPU blip, which may be harmless. Every page should be <strong>actionable and urgent</strong>; anything else is a dashboard or a ticket. Noisy alerting is how on-call engineers learn to ignore the pager, which is far more dangerous than no alert at all.</p>
+
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>If asked "how do you decide what to alert on?", anchor on symptoms and error budgets (next section): <em>"I page when the user-facing SLO is at risk of being missed, using a burn-rate alert — fast burn pages immediately, slow burn opens a ticket."</em> That one sentence separates people who've carried a pager from people who haven't.</p>
+      </div>
+    </section>
+
+    <section id="slo">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>SLI / SLO / SLA &amp; error budgets</h2>
+      <p>These three acronyms are the vocabulary of reliability, and interviewers use them to check whether you think about "good enough" quantitatively instead of chasing an impossible 100%.</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Term</th><th>What it is</th><th>Example</th><th>Audience</th></tr></thead>
+          <tbody>
+            <tr><td>SLI</td><td><strong>Indicator</strong> — a measured number describing service quality</td><td>% of requests served &lt; 200 ms</td><td>Engineers</td></tr>
+            <tr><td>SLO</td><td><strong>Objective</strong> — the internal target for an SLI</td><td>99.9% of requests &lt; 200 ms over 30 days</td><td>Internal team</td></tr>
+            <tr><td>SLA</td><td><strong>Agreement</strong> — a contract with customers, with penalties</td><td>99.5% or we refund credits</td><td>Customers / legal</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The ordering is deliberate: the <strong>SLI</strong> is what you measure, the <strong>SLO</strong> is the bar you hold yourself to, and the <strong>SLA</strong> is the (looser) promise you sell — always set the SLA below the SLO so you have headroom before money and reputation are on the line. A good SLI is expressed as <em>good events ÷ valid events</em>, so it's naturally a percentage between 0 and 100.</p>
+
+      <h3>The error budget: reliability as a currency</h3>
+      <p>Here's the idea that reframes everything: an SLO of 99.9% is a decision that <strong>0.1% of requests are allowed to fail</strong>. That 0.1% is your <strong>error budget</strong> — a real, spendable amount of unreliability. If you're under budget, you ship features fast and take risks. If you've blown the budget, the policy kicks in: <strong>freeze feature launches and spend engineering on reliability</strong> until you're back in the black. It turns an endless "dev wants speed vs. ops wants stability" argument into arithmetic both sides agreed to in advance.</p>
+      <p>The magic of the number is how little downtime "three nines" actually buys you:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Availability SLO</th><th>Downtime / year</th><th>Downtime / 30 days</th><th>Error budget</th></tr></thead>
+          <tbody>
+            <tr><td>99% (two nines)</td><td class="num">3.65 days</td><td class="num">7.2 hrs</td><td class="num">1.0%</td></tr>
+            <tr><td>99.9% (three nines)</td><td class="num">8.77 hrs</td><td class="num">43.2 min</td><td class="num">0.1%</td></tr>
+            <tr><td>99.99% (four nines)</td><td class="num">52.6 min</td><td class="num">4.32 min</td><td class="num">0.01%</td></tr>
+            <tr><td>99.999% (five nines)</td><td class="num">5.26 min</td><td class="num">26 sec</td><td class="num">0.001%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Each extra nine is roughly 10× harder and more expensive. This table is why a seasoned engineer pushes back on "we need five nines" — that's 26 seconds of budget a <em>month</em>, which forbids most maintenance windows and costs a fortune. You spend availability where it earns its keep and no further. <strong>Burn-rate alerting</strong> operationalizes the budget: alert when you're consuming it fast enough to exhaust it before the window ends (e.g. a 14× burn rate pages now; a 3× burn opens a ticket).</p>
+
+      <div class="callout tool">
+        <p class="lbl">Play with it → your tool</p>
+        <p>Open the <a href="../tools/slo-calculator.html">📉 SLO Calculator</a>, set a target like <strong>99.9%</strong>, and watch the allowed downtime, monthly error budget, and how many failed requests that actually permits fall right out. Nudge it to 99.99% and feel how brutally the budget shrinks — that visceral sense of "each nine costs 10×" is exactly what makes you credible when you argue an SLO in a design round.</p>
+      </div>
+    </section>
+
+    <section id="postmortem">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>The blameless post-mortem</h2>
+      <p>Observability's payoff isn't the graph — it's what you do after an incident. The <strong>post-mortem</strong> (a.k.a. incident retro) is a written analysis of an outage: what happened, why, and what changes prevent a recurrence. The word that matters is <strong>blameless</strong>: the premise is that people act reasonably given the information and tools they had, so you fix <em>systems</em>, not people. The moment a post-mortem points a finger, engineers stop reporting incidents honestly and your reliability data goes dark.</p>
+      <p>A solid post-mortem has a predictable skeleton:</p>
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>Summary &amp; impact <span class="ft">what &amp; how bad</span></b><p>One paragraph: what broke, who was affected, for how long, quantified against the SLO / error budget spent.</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>Timeline <span class="ft">the facts</span></b><p>Timestamped sequence — detection, escalation, mitigation, resolution. Sourced straight from your metrics, logs, and traces (this is why they exist).</p></div></div>
+        <div class="fstep"><span class="fn">3</span><div><b>Root-cause analysis <span class="ft">the why</span></b><p>Dig past the surface with techniques like the <em>5 Whys</em>. Usually it's a chain of contributing causes, not one villain.</p></div></div>
+        <div class="fstep"><span class="fn">4</span><div><b>What went well / poorly <span class="ft">honest</span></b><p>Did detection lag? Was the runbook missing? Did the alert even fire? Praise fast mitigation; name the gaps without blame.</p></div></div>
+        <div class="fstep"><span class="fn">5</span><div><b>Action items <span class="ft">owned &amp; dated</span></b><p>Concrete, assigned, tracked fixes — a new alert, a rollback guardrail, an auto-scaling limit. An action item with no owner is a wish.</p></div></div>
+      </div>
+      <p>Two metrics quantify how well your observability actually serves incidents: <strong>MTTD</strong> (mean time to <em>detect</em>) and <strong>MTTR</strong> (mean time to <em>recover</em>). Great instrumentation crushes both — you find out before customers do, and you localize the fault in minutes instead of hours. When an interviewer asks "how do you know your monitoring is good?", the answer is "my MTTD and MTTR are low and trending down."</p>
+    </section>
+
+    <section id="facebook">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Worked example: Facebook Live Comments</h2>
+      <p>Let's run the 5-step framework on <em>"Design the live-comments feed for Facebook Live"</em> — real-time comments streaming under a video as millions watch — and then wire in everything above so we can actually <strong>operate</strong> it. This is a fan-out problem with an observability spine.</p>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Functional:</strong> a viewer posts a comment on a live video; every viewer sees new comments appear in near-real-time as a streaming feed.</li>
+        <li><strong>Non-functional:</strong> low end-to-end latency (comment visible in &lt; 2 s), very high availability, <em>massive</em> read fan-out (one comment → millions of screens), eventual consistency is fine (ordering roughly by time), graceful behaviour under viral spikes.</li>
+        <li><strong>Out of scope (say it):</strong> the video encoding/CDN path, comment ranking / spam-ML, and edit/delete history — keep the core tight.</li>
+      </ul>
+
+      <h3>② Estimate</h3>
+      <pre><code>Popular stream: 10M concurrent viewers
+Post rate (peak): ~1% comment per minute → ~100k comments/min
+                = ~1,700 comment writes / s          <span class="cmt">(modest write load)</span>
+Naive fan-out:  1,700 writes/s × 10M viewers
+                = 17,000,000,000 deliveries / s        <span class="cmt">◀ impossible AND unreadable</span>
+Comment size:   ~200 bytes  →  raw is trivial; the DELIVERY is the problem</code></pre>
+      <p>The estimate immediately makes the design decision: writes are easy, but the fan-out is astronomical — and no human can read 1,700 comments/s anyway. So we <strong>sample / rate-limit what each viewer is shown</strong> (a few per second) and fan out that reduced stream. Spotting that in the numbers is the whole insight.</p>
+
+      <h3>③ Interface</h3>
+      <pre><code><span class="cmt"># Post a comment</span>
+POST /live/{videoId}/comments   { "text": "🔥🔥🔥" }  →  202 Accepted
+
+<span class="cmt"># Subscribe to the live feed (server pushes; not polling)</span>
+GET  /live/{videoId}/comments/stream            <span class="cmt">WebSocket / SSE</span>
+     ← server pushes {author, text, ts} events as they arrive</code></pre>
+      <p>The asymmetry is the design: writes are a normal REST call; reads are a <strong>persistent push connection</strong> (WebSocket or Server-Sent Events) because polling millions of clients would melt the servers.</p>
+
+      <h3>④ High-level design</h3>
+      <pre><code>viewer ─POST─▶ Gateway ─▶ Comment-svc ─▶ store (write)
+                                    └─▶ publish to broker topic: video:{id}
+
+                         ┌──────────── broker (partitioned by videoId) ───────────┐
+                         ▼                        ▼                        ▼
+                    Dispatcher A            Dispatcher B            Dispatcher C
+                    (holds ~50k WS)         (holds ~50k WS)         (holds ~50k WS)
+                         │                        │                        │
+                    viewers…                 viewers…                 viewers…</code></pre>
+      <p>A comment is written once and <strong>published once</strong> to a per-video topic on a broker (Kafka/Redis). A fleet of <strong>dispatcher</strong> nodes each subscribe to that topic and each hold tens of thousands of viewer WebSocket connections; when a comment lands on the topic, every dispatcher pushes it to its local connections. Viewers for a hot video are spread across dispatchers by consistent hashing, so one machine never owns all 10M.</p>
+
+      <h3>⑤ Deep-dive &amp; scale — and how we <em>know</em> it's healthy</h3>
+      <p>The scaling moves: <strong>hierarchical fan-out</strong> (publish once, dispatchers multiply it locally), <strong>connection sharding</strong> (a routing layer maps a viewer to a dispatcher; add dispatchers as viewership grows), and <strong>display sampling / rate-limiting</strong> so each viewer receives a readable few-per-second slice under a viral surge. Backpressure drops excess comments rather than toppling a dispatcher.</p>
+      <p>Now the module's real lesson — at 10M viewers, "looks fine on my laptop" is worthless. We instrument the pipeline so we can prove it and debug it:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Pillar</th><th>What we emit for Live Comments</th><th>What it catches</th></tr></thead>
+          <tbody>
+            <tr><td>Metrics (RED/USE)</td><td>comment write rate; <strong>delivery latency histogram</strong> (post → client render); active WS connections/dispatcher; broker lag; dropped-message rate; dispatcher CPU &amp; queue depth</td><td>"delivery p99 crossed 2 s on video X" — the symptom that pages</td></tr>
+            <tr><td>Traces (OTel)</td><td>trace each comment: <code>POST → store → broker.publish → dispatcher.push</code>, one span per hop, sampled + all errors kept</td><td>which hop ate the latency — broker retries? a hot dispatcher? cross-region push?</td></tr>
+            <tr><td>Logs (structured)</td><td>JSON keyed by <code>trace_id</code> + <code>video_id</code>; connection open/close, drop reasons, backpressure events</td><td>why a specific video degraded — filter every service by that <code>video_id</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>SLO:</strong> "99% of comments delivered to a subscribed viewer within 2 s, measured over 30 days." <strong>Error budget:</strong> the 1% you're allowed to drop or delay — spent fast during a Super Bowl surge, so a <strong>burn-rate alert</strong> pages on-call the moment delivery latency threatens the budget. <strong>Prometheus</strong> scrapes every dispatcher's connection count and queue depth; <strong>Grafana</strong> shows a per-video dashboard so a producer can watch a marquee stream live.</p>
+      <p><strong>Tie it together with a mini post-mortem.</strong> Say a celebrity stream degrades: delivery p99 spikes to 9 s. The <em>metric</em> pages via burn-rate alert (symptom, not cause). A <em>trace</em> shows <code>broker.publish</code> retrying — one Kafka partition for that video is overloaded. The <em>logs</em>, filtered by <code>video_id</code>, show a single hot partition with no key spread. Root cause: partitioning by <code>videoId</code> alone put a viral video on one partition. Action items: sub-partition hot videos, add a partition-lag alert, cap per-dispatcher connections. That is observability closing the loop — metric → trace → log → fix — which is precisely what this module exists to teach.</p>
+
+      <div class="callout">
+        <p class="lbl">Why this problem</p>
+        <p>Live Comments is a favourite because it forces the fan-out realisation in the estimate <em>and</em> rewards a candidate who says "here's how I'd monitor it." Bolting SLOs, tracing, and a burn-rate alert onto a real design is exactly the senior signal interviewers are hunting for.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Your reps this week</h2>
+      <p>Reading about observability doesn't build the reflex — instrumenting and defending a design does. Do these, in order:</p>
+      <ol>
+        <li><strong>Instrument something real.</strong> Take any small service you have (or spin one up) and add a <code>/metrics</code> endpoint with a RED counter + a latency histogram, then point a local Prometheus + Grafana at it. Seeing your own request rate move a graph makes the whole module concrete.</li>
+        <li><strong>Whiteboard Facebook Live Comments yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and run the 5-step framework end-to-end, out loud, ~35 minutes — <em>then</em> explicitly add the observability layer (SLI/SLO, the three pillars, one alert) before re-reading Section 08. Struggling first is the point.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend both the design <em>and</em> how you'd operate it:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer running a system design interview. Give me the prompt: "Design the live-comments feed for Facebook Live." Then act as the interviewer — let me drive, ask clarifying and probing questions, and push back on anything hand-wavy. Make me handle the read fan-out to millions of viewers. Crucially, once I have a high-level design, pivot hard into OPERATIONS: ask what SLI and SLO I'd set, which metrics/logs/traces I'd emit, what I'd alert on and why, and walk me through debugging a live incident where delivery latency spikes. Do NOT give me the answer or lead me. After ~40 minutes (or when I say "done"), grade me 1–5 on each of: requirements &amp; estimation, API design, high-level design, fan-out deep-dive, observability &amp; SLOs, and communication — with specific feedback and what a strong candidate would have added.</div>
+        <ol start="4">
+        <li><strong>Compute a budget in the tool.</strong> In the <a href="../tools/slo-calculator.html">📉 SLO Calculator</a>, set your Live Comments SLO (say 99% delivery) and read off the monthly budget of dropped/late comments — then articulate what you'd freeze if you blew it.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>Metrics vs logs vs traces — which answers "that / where / why"? · What is a correlation ID and where is it minted? · SLI vs SLO vs SLA — which one has financial penalties? · If the SLO is 99.9%, how many bad minutes per 30 days? · Why alert on symptoms (burn rate) instead of causes (high CPU)?</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the three-pillars and SLO ones <em>before</em> your reps; save the metrics-monitoring system-design walkthroughs for <em>after</em> your own Live Comments attempt.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=rJfZyA831fI" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Observability and Its Pillars Explained | Logs, Metrics &amp; Traces Simplified</b><div class="ch">OpenObserve <span class="dur">· ~12 min · three pillars</span></div><p>Clean intro to metrics/logs/traces and the "that / where / why" split. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=Oa-zqv-EBpw" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Distributed Tracing Explained: OpenTelemetry &amp; Jaeger Tutorial</b><div class="ch">DevOps &amp; AI Toolkit <span class="dur">· ~25 min · tracing / OTel</span></div><p>Spans, context propagation, and OTel wired into Jaeger — the Section 04 ideas in practice.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=Akri1BlGp10" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>SLO vs SLI vs SLA vs Error Budget | Google SRE in Plain English</b><div class="ch">Tech Tutorials with Piyush <span class="dur">· ~12 min · SLO / budgets</span></div><p>The reliability vocabulary and error budgets, plainly. Pair it with the SLO Calculator.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=9TJx7QTrTyo" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Server Monitoring // Prometheus and Grafana Tutorial</b><div class="ch">Christian Lempa <span class="dur">· ~25 min · Prometheus + Grafana</span></div><p>Hands-on scrape → store → dashboard flow so the stack in Section 05 stops being abstract.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=T-8DgGQ7wUo" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Design Metrics Monitoring &amp; Alerting System: System Design Interview (Stripe &amp; Amazon Offers)</b><div class="ch">TechPrep <span class="dur">· ~20 min · SD interview</span></div><p>A full interview-style build of a Datadog-like metrics platform. Watch AFTER your own attempt.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=p_q-n09B8KA" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Distributed Logging &amp; Metrics Framework | Systems Design With Ex-Google SWE</b><div class="ch">Jordan has no life <span class="dur">· ~25 min · deeper cut</span></div><p>Depth on ingesting and querying logs/metrics at scale — optional second take.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA Chapter 1 (reliability, scalability, maintainability — the "reliability" framing underpins SLOs) and the observability/monitoring notes in the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> (free). For the source of truth on SLIs, SLOs, and error budgets, the <a href="https://sre.google/sre-book/service-level-objectives/" target="_blank" rel="noopener">Google SRE Book — Service Level Objectives</a> chapter is free online.</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/15-security-architecture.html">Next module →</a>
+    </div>
+
+    <footer>Module 14 · System Design Mastery · Phase 4 Production-Grade · You can now instrument, alert on, and defend a live system with SLOs. Next up: Module 15 — Security Architecture.</footer>
+  </div>
+</body>
+</html>

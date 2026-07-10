@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Message Queue &amp; Consumer Groups — System Design</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b1016;
+    --panel:#121a23;
+    --panel-2:#0e151d;
+    --border:#223140;
+    --border-soft:#1a2530;
+    --text:#cdd9e5;
+    --muted:#7d8fa1;
+    --faint:#54626f;
+    --accent:#34d3e0;
+    --accent-dim:rgba(52,211,224,.14);
+    --ok:#3fb950;
+    --warn:#e3b341;
+    --crit:#f85149;
+    --violet:#9d8bff;
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1100px 600px at 82% -8%, rgba(52,211,224,.06), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 56px}
+
+  /* header */
+  header{margin-bottom:22px}
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 10px;display:flex;align-items:center;gap:9px;
+  }
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  h1{
+    font-family:var(--mono);font-weight:600;font-size:clamp(26px,4.4vw,40px);
+    letter-spacing:-.01em;margin:0 0 10px;text-wrap:balance;
+  }
+  .lede{max-width:70ch;color:var(--muted);font-size:15.5px;margin:0}
+  .lede b{color:var(--text);font-weight:600}
+
+  /* layout */
+  .grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:24px}
+  @media(min-width:900px){.grid{grid-template-columns:1.55fr 1fr}}
+
+  .panel{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--border);border-radius:14px;
+  }
+  .stage{position:relative;min-height:500px;overflow:hidden}
+  @media(min-width:900px){.stage{min-height:566px}}
+  canvas#topo{display:block;width:100%;height:100%;position:absolute;inset:0}
+
+  .legend{
+    position:absolute;left:14px;bottom:12px;display:flex;gap:14px;flex-wrap:wrap;
+    font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.04em;
+    background:rgba(11,16,22,.6);padding:6px 10px;border-radius:8px;border:1px solid var(--border-soft);
+    backdrop-filter:blur(3px);
+  }
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:8px;height:8px;border-radius:2px;display:inline-block}
+
+  .side{display:flex;flex-direction:column;gap:16px}
+
+  /* metrics */
+  .metrics{padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border-soft);border-radius:14px;overflow:hidden}
+  .metric{background:var(--panel);padding:13px 14px}
+  .metric .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:0 0 4px}
+  .metric .v{font-family:var(--mono);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .metric .v small{font-size:12px;color:var(--muted);font-weight:400;margin-left:3px}
+  .metric.wide{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .v.ok{color:var(--ok)} .v.warn{color:var(--warn)} .v.crit{color:var(--crit)} .v.accent{color:var(--accent)}
+  canvas#spark{width:118px;height:34px;display:block}
+
+  /* coaching */
+  .coach{padding:15px 16px;border:1px solid var(--border);border-radius:14px;background:var(--panel);border-left:3px solid var(--accent)}
+  .coach .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+  .coach p{margin:0;font-size:14px;color:var(--text)}
+
+  /* events */
+  .events{padding:13px 16px;border:1px solid var(--border-soft);border-radius:14px;background:var(--panel-2)}
+  .events .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+  .events ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;min-height:54px}
+  .events li{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;gap:8px;animation:slideIn .3s ease}
+  .events li .ts{color:var(--faint);flex-shrink:0}
+  .events li b{color:var(--text);font-weight:600}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+  /* controls */
+  .controls{grid-column:1/-1;padding:18px;display:flex;flex-wrap:wrap;gap:22px;align-items:flex-end}
+  .ctrl{display:flex;flex-direction:column;gap:8px}
+  .ctrl>label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+  .slider{display:flex;align-items:center;gap:12px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:180px;height:4px;background:var(--border);border-radius:3px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px rgba(52,211,224,.5)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--accent);cursor:pointer}
+  .rps-val{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--accent);min-width:88px;font-variant-numeric:tabular-nums}
+
+  .stepper{display:inline-flex;align-items:center;gap:0;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+  .stepper button{font-family:var(--mono);font-size:16px;width:36px;height:36px;background:var(--panel-2);border:0;color:var(--text);cursor:pointer;transition:background .12s}
+  .stepper button:hover:not(:disabled){background:var(--accent-dim);color:var(--accent)}
+  .stepper button:disabled{color:var(--faint);cursor:not-allowed}
+  .stepper .count{font-family:var(--mono);font-size:15px;font-weight:600;min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
+
+  .switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+  .switch input{position:absolute;opacity:0;width:0;height:0}
+  .track{width:42px;height:24px;background:var(--border);border-radius:12px;position:relative;transition:background .16s;flex-shrink:0}
+  .track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--muted);transition:transform .16s,background .16s}
+  .switch input:checked+.track{background:var(--accent-dim);box-shadow:inset 0 0 0 1px var(--accent)}
+  .switch input:checked+.track::after{transform:translateX(18px);background:var(--accent)}
+  .switch .txt{font-family:var(--mono);font-size:12px;color:var(--text)}
+
+  .ghost{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:9px 14px;cursor:pointer;transition:color .12s,border-color .12s}
+  .ghost:hover{color:var(--crit);border-color:var(--crit)}
+
+  /* experiments */
+  .labcard{grid-column:1/-1;padding:20px 22px;border:1px solid var(--border);border-radius:14px;background:
+    linear-gradient(180deg,rgba(52,211,224,.03),transparent),var(--panel)}
+  .labcard h2{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  .labs{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:640px){.labs{grid-template-columns:1fr 1fr}}
+  .lab{display:flex;gap:12px;align-items:flex-start}
+  .lab .n{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(52,211,224,.3);width:24px;height:24px;border-radius:6px;display:grid;place-items:center;flex-shrink:0}
+  .lab p{margin:0;font-size:13.5px;color:var(--muted)}
+  .lab p b{color:var(--text);font-weight:600}
+
+  footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.03em}
+  footer b{color:var(--muted);font-weight:600}
+
+  button:focus-visible,input:focus-visible,.switch input:focus-visible+.track{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+  }
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(11,16,22,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:30}
+  .topnav .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .topnav .navlinks{display:flex;gap:6px;flex-wrap:wrap}
+  .topnav .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;transition:color .12s,background .12s}
+  .topnav .navlinks a:hover{color:var(--accent);background:var(--accent-dim)}
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <a class="brand" href="../index.html">◇ SD Mastery</a>
+  <div class="navlinks">
+    <a href="../index.html">Home</a>
+    <a href="../roadmap-dashboard.html">Roadmap</a>
+    <a href="../modules/07-messaging-systems.html">Module 7 notes</a>
+    <a href="load-balancer-simulator.html">Load Balancer</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow"><span class="dot"></span>System Design · Module 7 — Messaging Systems</p>
+    <h1>Message Queue &amp; Consumer Groups</h1>
+    <p class="lede">Watch a Kafka-style broker in motion. A producer hashes each message by key into one of <b>N partitions</b>; a <b>consumer group</b> of M consumers each owns a subset of partitions and pulls messages, advancing its offset. Change the partition and consumer counts, flood the producer, or make one consumer <b>slow</b> — and see exactly where <b>lag</b> piles up. The lessons: partitions are the unit of parallelism, extra consumers beyond the partition count sit idle, and a slow consumer only backs up <b>its own</b> partitions.</p>
+  </header>
+
+  <div class="grid">
+    <!-- stage -->
+    <div class="panel stage" aria-label="Live diagram: a producer hashing messages into partitions, consumed by a consumer group.">
+      <canvas id="topo"></canvas>
+      <div class="legend" aria-hidden="true">
+        <span><i style="background:#3fb950"></i>low lag</span>
+        <span><i style="background:#e3b341"></i>building</span>
+        <span><i style="background:#f85149"></i>backed up</span>
+        <span><i style="background:#34d3e0"></i>message</span>
+      </div>
+    </div>
+
+    <!-- side -->
+    <div class="side">
+      <div class="metrics" role="group" aria-label="Live metrics">
+        <div class="metric"><p class="k">Produce</p><p class="v accent" id="m-prod">60<small>msg/s</small></p></div>
+        <div class="metric"><p class="k">Consume</p><p class="v ok" id="m-cons">0<small>msg/s</small></p></div>
+        <div class="metric"><p class="k">Total lag</p><p class="v" id="m-lag">0<small>msg</small></p></div>
+        <div class="metric"><p class="k">Max partition lag</p><p class="v" id="m-maxlag">0<small>msg</small></p></div>
+        <div class="metric wide">
+          <div><p class="k">Active consumers</p><p class="v" id="m-active">4<small>/4</small></p></div>
+          <canvas id="spark" aria-hidden="true"></canvas>
+        </div>
+      </div>
+
+      <div class="coach">
+        <p class="lbl">What's happening</p>
+        <p id="coach" aria-live="polite">Balanced group: each consumer owns one partition and keeps up. Lag stays near zero — this is healthy parallel consumption.</p>
+      </div>
+
+      <div class="events">
+        <p class="lbl">Event log</p>
+        <ul id="events" aria-live="polite"><li><span class="ts">0s</span>Broker started · 4 partitions, 4 consumers</li></ul>
+      </div>
+    </div>
+
+    <!-- controls -->
+    <div class="panel controls">
+      <div class="ctrl">
+        <label>Partitions</label>
+        <div class="stepper">
+          <button id="part-minus" aria-label="Remove a partition">–</button>
+          <span class="count" id="part-count">4</span>
+          <button id="part-plus" aria-label="Add a partition">+</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>Consumers</label>
+        <div class="stepper">
+          <button id="cons-minus" aria-label="Remove a consumer">–</button>
+          <span class="count" id="cons-count">4</span>
+          <button id="cons-plus" aria-label="Add a consumer">+</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label for="rate">Produce rate</label>
+        <div class="slider">
+          <input type="range" id="rate" min="0" max="160" step="5" value="60">
+          <span class="rps-val" id="rate-out">60 msg/s</span>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>Slow consumer (C0)</label>
+        <label class="switch">
+          <input type="checkbox" id="slow">
+          <span class="track"></span>
+          <span class="txt">off</span>
+        </label>
+      </div>
+
+      <div class="ctrl">
+        <label>&nbsp;</label>
+        <button class="ghost" id="reset">↺ Reset</button>
+      </div>
+    </div>
+
+    <!-- experiments -->
+    <div class="labcard">
+      <h2>◆ Run these four experiments</h2>
+      <div class="labs">
+        <div class="lab"><span class="n">1</span><p><b>Isolate the lag.</b> Start balanced (4 partitions, 4 consumers) and flip <b>Slow consumer</b> on. Only C0's partition reddens and backs up — every other partition stays green. <b>Lag is per-partition; one slow consumer can't stall the group.</b></p></div>
+        <div class="lab"><span class="n">2</span><p><b>Parallelism is capped by partitions.</b> Drop to <b>1 partition</b> and push the produce rate up. Add consumers — they just sit <b>idle</b> and lag keeps climbing. One partition is read by exactly one consumer, so nothing parallelizes.</p></div>
+        <div class="lab"><span class="n">3</span><p><b>Now unlock it.</b> From that jammed state, add partitions one at a time. Each rebalance hands a fresh partition to an idle consumer, they start pulling in parallel, and the backlog drains. <b>Partitions = the scaling knob.</b></p></div>
+        <div class="lab"><span class="n">4</span><p><b>Too many consumers.</b> Set 3 partitions and 6 consumers — 3 consumers own nothing and read zero. You <b>can't</b> parallelize past the partition count; adding consumers beyond it is wasted capacity, not more throughput.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>interactive simulator · pairs with Module 7 notes</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---- tuning ----
+  var MAXP = 8, MINP = 1, MAXC = 6, MINC = 1;
+  var CONS_CAP = 50;      // messages/sec a healthy consumer can process
+  var SLOW_CAP = 7;       // messages/sec when the slow toggle is on
+  var SLOW_IDX = 0;       // C0 is the one we throttle (it always owns >=1 partition)
+  var TRAVEL = 0.55;      // seconds for a produced message to reach its partition
+  var REBAL_MS = 0.6;     // stop-the-world pause on rebalance (classic eager rebalance)
+  var KEYSPACE = 400;     // distinct message keys the producer draws from
+
+  // ---- state ----
+  var nPart = 4, nCons = 4, produceRate = 60, slowOn = false;
+  var parts = [];   // { produced, consumed, x, w, tubeTop, tubeBottom }
+  var cons  = [];   // { thru, total, frame }
+  var owner = [];   // owner[p] = consumer index that owns partition p
+  var particles = [];
+  var rebalTimer = 0;
+  var clock = 0, produceAcc = 0, rateAcc = 0, coachAcc = 0;
+  var consumeRate = 0;
+  var RATE_TAU = 1.2;   // seconds — rolling window for the smoothed rate readouts
+  var lagHist = [], sparkData = [];
+
+  // consumer colours (kept distinct from the green/amber/red lag palette)
+  var CCOL = ["#34d3e0","#9d8bff","#58a6ff","#f778ba","#6ee7b5","#f0b866"];
+  function ccol(i){ return CCOL[i % CCOL.length]; }
+
+  function hash(str){
+    var h = 5381;
+    for(var i=0;i<str.length;i++){ h = ((h<<5) + h + str.charCodeAt(i)) >>> 0; }
+    return h >>> 0;
+  }
+
+  function makePart(){ return { produced:0, consumed:0, x:0, w:0, tubeTop:0, tubeBottom:0 }; }
+  function makeCons(){ return { thru:0, total:0, frame:0 }; }
+
+  function assign(){
+    owner = [];
+    for(var p=0;p<nPart;p++) owner[p] = p % nCons;   // RoundRobinAssignor: partition p -> consumer p%M
+  }
+  function ownedBy(c){
+    var a = [];
+    for(var p=0;p<nPart;p++) if(owner[p] === c) a.push(p);
+    return a;
+  }
+  function lagOf(p){ var v = parts[p].produced - parts[p].consumed; return v>0 ? v : 0; }
+
+  function reset(){
+    nPart = 4; nCons = 4; produceRate = 60; slowOn = false;
+    parts = []; for(var i=0;i<nPart;i++) parts.push(makePart());
+    cons  = []; for(var j=0;j<nCons;j++) cons.push(makeCons());
+    assign();
+    particles = []; rebalTimer = 0;
+    clock = 0; produceAcc = 0; rateAcc = 0; coachAcc = 0;
+    consumeRate = 0; lagHist = []; sparkData = [];
+    el("part-count").textContent = nPart;
+    el("cons-count").textContent = nCons;
+    el("rate").value = produceRate; el("rate-out").textContent = produceRate + " msg/s";
+    el("slow").checked = false; el("slow").parentElement.querySelector(".txt").textContent = "off";
+    events.innerHTML = ""; pushEvent("Broker reset · 4 partitions, 4 consumers");
+    syncSteppers(); layout(); updateMetrics(); updateCoach();
+  }
+
+  // ---- canvas ----
+  var cv = document.getElementById("topo"), ctx = cv.getContext("2d");
+  var stage = cv.parentElement, W = 0, H = 0, dpr = 1;
+  var prod = { x:0, y:0, w:0, h:0 };
+  var consBox = [];   // consBox[c] = { x, y, w, h }
+
+  function monoFont(){ return "ui-monospace,Menlo,Consolas,monospace"; }
+  function rrect(x,y,w,h,r){
+    if(r>h/2) r=h/2; if(r>w/2) r=w/2;
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);     ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  function resize(){
+    var r = stage.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio||1, 2);
+    cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    W = r.width; H = r.height; layout();
+  }
+
+  function layout(){
+    // producer, far left, vertically centred
+    prod.w = Math.min(96, W*0.16); prod.h = 66; prod.x = 16; prod.y = H/2 - prod.h/2;
+
+    // consumer column, right side
+    var cw = Math.min(150, Math.max(112, W*0.2));
+    var cx = W - cw - 12;
+    consBox = [];
+    var top = 40, bot = H - 14, gap = 8;
+    var bh = (bot - top - (nCons-1)*gap) / nCons;
+    for(var c=0;c<nCons;c++){
+      consBox.push({ x:cx, y: top + c*(bh+gap), w:cw, h:bh });
+    }
+
+    // partition columns, centred in the middle band
+    var areaX0 = prod.x + prod.w + 22;
+    var areaX1 = cx - 20;
+    var areaW  = Math.max(60, areaX1 - areaX0);
+    var colGap = nPart > 5 ? 8 : 12;
+    var colW   = Math.min(60, (areaW - (nPart-1)*colGap) / nPart);
+    colW = Math.max(26, colW);
+    var totalW = nPart*colW + (nPart-1)*colGap;
+    var startX = areaX0 + (areaW - totalW)/2;
+    var colTop = 48, colBottom = H - 14;
+    for(var p=0;p<nPart;p++){
+      var s = parts[p];
+      s.x = startX + p*(colW+colGap);
+      s.w = colW;
+      s.tubeTop = colTop + 34;
+      s.tubeBottom = colBottom - 30;
+    }
+    parts._colTop = colTop; parts._colBottom = colBottom;
+  }
+
+  function lagColor(lag){
+    if(lag < 8)  return "#3fb950";
+    if(lag < 25) return "#e3b341";
+    return "#f85149";
+  }
+
+  function render(){
+    ctx.clearRect(0,0,W,H);
+
+    // ---- ownership connectors (partition -> owning consumer) ----
+    for(var p=0;p<parts.length;p++){
+      var s = parts[p], c = owner[p], box = consBox[c];
+      if(!box) continue;
+      var ax = s.x + s.w, ay = s.tubeBottom - 4;
+      var bx = box.x, by = box.y + box.h/2;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.quadraticCurveTo((ax+bx)/2, ay, bx, by);
+      ctx.strokeStyle = hexA(ccol(c), rebalTimer>0 ? 0.10 : 0.26);
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+
+    // ---- producer ----
+    rrect(prod.x, prod.y, prod.w, prod.h, 10);
+    ctx.fillStyle = "#0e151d"; ctx.fill();
+    ctx.strokeStyle = "#34d3e0"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = "#34d3e0"; ctx.textAlign = "center";
+    ctx.font = "600 12px " + monoFont();
+    ctx.fillText("PRODUCER", prod.x + prod.w/2, prod.y + prod.h/2 - 4);
+    ctx.fillStyle = "#7d8fa1"; ctx.font = "10px " + monoFont();
+    ctx.fillText(Math.round(produceRate) + " msg/s", prod.x + prod.w/2, prod.y + prod.h/2 + 12);
+    ctx.fillStyle = "#54626f"; ctx.font = "9px " + monoFont();
+    ctx.fillText("hash(key)%N", prod.x + prod.w/2, prod.y + prod.h - 7);
+
+    // ---- in-flight messages ----
+    if(!reduceMotion){
+      var srcX = prod.x + prod.w, srcY = prod.y + prod.h/2;
+      for(var i=0;i<particles.length;i++){
+        var pt = particles[i], tp = parts[pt.p];
+        if(!tp) continue;
+        var tx = tp.x + tp.w/2, ty = tp.tubeTop;
+        var t = pt.prog < 1 ? pt.prog : 1;
+        var x = srcX + (tx - srcX)*t;
+        var y = srcY + (ty - srcY)*t - Math.sin(t*Math.PI)*22;
+        ctx.beginPath(); ctx.arc(x, y, 2.6, 0, 6.2832);
+        ctx.fillStyle = "#7fe9f1"; ctx.shadowColor = "#34d3e0"; ctx.shadowBlur = 6;
+        ctx.fill(); ctx.shadowBlur = 0;
+      }
+    }
+
+    // ---- partition columns ----
+    ctx.fillStyle = "#54626f"; ctx.font = "10px " + monoFont(); ctx.textAlign = "left";
+    ctx.fillText("PARTITIONS", parts.length ? parts[0].x : 120, parts._colTop ? parts._colTop - 20 : 28);
+
+    for(var q=0;q<parts.length;q++){
+      var pp = parts[q], lag = lagOf(q), col = lagColor(lag), oc = ccol(owner[q]);
+      var cxm = pp.x + pp.w/2;
+
+      // header: partition id + owner tag
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#cdd9e5"; ctx.font = "600 13px " + monoFont();
+      ctx.fillText("P" + q, cxm, pp.tubeTop - 20);
+      ctx.fillStyle = oc; ctx.font = "9px " + monoFont();
+      ctx.fillText("→ C" + owner[q], cxm, pp.tubeTop - 8);
+
+      // tube
+      var tubeH = pp.tubeBottom - pp.tubeTop;
+      rrect(pp.x, pp.tubeTop, pp.w, tubeH, 6);
+      ctx.fillStyle = "#0c131b"; ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.07)"; ctx.lineWidth = 1; ctx.stroke();
+      // owner-tinted top rule
+      ctx.strokeStyle = hexA(oc, 0.55); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(pp.x+3, pp.tubeTop+1); ctx.lineTo(pp.x+pp.w-3, pp.tubeTop+1); ctx.stroke();
+
+      // cells fill from the bottom (queue depth = lag)
+      var cellH = 9, cellGap = 2, innerW = pp.w - 10;
+      var maxCells = Math.floor((tubeH - 8) / (cellH + cellGap));
+      var shown = Math.round(lag);
+      if(shown > maxCells) shown = maxCells;
+      for(var k=0;k<shown;k++){
+        var cyk = pp.tubeBottom - 5 - (k+1)*(cellH+cellGap) + cellGap;
+        rrect(pp.x+5, cyk, innerW, cellH, 2);
+        ctx.fillStyle = col; ctx.globalAlpha = 0.9; ctx.fill(); ctx.globalAlpha = 1;
+      }
+      if(Math.round(lag) > maxCells){
+        ctx.fillStyle = col; ctx.font = "600 9px " + monoFont(); ctx.textAlign = "center";
+        ctx.fillText("+" + (Math.round(lag) - maxCells), cxm, pp.tubeTop + 12);
+      }
+
+      // footer: lag + offsets
+      ctx.textAlign = "center";
+      ctx.fillStyle = col; ctx.font = "600 13px " + monoFont();
+      ctx.fillText(String(Math.round(lag)), cxm, pp.tubeBottom + 15);
+      ctx.fillStyle = "#54626f"; ctx.font = "8px " + monoFont();
+      ctx.fillText("lag", cxm, pp.tubeBottom + 24);
+    }
+
+    // ---- consumer group ----
+    ctx.textAlign = "left"; ctx.fillStyle = "#54626f"; ctx.font = "10px " + monoFont();
+    if(consBox.length) ctx.fillText("CONSUMER GROUP", consBox[0].x, 28);
+
+    for(var c2=0;c2<consBox.length;c2++){
+      var b = consBox[c2], own = ownedBy(c2), color = ccol(c2);
+      var idle = own.length === 0, isSlow = slowOn && c2 === SLOW_IDX;
+
+      rrect(b.x, b.y, b.w, b.h, 9);
+      ctx.fillStyle = "#131c26"; ctx.fill();
+      ctx.strokeStyle = idle ? "rgba(255,255,255,.07)" : hexA(color, 0.45);
+      ctx.lineWidth = 1; ctx.stroke();
+      // colour spine
+      ctx.fillStyle = idle ? "#2a3948" : color;
+      rrect(b.x, b.y, 3, b.h, 2); ctx.fill();
+
+      var px = b.x + 12, py = b.y + 4;
+      ctx.textAlign = "left";
+      ctx.fillStyle = idle ? "#54626f" : color; ctx.font = "600 12px " + monoFont();
+      ctx.fillText("C" + c2, px, py + 13);
+
+      // status tag (right)
+      ctx.textAlign = "right";
+      if(isSlow){ ctx.fillStyle = "#f85149"; ctx.font = "600 9px " + monoFont(); ctx.fillText("SLOW", b.x + b.w - 11, py + 13); }
+      else if(idle){ ctx.fillStyle = "#54626f"; ctx.font = "9px " + monoFont(); ctx.fillText("idle", b.x + b.w - 11, py + 13); }
+      else { ctx.fillStyle = "#3fb950"; ctx.font = "9px " + monoFont(); ctx.fillText("active", b.x + b.w - 11, py + 13); }
+
+      // owned partitions
+      ctx.textAlign = "left"; ctx.fillStyle = "#7d8fa1"; ctx.font = "10px " + monoFont();
+      var lbl = idle ? "owns —" : "owns " + own.map(function(pi){ return "P"+pi; }).join(",");
+      if(lbl.length > 20) lbl = lbl.slice(0,18) + "…";
+      if(b.h > 42) ctx.fillText(lbl, px, py + 30);
+
+      // throughput
+      if(b.h > 58){
+        var thr = cons[c2] ? cons[c2].thru : 0;
+        ctx.fillStyle = idle ? "#54626f" : (isSlow ? "#e3b341" : "#cdd9e5");
+        ctx.font = "600 11px " + monoFont();
+        ctx.fillText(Math.round(thr) + " msg/s", px, py + 46);
+      }
+    }
+  }
+
+  function hexA(hex, a){
+    var h = hex.replace("#","");
+    var r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
+    return "rgba(" + r + "," + g + "," + b + "," + a + ")";
+  }
+
+  // ---- simulation ----
+  function produceOne(){
+    if(nPart <= 0) return;
+    var key = "u" + ((Math.random()*KEYSPACE)|0);
+    var p = hash(key) % nPart;
+    if(reduceMotion){ if(parts[p]) parts[p].produced++; }
+    else particles.push({ p:p, prog:0 });
+  }
+
+  function consumeFor(c, dt){
+    if(!cons[c]) return;
+    var pl = ownedBy(c);
+    if(pl.length === 0) return;
+    var cap = (slowOn && c === SLOW_IDX) ? SLOW_CAP : CONS_CAP;
+    var budget = cap * dt;
+    if(budget <= 0) return;
+    // gather partitions with real lag
+    var avail = 0, list = [];
+    for(var i=0;i<pl.length;i++){
+      var lag = lagOf(pl[i]);
+      if(lag > 1e-6){ avail += lag; list.push({ p:pl[i], lag:lag }); }
+    }
+    if(avail <= 0) return;
+    var take = Math.min(budget, avail);
+    for(var j=0;j<list.length;j++){
+      var it = list[j];
+      var share = take * (it.lag / avail);
+      var pp = parts[it.p];
+      pp.consumed += share;
+      if(pp.consumed > pp.produced) pp.consumed = pp.produced;
+    }
+    cons[c].total   += take;
+    cons[c].frame   += take;
+  }
+
+  function update(dt){
+    clock += dt;
+    if(rebalTimer > 0) rebalTimer -= dt;
+
+    // produce (continues even during a rebalance — messages buffer in the log)
+    produceAcc += produceRate * dt;
+    var guard = 0;
+    while(produceAcc >= 1 && guard < 300){ produceAcc -= 1; produceOne(); guard++; }
+
+    // advance in-flight messages
+    if(!reduceMotion){
+      for(var i=particles.length-1;i>=0;i--){
+        var pt = particles[i];
+        pt.prog += dt / TRAVEL;
+        if(pt.prog >= 1){ if(parts[pt.p]) parts[pt.p].produced++; particles.splice(i,1); }
+      }
+    }
+
+    // consume (paused while the group is rebalancing)
+    for(var c=0;c<nCons;c++) cons[c].frame = 0;
+    if(rebalTimer <= 0){
+      for(var c=0;c<nCons;c++) consumeFor(c, dt);
+    }
+
+    // smoothed per-second rates: exponential moving average over ~RATE_TAU seconds,
+    // so the readouts reflect a full rolling window (not a partial one) and stay
+    // consistent with the sim — when lag is ~0 and consumers keep up, consume → produce.
+    var alpha = 1 - Math.exp(-dt / RATE_TAU);
+    var frameConsumed = 0;
+    for(var fc=0;fc<nCons;fc++){
+      frameConsumed += cons[fc].frame;
+      var cInst = dt > 0 ? cons[fc].frame / dt : 0;
+      cons[fc].thru += (cInst - cons[fc].thru) * alpha;
+    }
+    var totalInst = dt > 0 ? frameConsumed / dt : 0;
+    consumeRate += (totalInst - consumeRate) * alpha;
+
+    // 1s tick: lag history, spark, metrics readout
+    rateAcc += dt;
+    if(rateAcc >= 1){
+      rateAcc -= 1;
+      var tl = totalLag();
+      lagHist.push(tl); if(lagHist.length > 8) lagHist.shift();
+      sparkData.push(tl); if(sparkData.length > 48) sparkData.shift();
+      updateMetrics();
+    }
+
+    // coaching (0.5s)
+    coachAcc += dt; if(coachAcc >= 0.5){ coachAcc = 0; updateCoach(); }
+  }
+
+  function totalLag(){ var t=0; for(var p=0;p<parts.length;p++) t += lagOf(p); return t; }
+  function maxLag(){ var m=0; for(var p=0;p<parts.length;p++){ var l=lagOf(p); if(l>m) m=l; } return m; }
+
+  // ---- metrics DOM ----
+  function el(id){ return document.getElementById(id); }
+  function updateMetrics(){
+    el("m-prod").innerHTML = Math.round(produceRate) + '<small>msg/s</small>';
+
+    var cel = el("m-cons");
+    cel.innerHTML = Math.round(consumeRate) + '<small>msg/s</small>';
+    cel.className = "v " + (consumeRate + 2 < produceRate && produceRate > 0 ? "warn" : "ok");
+
+    var tl = Math.round(totalLag());
+    var lel = el("m-lag");
+    lel.innerHTML = tl + '<small>msg</small>';
+    lel.className = "v " + (tl > 120 ? "crit" : tl > 30 ? "warn" : tl>0 ? "" : "ok");
+
+    var ml = Math.round(maxLag());
+    var mel = el("m-maxlag");
+    mel.innerHTML = ml + '<small>msg</small>';
+    mel.className = "v " + (ml > 60 ? "crit" : ml > 20 ? "warn" : "");
+
+    var active = 0;
+    for(var c=0;c<nCons;c++) if(ownedBy(c).length>0) active++;
+    var ael = el("m-active");
+    ael.innerHTML = active + '<small>/' + nCons + '</small>';
+    ael.className = "v " + (active < nCons ? "warn" : "ok");
+
+    drawSpark();
+  }
+
+  var sc = el("spark"), sctx = sc.getContext("2d");
+  function drawSpark(){
+    var w=118,h=34,d=Math.min(window.devicePixelRatio||1,2);
+    sc.width=w*d; sc.height=h*d; sctx.setTransform(d,0,0,d,0,0); sctx.clearRect(0,0,w,h);
+    if(sparkData.length<2) return;
+    var max=Math.max(20, Math.max.apply(null,sparkData)), n=sparkData.length;
+    sctx.beginPath();
+    for(var i=0;i<n;i++){ var x=i/(n-1)*w, y=h-3-(sparkData[i]/max)*(h-6); if(i===0)sctx.moveTo(x,y); else sctx.lineTo(x,y); }
+    sctx.strokeStyle="#34d3e0"; sctx.lineWidth=1.5; sctx.stroke();
+    sctx.lineTo(w,h); sctx.lineTo(0,h); sctx.closePath();
+    sctx.fillStyle="rgba(52,211,224,.10)"; sctx.fill();
+    var lx=w, ly=h-3-(sparkData[n-1]/max)*(h-6);
+    sctx.beginPath(); sctx.arc(lx-1,ly,2,0,6.2832); sctx.fillStyle="#34d3e0"; sctx.fill();
+  }
+
+  // ---- coaching ----
+  function rising(){
+    if(lagHist.length < 4) return false;
+    return totalLag() > lagHist[lagHist.length-4] + 4;
+  }
+  function updateCoach(){
+    var c = el("coach"), msg;
+    var active = 0; for(var i=0;i<nCons;i++) if(ownedBy(i).length>0) active++;
+    var idle = nCons - active;
+    var ml = maxLag(), r = rising();
+
+    // slow-consumer isolation stats
+    var slowP = ownedBy(SLOW_IDX), slowLag = 0;
+    for(var s=0;s<slowP.length;s++) slowLag += lagOf(slowP[s]);
+    var othersMax = 0;
+    for(var p=0;p<parts.length;p++){ if(owner[p] !== SLOW_IDX){ var l=lagOf(p); if(l>othersMax) othersMax=l; } }
+
+    if(rebalTimer > 0){
+      msg = "Rebalancing—consumption pauses while partitions are reassigned (classic eager “stop-the-world” rebalance). Lag ticks up for a beat, then drains once ownership settles.";
+    } else if(nPart === 1 && (r || ml > 20)){
+      msg = "One partition means exactly one active consumer—the other consumers stay idle no matter how many you add. Add partitions to unlock parallel consumption.";
+    } else if(active === 1 && nPart > 1 && (r || ml > 20)){
+      msg = "A single consumer owns all " + nPart + " partitions, so there's no parallelism—its fixed capacity is the ceiling. Add consumers to split the partitions and share the load.";
+    } else if(slowOn && slowLag > 12 && othersMax < 8){
+      msg = "Consumer C0 is slow, so only its partition" + (slowP.length>1?"s ("+slowP.map(function(x){return "P"+x;}).join(",")+")":" (P"+(slowP[0]||0)+")") + " back up. Lag is isolated to one consumer—the rest of the group stays drained. This is why partitioning contains slow consumers.";
+    } else if(idle > 0){
+      msg = "You have " + nCons + " consumers but only " + nPart + " partitions, so " + idle + " consumer" + (idle>1?"s sit":" sits") + " idle. A partition is read by exactly one consumer in the group—parallelism caps at the partition count.";
+    } else if(r || ml > 30){
+      msg = "The group can't keep up: produce rate is outrunning total consume capacity, so lag is climbing across partitions. Add consumers (up to the partition count) or add partitions to parallelize further.";
+    } else {
+      msg = "Balanced group: " + nPart + " partitions spread across " + active + " consumer" + (active>1?"s":"") + ", each keeping up. Lag stays near zero—healthy parallel consumption.";
+    }
+    if(c.textContent !== msg) c.textContent = msg;
+  }
+
+  // ---- events ----
+  var events = el("events");
+  function pushEvent(html){
+    var li = document.createElement("li");
+    li.innerHTML = '<span class="ts">' + Math.round(clock) + 's</span>' + html;
+    events.insertBefore(li, events.firstChild);
+    while(events.children.length > 4) events.removeChild(events.lastChild);
+  }
+
+  function triggerRebalance(kind){
+    assign();
+    rebalTimer = REBAL_MS;
+    pushEvent('<b>Rebalance</b> · ' + kind + ' → ' + nPart + ' partitions across ' + nCons + ' consumers');
+    layout(); updateMetrics(); updateCoach();
+  }
+
+  // ---- mutations ----
+  function setPartitions(n){
+    if(n < MINP || n > MAXP) return;
+    var old = parts;
+    parts = [];
+    for(var i=0;i<n;i++) parts.push(old[i] ? old[i] : makePart());
+    nPart = n;
+    el("part-count").textContent = nPart;
+    syncSteppers();
+    triggerRebalance("partition change");
+  }
+  function setConsumers(n){
+    if(n < MINC || n > MAXC) return;
+    var prev = nCons;
+    while(cons.length < n) cons.push(makeCons());
+    cons.length = n;
+    nCons = n;
+    el("cons-count").textContent = nCons;
+    syncSteppers();
+    triggerRebalance(n > prev ? "consumer joined" : "consumer left");
+  }
+  function syncSteppers(){
+    el("part-minus").disabled = nPart <= MINP;
+    el("part-plus").disabled  = nPart >= MAXP;
+    el("cons-minus").disabled = nCons <= MINC;
+    el("cons-plus").disabled  = nCons >= MAXC;
+  }
+
+  // ---- input wiring ----
+  el("part-plus").addEventListener("click", function(){ setPartitions(nPart+1); });
+  el("part-minus").addEventListener("click", function(){ setPartitions(nPart-1); });
+  el("cons-plus").addEventListener("click", function(){ setConsumers(nCons+1); });
+  el("cons-minus").addEventListener("click", function(){ setConsumers(nCons-1); });
+  el("rate").addEventListener("input", function(e){
+    produceRate = +e.target.value;
+    el("rate-out").textContent = produceRate + " msg/s";
+    el("m-prod").innerHTML = produceRate + '<small>msg/s</small>';
+  });
+  el("slow").addEventListener("change", function(e){
+    slowOn = e.target.checked;
+    e.target.parentElement.querySelector(".txt").textContent = slowOn ? "on" : "off";
+    pushEvent(slowOn ? "Consumer <b>C0 throttled</b> — its partitions will lag" : "Consumer <b>C0 restored</b> to full speed");
+    updateCoach();
+  });
+  el("reset").addEventListener("click", reset);
+
+  // ---- boot ----
+  var ro = ("ResizeObserver" in window) ? new ResizeObserver(resize) : null;
+  if(ro) ro.observe(stage); else window.addEventListener("resize", resize);
+  parts = []; for(var bi=0;bi<nPart;bi++) parts.push(makePart());
+  cons  = []; for(var bj=0;bj<nCons;bj++) cons.push(makeCons());
+  assign();
+  resize(); syncSteppers(); updateMetrics(); updateCoach();
+
+  var last = 0;
+  function frame(ts){
+    if(!last) last = ts; var dt = (ts - last)/1000; last = ts; if(dt > 0.05) dt = 0.05;
+    update(dt); render(); requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

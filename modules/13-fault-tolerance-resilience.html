@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fault Tolerance &amp; Resilience | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#d97b2e; --hue-soft:rgba(217,123,46,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+      <a href="../tools/cascade-failure.html">🔗 Cascade Sim</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 4 · Production-Grade</span><span class="sep">·</span><span>Module 13</span><span class="sep">·</span><span>Weeks 6-8 · ~13 hrs</span></p>
+      <h1>Fault Tolerance &amp; Resilience</h1>
+      <p class="sub">Every dependency you draw <em>will</em> fail — a disk, a network link, a whole datacenter. This module is about designing systems that <strong>absorb</strong> those failures and keep serving, instead of falling over with them.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#mindset">The resilience mindset</a></li>
+        <li><a href="#ha">High availability &amp; failover</a></li>
+        <li><a href="#bulkhead">Bulkheads: isolate the blast radius</a></li>
+        <li><a href="#timeouts">Timeouts, retries &amp; circuit breakers</a></li>
+        <li><a href="#degradation">Graceful degradation &amp; fallbacks</a></li>
+        <li><a href="#dr">Disaster recovery: RTO &amp; RPO</a></li>
+        <li><a href="#chaos">Chaos engineering</a></li>
+        <li><a href="#auction">Worked example: Auction Platform</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="mindset">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>The resilience mindset</h2>
+      <p class="lead">A distributed system is a large collection of components that each fail independently and occasionally — so at any real scale, <strong>something is always broken.</strong> The job isn't to prevent every failure; it's to make sure no single failure can take the whole system down with it.</p>
+      <p>Two words get used loosely, so pin them down. <strong>Fault tolerance</strong> is the property that the system keeps meeting its requirements <em>despite</em> faults — a failed component is masked, not surfaced to the user. <strong>Resilience</strong> is the broader discipline: not just tolerating faults, but detecting them fast, degrading gracefully, recovering automatically, and getting <em>stronger</em> from each incident. Fault tolerance is a state; resilience is the practice that keeps you there.</p>
+      <p>The mental model senior candidates carry is the <strong>blast radius</strong>: when component X dies, how much of the system dies with it? Great architecture shrinks that radius on purpose — with redundancy, isolation, timeouts, and fallbacks — so a hard failure in one corner becomes a shrug instead of an outage. Every pattern in this module is a different tool for shrinking the blast radius.</p>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>Assume failure. Never ask <em>"what if this dependency goes down?"</em> — ask <em>"when it goes down, what happens to everything that calls it?"</em> If the honest answer is "the whole system stalls," you have a design bug, not an operational one.</p>
+      </div>
+    </section>
+
+    <section id="ha">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>High availability &amp; failover</h2>
+      <p><strong>Availability</strong> is the fraction of time the system is up and serving correctly, and it's the NFR fault tolerance exists to protect. We talk about it in <strong>"nines"</strong> — and each extra nine costs roughly an order of magnitude more engineering, because you're chasing ever-shorter windows of allowed downtime.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Target</th><th>Nines</th><th>Downtime / year</th><th>Roughly what it takes</th></tr></thead>
+          <tbody>
+            <tr><td>99%</td><td>two</td><td class="num">~3.65 days</td><td>A single well-run server</td></tr>
+            <tr><td>99.9%</td><td>three</td><td class="num">~8.77 hours</td><td>Redundancy + health checks + auto-restart</td></tr>
+            <tr><td>99.99%</td><td>four</td><td class="num">~52.6 min</td><td>Multi-AZ, automated failover, no SPOFs</td></tr>
+            <tr><td>99.999%</td><td>five</td><td class="num">~5.26 min</td><td>Multi-region active-active, ruthless automation</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Don't quote five nines by reflex — it's punishingly expensive and most products don't need it. Match the target to the business: a checkout path might justify 99.99%; an internal analytics dashboard is fine at 99%.</p>
+
+      <h3>Redundancy: kill every single point of failure</h3>
+      <p>A <strong>single point of failure (SPOF)</strong> is any component that, alone, can take the system down — one load balancer, one database primary, one shared cache. Redundancy is the cure: run more than one of everything on the critical path so the loss of any one instance is survivable. There are two flavors, and naming which you're using is a seniority signal:</p>
+      <ul>
+        <li><strong>Active-active</strong> — all replicas serve traffic simultaneously behind a load balancer. Losing one just sheds a fraction of capacity (so size for N+1). Bonus: you're continuously proving the "spare" actually works.</li>
+        <li><strong>Active-passive (standby)</strong> — one node serves; a hot/warm standby waits and takes over on failure. Simpler for stateful systems like a database primary, but the standby is idle capacity and its takeover path is only exercised during real incidents — so you must rehearse it.</li>
+      </ul>
+
+      <h3>Why redundancy math actually works</h3>
+      <p>Availability composes very differently depending on <em>how</em> components are wired. Two things in <strong>series</strong> (both must be up) multiply — so the whole is <em>less</em> available than either part. The same thing <strong>in parallel</strong> (either can serve) fails only if <em>both</em> fail — which is why redundancy is so powerful:</p>
+      <pre><code><span class="cmt"># Series: request needs BOTH the app AND the db (each 99.9%)</span>
+A_series   = 0.999 &times; 0.999            = 0.998001   <span class="cmt">&rarr; ~99.8%  (worse than either)</span>
+
+<span class="cmt"># Parallel: two identical 99.9% replicas, either can serve</span>
+A_parallel = 1 &minus; (1 &minus; 0.999)&sup2;       = 0.999999   <span class="cmt">&rarr; ~99.9999% (six nines)</span></code></pre>
+      <p>Read that twice: adding dependencies in series quietly <em>erodes</em> availability, while duplicating a component in parallel dramatically raises it. This is the arithmetic behind "remove the SPOF" — and behind why long serial dependency chains are fragile.</p>
+
+      <h3>Failover: detect, then switch</h3>
+      <p>Redundancy is useless if traffic keeps hitting the dead node. <strong>Failover</strong> is the automatic switch from a failed component to a healthy one, and it has two halves:</p>
+      <ul>
+        <li><strong>Detection</strong> — health checks and heartbeats. A load balancer probes <code>/healthz</code>; peers exchange heartbeats. Tune the threshold: too twitchy and a GC pause triggers a needless failover (flapping); too slow and you eat extra downtime.</li>
+        <li><strong>Promotion</strong> — for stateless app servers, just stop routing to the dead one. For a stateful primary (a database), a standby must be <em>promoted</em>, often via leader election (Raft/Paxos, covered in Module 3) so exactly one primary exists and you never get split-brain — two nodes both thinking they're primary and diverging.</li>
+      </ul>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>When you draw two of something for redundancy, immediately say the next sentence: <em>"health check here, automatic failover there, and I'll use leader election on the DB primary to avoid split-brain."</em> Redundancy without a stated failover mechanism reads as a half-thought — the interviewer will ask "and who decides to switch?"</p>
+      </div>
+    </section>
+
+    <section id="bulkhead">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Bulkheads: isolate the blast radius</h2>
+      <p>The <strong>bulkhead pattern</strong> is named after ships: a hull is divided into watertight compartments so that a breach floods one section instead of sinking the vessel. In software, you <em>partition resources</em> so that one misbehaving dependency can only exhaust <em>its own</em> slice — never the pool everything else needs.</p>
+      <p>The failure it prevents is subtle and lethal. Say your service calls three downstreams — Payments, Search, Recommendations — all sharing one pool of, say, 100 worker threads. Recommendations gets slow. Requests to it pile up, each holding a thread while it waits. Within seconds all 100 threads are parked on Recommendations, and now <em>Payments and Search calls can't get a thread either</em>. A slowdown in your least important dependency just took down your most important one. That's <strong>resource exhaustion</strong>, and it's the fuse for most cascading failures.</p>
+      <pre><code><span class="cmt">WITHOUT bulkheads — one shared pool of 100 threads</span>
+   [Payments][Search][Recommendations]  &rarr;  100 shared threads
+   Recommendations stalls &rarr; all 100 threads parked on it
+   &rarr; Payments &amp; Search starve too   <span class="cmt">(whole service down)</span>
+
+<span class="cmt">WITH bulkheads — a dedicated, capped pool per dependency</span>
+   Payments        &rarr; [ 40 threads ]   <span class="cmt">critical: generous slice</span>
+   Search          &rarr; [ 40 threads ]
+   Recommendations &rarr; [ 20 threads ]   <span class="cmt">stalls &rarr; only these 20 park</span>
+   &rarr; Payments &amp; Search keep serving  <span class="cmt">(blast radius contained)</span></code></pre>
+      <p>Concretely, bulkheads are <strong>separate connection pools, thread pools, or even separate service instances</strong> per dependency (or per tenant, or per traffic class). Give each a hard cap. When Recommendations saturates its 20 threads, further calls to it fail fast (see the next section) instead of borrowing from Payments. You've traded a little capacity for a guarantee: <em>the failure of any one dependency is bounded.</em></p>
+      <p>The same idea scales up. Isolating <strong>free-tier from paid-tier</strong> traffic keeps a free-tier stampede from starving paying customers. Giving noisy tenants their own compartment is how multi-tenant systems stop one customer's spike from becoming everyone's outage. Bulkheads are how you make "the blast radius" a design parameter you actually control.</p>
+    </section>
+
+    <section id="timeouts">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>Timeouts, retries &amp; circuit breakers</h2>
+      <p>Bulkheads cap <em>how many</em> resources a bad dependency can hold. Timeouts cap <em>how long</em> it can hold them. Together with retries and circuit breakers, they form the standard trio for stopping a <strong>cascading failure</strong> — the domino effect where one slow service drags down everything upstream of it.</p>
+
+      <h3>Timeouts: the most under-used line of defense</h3>
+      <p>Every network call must have a timeout. A call with no timeout is a promise to wait forever, and "forever" is exactly how threads leak and pools exhaust. The design choice is a spectrum between two philosophies:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Strategy</th><th>Fail-fast</th><th>Wait-and-retry</th></tr></thead>
+          <tbody>
+            <tr><td>Timeout</td><td>Short (e.g. p99 + margin)</td><td>Longer, tolerant of slow calls</td></tr>
+            <tr><td>On failure</td><td>Give up immediately, return error/fallback</td><td>Retry (with backoff) hoping it's transient</td></tr>
+            <tr><td>Best when</td><td>Interactive path; a fast error beats a slow hang</td><td>Idempotent, async, or must-succeed work</td></tr>
+            <tr><td>Risk</td><td>Sheds work that might have succeeded</td><td>Retries amplify load on an already-sick service</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The rule of thumb: on a <strong>user-facing request</strong>, fail fast — a 200&nbsp;ms timeout and a graceful fallback beat a 30&nbsp;s spinner. On <strong>background or must-complete work</strong> (a payment settlement, a queue consumer), wait-and-retry — correctness matters more than latency. And set timeouts <em>tighter as you go up the stack</em>: an outer request budget of 1&nbsp;s can't contain three inner calls that each wait 1&nbsp;s.</p>
+
+      <h3>Retries — and the storm they can cause</h3>
+      <p>Retries recover from <em>transient</em> faults (a dropped packet, a brief blip). But naive retries are dangerous: when a service is struggling, every caller retrying immediately triples its load and finishes the job of killing it — a <strong>retry storm</strong>. Three guardrails make retries safe:</p>
+      <ul>
+        <li><strong>Exponential backoff</strong> — wait 100&nbsp;ms, then 200, 400, 800… so you back off as the service struggles instead of hammering it.</li>
+        <li><strong>Jitter</strong> — randomize each delay so ten thousand clients don't retry in a synchronized thundering herd at exactly the same instant.</li>
+        <li><strong>A retry budget / cap</strong> — bound total attempts (e.g. 3), and only retry <em>idempotent</em> operations, or you'll double-charge a card.</li>
+      </ul>
+
+      <h3>Circuit breakers: stop calling a service that's down</h3>
+      <p>Retrying a service that is genuinely <em>down</em> (not just blipping) is pure harm — you add load and still fail. A <strong>circuit breaker</strong> wraps a dependency and trips when it sees sustained failures, after which it <em>fails fast without even making the call</em> — protecting both the caller (no threads parked waiting) and the callee (breathing room to recover). It's a small state machine:</p>
+      <pre><code>            failures &ge; threshold
+   CLOSED  ───────────────────────▶  OPEN
+   (calls flow,                       (reject instantly,
+    counting failures)                 don't touch downstream)
+      ▲                                    │
+      │ trial call                         │ after cool-down timer
+      │ succeeds                            ▼
+      └────────────  HALF-OPEN  ◀──────────┘
+                 (let a few probes through)
+                 probe fails ─▶ back to OPEN</code></pre>
+      <p><strong>Closed</strong> is normal. On enough failures it flips to <strong>Open</strong> and short-circuits every call (returning an error or a fallback) for a cool-down. Then it goes <strong>Half-Open</strong> and lets a trickle of trial requests through: if they succeed, close and resume; if they fail, re-open and wait again. This is the single most important cascading-failure defense — it converts "hang and pile up" into "fail instantly and shed load."</p>
+
+      <div class="callout tool">
+        <p class="lbl">Play with it → your tool</p>
+        <p>Watch a cascade happen and then stop it in the <a href="../tools/cascade-failure.html">🔗 Cascade Failure Simulator</a>. Overload one downstream service and see threads pile up and starve its neighbors; then flip on <strong>timeouts</strong>, <strong>bulkheads</strong>, and a <strong>circuit breaker</strong> and watch the blast radius collapse to a single component. Nothing builds the intuition faster than triggering the dominoes yourself.</p>
+      </div>
+    </section>
+
+    <section id="degradation">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Graceful degradation &amp; fallbacks</h2>
+      <p>When a dependency fails and the circuit opens, you're returning… what, exactly? The answer is a <strong>fallback</strong>, and the discipline of choosing good ones is <strong>graceful degradation</strong>: the system loses a feature, not its life. A degraded product that still does its core job beats a perfect product that's returning 500s.</p>
+      <p>The move is to rank features by criticality and decide, ahead of time, what each one degrades <em>to</em>:</p>
+      <ul>
+        <li><strong>Serve stale</strong> — if the live source is down, return the last-known-good value from cache. A slightly stale price or feed is almost always better than an error.</li>
+        <li><strong>Return a sensible default</strong> — recommendations service down? Show a generic "popular items" list instead of a broken panel. Personalization is a nice-to-have; a working page is not.</li>
+        <li><strong>Hide the non-essential</strong> — drop the review count, the "others also bought" carousel, the live badge. The user may not even notice; they can still complete the core task.</li>
+        <li><strong>Read-only / safe mode</strong> — if writes are unsafe (primary DB failing over), keep serving reads and reject writes cleanly with a clear message, rather than accepting writes you might lose.</li>
+        <li><strong>Load shedding</strong> — under extreme overload, deliberately reject a fraction of low-priority requests <em>early</em> (return 503 fast) to keep the system responsive for the rest. Shed the cheapest work to protect the most valuable.</li>
+      </ul>
+      <p>The design test to run on every component you draw: <em>"if this returns an error or never responds, what does the user see?"</em> If the answer is "a broken page" or "an infinite spinner," you're missing a fallback. If it's "the same page, minus the recommendations strip," you've designed for degradation. Feature flags make this operational — you can toggle an expensive feature off during an incident and restore it after.</p>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>Great degradation answers are specific. Not "it degrades gracefully," but <em>"if the pricing service times out, I serve the cached price with a 'prices may be delayed' note, and disable checkout for that item so we never sell at a stale price."</em> Naming the exact fallback per dependency is what separates senior from junior.</p>
+      </div>
+    </section>
+
+    <section id="dr">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>Disaster recovery: RTO &amp; RPO</h2>
+      <p>Everything so far handles a component failing. <strong>Disaster recovery (DR)</strong> plans for the big one: an entire region goes dark, a botched deploy corrupts the database, ransomware, a fat-fingered <code>DROP TABLE</code>. DR is measured with two numbers you must be able to define instantly — interviewers love this pair:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Metric</th><th>Question it answers</th><th>Reduced by</th></tr></thead>
+          <tbody>
+            <tr><td>RTO — Recovery Time Objective</td><td>How long can we be <em>down</em> before recovery? (max tolerable downtime)</td><td>Warm/hot standby, automation, rehearsed runbooks</td></tr>
+            <tr><td>RPO — Recovery Point Objective</td><td>How much <em>data</em> can we lose? (max acceptable data-loss window)</td><td>More frequent backups, synchronous replication</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The clean way to hold them: <strong>RTO looks forward in time</strong> (how long until we're back up), <strong>RPO looks backward</strong> (how far back does our last good copy sit). An RPO of 5 minutes means a disaster may cost you up to the last 5 minutes of writes. An RTO of 1 hour means you must be serving again within an hour. Both are business decisions — a bank targets near-zero on both and pays dearly; a hobby blog is fine losing a day.</p>
+
+      <h3>Backups vs replication (not the same thing)</h3>
+      <p>A common trap: "we have replicas, so we're covered." Replicas protect against <em>hardware</em> failure but faithfully copy a bad <code>DELETE</code> to every node in milliseconds — they don't protect against corruption or human error. <strong>Backups</strong> (point-in-time snapshots you can restore to a past moment) are your defense there. You need both, and you must actually <em>test restores</em> — an untested backup is a rumor.</p>
+
+      <h3>The DR strategy ladder</h3>
+      <p>Cost rises steeply as you buy down RTO and RPO. Pick the rung the business will pay for:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Strategy</th><th>RTO</th><th>RPO</th><th>Cost</th><th>How it works</th></tr></thead>
+          <tbody>
+            <tr><td>Backup &amp; restore</td><td>hours–days</td><td>hours</td><td>$</td><td>Periodic backups to another region; rebuild on disaster</td></tr>
+            <tr><td>Pilot light</td><td>10s of min</td><td>minutes</td><td>$$</td><td>Core data replicated &amp; always on; spin up app tier on demand</td></tr>
+            <tr><td>Warm standby</td><td>minutes</td><td>seconds</td><td>$$$</td><td>Scaled-down full copy always running; scale up &amp; cut over</td></tr>
+            <tr><td>Hot / active-active</td><td>~seconds</td><td>~zero</td><td>$$$$</td><td>Full live capacity in 2+ regions; traffic already split</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Note the RPO lever is <em>replication mode</em>: <strong>synchronous</strong> replication (the write isn't acknowledged until a second region has it) gives near-zero RPO but adds latency to every write; <strong>asynchronous</strong> is fast but risks losing the last few seconds on a sudden regional loss. That trade — write latency vs data-loss window — is the heart of any DR discussion.</p>
+    </section>
+
+    <section id="chaos">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Chaos engineering</h2>
+      <p>Here's the uncomfortable truth about every resilience mechanism above: <strong>the failover you never trigger is a failover you don't actually have.</strong> Standbys rot, health checks get misconfigured, a "redundant" pair quietly shares one power supply. You only find out during a real outage — the worst possible time. <strong>Chaos engineering</strong> flips that: you inject controlled failures <em>on purpose</em>, in a controlled way, to verify the system behaves as designed <em>before</em> reality tests it for you.</p>
+      <p>Netflix pioneered it with <strong>Chaos Monkey</strong>, a tool that randomly kills production instances during business hours. The point was cultural as much as technical: if a random server can vanish at any moment, engineers <em>have</em> to build services that survive it. The broader "Simian Army" extended this to killing whole availability zones and injecting latency.</p>
+      <p>The practice is a disciplined experiment, not reckless breakage:</p>
+      <ol>
+        <li><strong>Define steady state</strong> — a measurable "healthy" signal (e.g. successful-checkout rate, p99 latency). This is your hypothesis baseline.</li>
+        <li><strong>Hypothesize</strong> — "if we kill one DB replica, steady state holds; failover completes under our RTO with no lost orders."</li>
+        <li><strong>Inject a real fault</strong> — terminate an instance, add 300&nbsp;ms of network latency, blackhole a dependency, fill a disk.</li>
+        <li><strong>Minimize blast radius</strong> — start in staging, then a tiny slice of production traffic; have an abort switch. You're probing weakness, not causing an incident.</li>
+        <li><strong>Learn &amp; fix</strong> — if steady state broke, you found a real gap in a controlled window. Fix it, then automate the experiment so it can never regress.</li>
+      </ol>
+      <p>In practice teams run scheduled <strong>GameDays</strong> — rehearsed disaster drills where they deliberately fail a component and watch the on-call runbook play out. It's the only honest way to know your RTO/RPO numbers are real rather than aspirational.</p>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>Resilience isn't proven by a diagram; it's proven by <em>breaking the system on your own terms and watching it recover.</em> "We do chaos engineering / GameDays to validate failover meets our RTO" is a line that instantly signals operational maturity in a design review.</p>
+      </div>
+    </section>
+
+    <section id="auction">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Worked example: Online Auction Platform</h2>
+      <p>Let's run the 5-step framework on <em>"Design an online auction platform like eBay auctions"</em> — a problem that is <strong>all</strong> about fault tolerance, because there's money on the line and a hard deadline (the auction close) that can't be missed even if a server dies mid-bid.</p>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Functional:</strong> create an auction (item, start price, end time); place a bid; see the current highest bid live; auto-close at end time and declare a winner; settle payment. (Stretch: proxy/max bids, snipe protection, watchlists.)</li>
+        <li><strong>Non-functional (the resilience core):</strong> <em>high availability</em> for bidding — especially the frenzied final seconds; <em>correctness under failure</em> — never lose a bid, never accept an out-of-order lower bid as the winner, never double-charge; <em>durability</em> — an accepted bid is money-adjacent and must survive a node loss (RPO ≈ 0); <em>graceful degradation</em> — if search or recommendations die, bidding still works; <em>low latency</em> on bid placement.</li>
+        <li><strong>Out of scope (say it):</strong> shipping, disputes, fraud ML — keep the core bidding loop tight.</li>
+      </ul>
+
+      <h3>② Estimate</h3>
+      <pre><code>10M active auctions, 100M users
+50M bids/day        &asymp; 50M &divide; 100k  = ~600 bids/s average
+BUT bids cluster at close: a hot auction's last 10s
+   can spike to 10k–50k bids/s on ONE item        <span class="cmt">&larr; the real problem</span>
+reads (watchers)   &gt;&gt; writes, very spiky
+bid storage: 50M/day &times; 365 &times; ~200 B &asymp; ~4 TB/yr   <span class="cmt">durable, must never drop a bid</span></code></pre>
+      <p>The estimate surfaces the whole design tension: average load is trivial, but a <strong>single hot auction</strong> becomes a write-contention hotspot at the exact moment correctness matters most. That's where we'll spend our fault-tolerance budget.</p>
+
+      <h3>③ Interface</h3>
+      <pre><code>POST /auctions                 &rarr; create; body {item, startPrice, endTime}
+POST /auctions/{id}/bids       &rarr; body {amount, userId, idempotencyKey}
+       201 {accepted:true, currentHigh}   |   409 {outbid, currentHigh}
+GET  /auctions/{id}            &rarr; current state (cacheable)
+WS   /auctions/{id}/stream     &rarr; live bid push to watchers</code></pre>
+      <p>The <code>idempotencyKey</code> is deliberate — it lets the client safely retry a bid after a timeout without risking a duplicate, which is exactly what we need when a node fails over mid-request.</p>
+
+      <h3>④ High-level design (happy path)</h3>
+      <pre><code>client ─▶ LB ─▶ Bid Service ─▶ Auction DB (strongly consistent per auction)
+                    │                │
+                    │                └─▶ replicas (sync, cross-AZ) for durable bids
+                    ├─▶ Cache (current high, hot reads)
+                    ├─▶ Pub/Sub ─▶ WebSocket fanout to watchers
+                    └─▶ Close Queue ─▶ Settlement worker ─▶ Payment / Notify</code></pre>
+      <p>The heart is bid ordering: for a given auction, bids must be <strong>serialized</strong> so "highest wins" is unambiguous. Use a conditional/optimistic write — <code>accept bid only if amount &gt; current_high</code> — so two simultaneous bids can't both win; the loser gets a clean <code>409 outbid</code>. This is a per-auction strong-consistency requirement (CP for the bid write), even though watcher reads can be eventually consistent (AP).</p>
+
+      <h3>⑤ Deep-dive &amp; scale — every pattern from this module, applied</h3>
+      <ul>
+        <li><strong>High availability &amp; failover (§02):</strong> Bid Service is stateless and runs active-active behind the LB across ≥2 AZs. The Auction DB uses a primary with <em>synchronous</em> cross-AZ replicas so an accepted bid is durable before we ACK (RPO ≈ 0), and leader election promotes a replica on primary loss — no split-brain, no lost bids.</li>
+        <li><strong>Bulkheads (§03):</strong> the bid path gets its own thread/connection pools, fully isolated from search, recommendations, and analytics. A slow recommendation query can never starve bid processing. Hot auctions can even be sharded onto dedicated partitions so one viral item's storm doesn't touch its neighbors.</li>
+        <li><strong>Timeouts, retries, circuit breakers (§04):</strong> settlement (Payment) is <em>off the bid path</em> — the bid write commits, then a message goes to the Close Queue. A circuit breaker guards Payment so an outage there can't cascade into bid failures; failed settlements retry with backoff from the queue. Bid writes fail fast (short timeout) and the client retries with its idempotency key.</li>
+        <li><strong>Graceful degradation (§05):</strong> if Pub/Sub is down, watchers fall back to polling <code>GET /auctions/{id}</code>. If recommendations/search die, hide those panels — bidding is untouched. If the DB primary is mid-failover, go <strong>read-only</strong>: serve the current high from cache and reject new bids with "reopening shortly" rather than accept bids we can't order correctly.</li>
+        <li><strong>Auction close correctness:</strong> the close is a durable, <em>idempotent</em> job driven off the queue. If the settlement worker crashes mid-close, another picks the message up and completes exactly once (idempotency key guards against double-charge). <strong>Snipe protection</strong> — extend the auction by N seconds on any last-second bid — doubles as load relief, smoothing the final spike.</li>
+        <li><strong>DR: RTO &amp; RPO (§06):</strong> bids are money-critical → sync replication for RPO ≈ 0, automated failover for an RTO in minutes; an async cross-<em>region</em> replica covers a full-region disaster. Point-in-time backups guard against a bad deploy corrupting auction state.</li>
+        <li><strong>Chaos engineering (§07):</strong> run a GameDay that kills the DB primary <em>during</em> a simulated high-traffic close and assert zero lost bids and failover under RTO; inject Payment latency to prove the circuit breaker + queue keep bidding alive.</li>
+      </ul>
+      <p>Notice the shape of a senior answer: the happy path is small, and 80% of the discussion is <em>"here's what breaks first, and here's the specific mechanism that contains it."</em> That's this entire module, delivered on one problem.</p>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Your reps this week</h2>
+      <p>Resilience is muscle memory — you build it by breaking things, not by reading about them. Do these in order:</p>
+      <ol>
+        <li><strong>Break something on purpose.</strong> Open the <a href="../tools/cascade-failure.html">🔗 Cascade Failure Simulator</a>, trigger a cascade by overloading one downstream, then add timeouts → bulkheads → a circuit breaker one at a time and watch the blast radius shrink. Narrate <em>why</em> each control helps.</li>
+        <li><strong>Whiteboard the Auction Platform yourself.</strong> In <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free), run all five steps out loud, timed to ~35 minutes, <em>before</em> re-reading Section 08 — and force yourself to answer "what breaks first?" for every box you draw.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your design under pressure:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer running a system design interview focused on fault tolerance and resilience. Give me the prompt: "Design an online auction platform like eBay auctions." Then act as the interviewer — let me drive, ask clarifying and probing questions, and keep pushing on failure modes: "what happens when the DB primary dies mid-bid?", "how do you stop a slow payment service from taking down bidding?", "what's your RTO and RPO, and how do you know they're real?", "how do you guarantee exactly-once settlement across a failover?". Do NOT give me the answer or lead me. After ~35 minutes (or when I say "done"), grade me 1–5 on each of: requirements &amp; NFRs, capacity estimation, API &amp; data model, high-level design, resilience deep-dives (redundancy, bulkheads, timeouts/circuit breakers, degradation, DR/RTO/RPO, chaos), and communication — with specific feedback and what a strong candidate would have added.</div>
+        <ol start="4">
+        <li><strong>Explain it back.</strong> Teach RTO vs RPO, and the timeouts→bulkhead→circuit-breaker trio, to a rubber duck without notes. Any gap you stumble on is a gap you still have.</li>
+        <li><strong>Flashcards</strong> (write these 5, review at week's end): <em>RTO vs RPO — one line each? · Why does redundancy in parallel raise availability while adding dependencies in series lowers it? · Fail-fast vs wait-and-retry — when each, and what turns retries into a storm? · The three circuit-breaker states and the transition that finally closes it? · Bulkhead vs circuit breaker — what does each one actually isolate or stop?</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the fault-tolerance and bulkhead ones <em>before</em> your reps; save the chaos-engineering talk for when you want the operational picture.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=3Lis4w4_bBc" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>8 Most Important Tips for Designing Fault-Tolerant Systems</b><div class="ch">ByteByteGo <span class="dur">· ~5 min · high availability</span></div><p>Fast, visual tour of redundancy, failover, and isolation. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=sm6IOzU7pqE" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Bulkhead Pattern | Design Resilient and Fault Tolerant Distributed Systems | System Design Interview</b><div class="ch">SoftwareDude <span class="dur">· ~12 min · bulkhead</span></div><p>Walks the ship analogy into real pool isolation, framed for interviews.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=2GAQVXGT_Zw" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Frontend and Backends Timeouts</b><div class="ch">Hussein Nasser <span class="dur">· ~25 min · timeouts</span></div><p>Why every network call needs a timeout, and where they hide. Deep and practical.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=5_Bt_OEg0no" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>The Circuit Breaker Pattern | Resilient Microservices</b><div class="ch">Nick Chapsas <span class="dur">· ~7 min · circuit breaker</span></div><p>The closed/open/half-open state machine shown in working code.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=4FxrxLYjvRg" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Stop Cascading Failures - Circuit Breaker &amp; Bulkhead</b><div class="ch">LearnThatStack <span class="dur">· ~5 min · cascading failures</span></div><p>How the trio combines to contain a cascade — ties §03 and §04 together.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=Lzv0UNzv4Po" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>IBM's Principles of Chaos Engineering - Haytham Elkhoja</b><div class="ch">Gremlin <span class="dur">· ~20 min · chaos engineering</span></div><p>How a real org adopts chaos experiments and GameDays. Watch for the operational picture.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA Chapter 8 (<em>The Trouble with Distributed Systems</em> — faults, unreliable networks, and clocks) plus the reliability half of Chapter 1. And the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> sections on availability, failover, and replication (free).</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/14-observability-monitoring.html">Next module →</a>
+    </div>
+
+    <footer>Module 13 of 24 · System Design Mastery · Phase 4 · Production-Grade · Next up: Module 14 — Observability &amp; Monitoring (you can't recover from what you can't see).</footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nginx Load Balancer — Sandbox Lab</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#4263eb; --hue-soft:rgba(66,99,235,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#6a8bff;--hue-soft:rgba(106,139,255,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#4263eb;--hue-soft:rgba(66,99,235,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#6a8bff;--hue-soft:rgba(106,139,255,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .steplbl{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:26px 0 2px}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../../index.html">Home</a>
+      <a href="../../roadmap-dashboard.html">Roadmap</a>
+      <a href="../../modules/02-scalability-load-balancing.html">Module 2 notes</a>
+      <a href="../../tools/load-balancer-simulator.html">🚦 the simulator</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Sandbox Lab · Module 2 — Scalability</span></p>
+      <h1>Nginx Load Balancer</h1>
+      <p class="sub">Put a real <strong>Nginx reverse proxy</strong> in front of three identical backends, then <code>curl</code> it and watch requests round-robin — and watch Nginx route around a backend you kill, live, on your own machine.</p>
+    </header>
+
+    <div class="callout tip">
+      <p class="lbl">Prerequisites</p>
+      <p><strong>Docker Desktop must be running</strong> (check the whale icon in your menu bar / system tray). Then open a terminal and <code>cd</code> into this lab's folder — everything below runs from there:</p>
+      <pre><code>cd "System Design/sandboxes/01-nginx-load-balancer"</code></pre>
+    </div>
+
+    <section id="build">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>What you'll build</h2>
+      <p class="lead">One <strong>load balancer</strong> (Nginx) fronting <strong>three interchangeable backends</strong> — the exact shape every scalable web tier takes.</p>
+      <p>The backends are <code>traefik/whoami</code>, a tiny official image whose whole job is to echo the container's own hostname on every request. That's the trick that makes load balancing <em>visible</em>: each reply literally tells you which of the three servers answered, so you can watch the rotation with your own eyes instead of trusting a diagram.</p>
+      <pre><code>                         curl localhost:8080
+                                  │
+                                  ▼
+                        ┌───────────────────┐
+                        │       nginx        │   host :8080  ->  container :80
+                        │     service "lb"   │
+                        └─────────┬─────────┘
+                                  │   upstream "backends"  (round-robin)
+                  ┌───────────────┼───────────────┐
+                  ▼               ▼               ▼
+           ┌────────────┐  ┌────────────┐  ┌────────────┐
+           │  whoami1   │  │  whoami2   │  │  whoami3   │
+           │    :80     │  │    :80     │  │    :80     │
+           └────────────┘  └────────────┘  └────────────┘
+              traefik/whoami — each echoes its own hostname</code></pre>
+      <p>All four containers share a private Docker bridge network, so Nginx reaches the backends by their service names (<code>whoami1</code>, <code>whoami2</code>, <code>whoami3</code>) via Docker's built-in DNS. Only the load balancer's port is published to your host — the backends are never exposed directly, exactly as in production.</p>
+    </section>
+
+    <section id="stack">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>The stack</h2>
+      <p>Two files define the whole lab. First, <code>docker-compose.yml</code> — four services on one network, only the LB published:</p>
+      <pre><code><span class="cmt"># Nginx reverse-proxy load balancer in front of three whoami backends.</span>
+<span class="cmt"># Bring up : docker compose up -d</span>
+<span class="cmt"># Tear down: docker compose down -v</span>
+
+services:
+  <span class="cmt"># Backend 1 — traefik/whoami echoes the container hostname on every request.</span>
+  whoami1:
+    image: traefik/whoami:v1.10.2
+    hostname: whoami1
+    networks: [labnet]
+
+  <span class="cmt"># Backend 2 — identical; you will `docker compose stop whoami2` mid-lab.</span>
+  whoami2:
+    image: traefik/whoami:v1.10.2
+    hostname: whoami2
+    networks: [labnet]
+
+  <span class="cmt"># Backend 3 — identical.</span>
+  whoami3:
+    image: traefik/whoami:v1.10.2
+    hostname: whoami3
+    networks: [labnet]
+
+  <span class="cmt"># Load balancer — official nginx, round-robins the three backends.</span>
+  <span class="cmt"># nginx.conf is mounted read-only; container :80 -> host :8080.</span>
+  lb:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on: [whoami1, whoami2, whoami3]
+    networks: [labnet]
+
+<span class="cmt"># Private bridge network so nginx resolves whoami1/2/3 by name.</span>
+networks:
+  labnet:
+    driver: bridge</code></pre>
+
+      <p>Second, <code>nginx.conf</code> — it defines an <strong>upstream pool</strong> of the three backends and proxies every request to it. With no method specified, Nginx uses <strong>round-robin</strong>:</p>
+      <pre><code>events {}
+
+http {
+    <span class="cmt"># The pool. No method line -> round-robin: 1 -> 2 -> 3 -> 1 ...</span>
+    upstream backends {
+        server whoami1:80;
+        server whoami2:80;
+        server whoami3:80;
+    }
+
+    server {
+        listen 80;
+        location / {
+            proxy_pass http://backends;
+            proxy_set_header Host            $host;
+            proxy_set_header X-Real-IP       $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            <span class="cmt"># If a backend refuses/errors, retry the next one in the pool.</span>
+            proxy_next_upstream error timeout http_502 http_503 http_504;
+        }
+    }
+}</code></pre>
+      <div class="callout">
+        <p class="lbl">Why this is the real thing</p>
+        <p>This is not a toy shim — it's the same <code>nginx.conf</code> shape that fronts production web tiers. The <code>upstream { }</code> block <em>is</em> the load-balancing pool, and <code>proxy_pass</code> <em>is</em> the reverse proxy. Everything you learn here transfers directly.</p>
+      </div>
+    </section>
+
+    <section id="up">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Bring it up</h2>
+      <p>Pull the images and start all four containers in the background:</p>
+      <pre><code>docker compose up -d</code></pre>
+      <p>Verify the stack is healthy — you should see four services, all <code>running</code>, with the LB mapping <code>0.0.0.0:8080-&gt;80/tcp</code>:</p>
+      <pre><code>docker compose ps</code></pre>
+      <p>Now confirm the front door answers:</p>
+      <pre><code>curl -s localhost:8080 | grep Hostname
+<span class="cmt"># -> Hostname: whoami1   (or whoami2 / whoami3 — whichever is next in rotation)</span></code></pre>
+      <div class="callout">
+        <p class="lbl">What to observe</p>
+        <p>The <code>whoami</code> response body includes a <code>Hostname:</code> line that names the container that served the request. That single line is your window into the load balancer for the rest of this lab.</p>
+      </div>
+    </section>
+
+    <section id="exercises">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>The exercises</h2>
+      <p>Three short experiments. Run the commands exactly, and read the <strong>“what to observe”</strong> note after each — that's where the learning is.</p>
+
+      <p class="steplbl">Exercise 1 — Watch round-robin rotate</p>
+      <h3>Fire six requests in a row and watch the server change</h3>
+      <p>Because there's no session affinity and no weighting, Nginx hands each successive request to the next backend in the pool, then wraps around:</p>
+      <pre><code>for i in $(seq 1 6); do curl -s localhost:8080 | grep Hostname; done</code></pre>
+      <div class="callout">
+        <p class="lbl">What to observe</p>
+        <p>The hostnames cycle in a clean, repeating order — <code>whoami1 → whoami2 → whoami3 → whoami1 → whoami2 → whoami3</code>. That perfectly even 1-2-3-1-2-3 pattern <em>is</em> round-robin. Run it again; the rotation simply continues from wherever it left off.</p>
+      </div>
+
+      <p class="steplbl">Exercise 2 — Kill a backend, watch Nginx route around it</p>
+      <h3>Stop whoami2, then curl again</h3>
+      <p>This is the whole point of a load balancer: if one server dies, traffic keeps flowing to the survivors. Stop the middle backend, then send another six requests:</p>
+      <pre><code>docker compose stop whoami2
+
+for i in $(seq 1 6); do curl -s localhost:8080 | grep Hostname; done</code></pre>
+      <div class="callout">
+        <p class="lbl">What to observe</p>
+        <p>You still get <strong>six successful <code>200</code> responses</strong> — but <code>whoami2</code> never appears; only <code>whoami1</code> and <code>whoami3</code> answer. On the first request that lands on the stopped backend, Nginx gets a connection refused, and thanks to <code>proxy_next_upstream</code> it <em>silently retries the next server</em>, so the client never sees an error. Nginx then marks <code>whoami2</code> as failed and, by default (<code>max_fails=1</code>, <code>fail_timeout=10s</code>), stops sending it traffic for the next 10 seconds. So don't expect to see errors — the correct outcome is that failover is <em>invisible</em> to the caller.</p>
+      </div>
+
+      <h3>Bring it back</h3>
+      <p>Start the backend again and it rejoins the rotation:</p>
+      <pre><code>docker compose start whoami2
+
+for i in $(seq 1 6); do curl -s localhost:8080 | grep Hostname; done
+<span class="cmt"># whoami2 is back in the 1-2-3 rotation (give it a second after fail_timeout elapses)</span></code></pre>
+      <div class="callout">
+        <p class="lbl">What to observe</p>
+        <p>Once <code>fail_timeout</code> lapses, Nginx tentatively sends a request back to <code>whoami2</code>; it succeeds, the backend is un-quarantined, and all three names appear again. You just watched a node leave and rejoin a pool with <strong>zero client-facing downtime</strong>.</p>
+      </div>
+
+      <p class="steplbl">Exercise 3 — Tune the passive health check</p>
+      <h3>Add max_fails / fail_timeout, then reload Nginx</h3>
+      <p>What you saw in Exercise 2 was Nginx's <strong>passive health checking</strong>: it never actively probes the backends — it just watches real requests and quarantines a server that fails. The defaults are <code>max_fails=1</code>, <code>fail_timeout=10s</code>. You tune them right on the <code>server</code> lines of the upstream. Open <code>nginx.conf</code> and change the pool to:</p>
+      <pre><code>upstream backends {
+    <span class="cmt"># Tolerate 3 failures inside a 15s window before quarantining a backend,</span>
+    <span class="cmt"># and keep it out of rotation for 15s once tripped.</span>
+    server whoami1:80 max_fails=3 fail_timeout=15s;
+    server whoami2:80 max_fails=3 fail_timeout=15s;
+    server whoami3:80 max_fails=3 fail_timeout=15s;
+}</code></pre>
+      <p>Then reload Nginx <em>without restarting the container</em> — the config is picked up in place:</p>
+      <pre><code><span class="cmt"># Validate the edited config first, then hot-reload it</span>
+docker compose exec lb nginx -t
+docker compose exec lb nginx -s reload</code></pre>
+      <div class="callout tip">
+        <p class="lbl">What the two knobs mean</p>
+        <p><code>max_fails</code> is how many failed attempts (within <code>fail_timeout</code>) it takes to consider a backend down; <code>fail_timeout</code> is <em>both</em> that counting window <em>and</em> how long the backend stays quarantined afterward. Raise <code>max_fails</code> to tolerate transient blips without ejecting a server; lower it to fail fast. Re-run Exercise 2 (<code>stop whoami2</code>) to feel the difference — with <code>max_fails=3</code>, Nginx tolerates more errors before pulling a backend out.</p>
+      </div>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Directive</th><th>Default</th><th>What it controls</th></tr></thead>
+          <tbody>
+            <tr><td>max_fails</td><td class="num">1</td><td>Failed attempts within the window before the backend is marked down</td></tr>
+            <tr><td>fail_timeout</td><td class="num">10s</td><td>The counting window, and how long the backend stays quarantined</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="teardown">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Teardown</h2>
+      <p>Stop and remove the containers, the network, and the named volumes in one command:</p>
+      <pre><code>docker compose down -v</code></pre>
+      <div class="callout">
+        <p class="lbl">What to observe</p>
+        <p>Everything this lab created is gone — <code>docker compose ps</code> now shows nothing for this project, and port <code>8080</code> is free again. The two source files (<code>docker-compose.yml</code>, <code>nginx.conf</code>) stay on disk, so <code>docker compose up -d</code> rebuilds the whole thing in seconds whenever you want it back.</p>
+      </div>
+    </section>
+
+    <section id="taught">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>What this taught — and the simulator pairing</h2>
+      <p>In a few commands you exercised the core of a scalable web tier:</p>
+      <ul>
+        <li><strong>Reverse proxy + upstream pool</strong> — one public entry point (<code>proxy_pass</code>) fanning out to many private backends.</li>
+        <li><strong>Round-robin</strong> — the default, session-less way to spread load evenly across identical servers.</li>
+        <li><strong>Passive failover</strong> — Nginx routes around a dead backend automatically, and <code>proxy_next_upstream</code> hides the failure from the client.</li>
+        <li><strong>Health-check tuning</strong> — <code>max_fails</code> / <code>fail_timeout</code> trade fail-fast responsiveness against tolerance for transient blips.</li>
+      </ul>
+      <div class="callout tool">
+        <p class="lbl">Pair it with the simulator</p>
+        <p>You just saw round-robin and failover on <em>real</em> Nginx. Now open the <a href="../../tools/load-balancer-simulator.html">🚦 Load Balancer Simulator</a> to explore the algorithms you <em>can't</em> easily eyeball here — weighted round-robin, least-connections, and hashing — and to crank traffic up until a pool saturates. The lab gives you the ground truth; the simulator lets you stress it and compare strategies side by side. For the theory behind both, see the <a href="../../modules/02-scalability-load-balancing.html">Module 2 notes</a>.</p>
+      </div>
+    </section>
+
+    <div class="nextnav">
+      <a href="../../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../../tools/load-balancer-simulator.html">Open the Load Balancer Simulator →</a>
+    </div>
+
+    <footer>Sandbox Lab 01 · Module 2 — Scalability &amp; Load Balancing · System Design Mastery · official images, run locally — nothing here reaches the internet.</footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,57 @@
+# Postgres streaming replication sandbox — one PRIMARY, one READ-REPLICA.
+# Replication is configured entirely through Bitnami env vars; there is NO custom code.
+#   Bring up:   docker compose up -d
+#   Primary:    docker compose exec primary psql -U postgres -d labdb
+#   Replica:    docker compose exec replica psql -U postgres -d labdb
+#   Tear down:  docker compose down -v
+# (Modern Compose file — no obsolete top-level `version:` key.)
+
+services:
+  # PRIMARY — accepts writes and streams its WAL to every connected replica.
+  # POSTGRESQL_REPLICATION_MODE=master turns on WAL streaming; the replication
+  # user/password are the credentials a replica uses to attach; POSTGRESQL_PASSWORD
+  # sets the built-in `postgres` superuser password (no POSTGRESQL_USERNAME set,
+  # so the admin user stays `postgres`, which is what the lab connects as).
+  primary:
+    image: docker.io/bitnami/postgresql:16
+    container_name: sd-pg-primary
+    ports:
+      - "5432:5432"                                   # optional host access for a GUI client
+    environment:
+      - POSTGRESQL_REPLICATION_MODE=master
+      - POSTGRESQL_REPLICATION_USER=repl_user
+      - POSTGRESQL_REPLICATION_PASSWORD=repl_password
+      - POSTGRESQL_PASSWORD=postgres_password         # password for the `postgres` superuser
+      - POSTGRESQL_DATABASE=labdb                     # a database to play in
+    volumes:
+      - primary_data:/bitnami/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # REPLICA — read-only hot standby. POSTGRESQL_REPLICATION_MODE=slave makes it
+  # run pg_basebackup from POSTGRESQL_MASTER_HOST=primary on first boot, then
+  # continuously replay the streamed WAL. Same replication creds as the primary.
+  # It waits for the primary to pass its healthcheck before starting.
+  replica:
+    image: docker.io/bitnami/postgresql:16
+    container_name: sd-pg-replica
+    depends_on:
+      primary:
+        condition: service_healthy
+    ports:
+      - "5433:5432"                                   # host 5433 -> replica's 5432
+    environment:
+      - POSTGRESQL_REPLICATION_MODE=slave
+      - POSTGRESQL_REPLICATION_USER=repl_user
+      - POSTGRESQL_REPLICATION_PASSWORD=repl_password
+      - POSTGRESQL_MASTER_HOST=primary
+      - POSTGRESQL_MASTER_PORT_NUMBER=5432
+    volumes:
+      - replica_data:/bitnami/postgresql
+
+volumes:
+  primary_data:
+  replica_data:

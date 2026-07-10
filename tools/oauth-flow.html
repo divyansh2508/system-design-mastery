@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OAuth 2.0 Flow Visualizer — System Design</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b1016; --panel:#121a23; --panel-2:#0e151d;
+    --border:#223140; --border-soft:#1a2530;
+    --text:#cdd9e5; --muted:#7d8fa1; --faint:#54626f;
+    --accent:#34d3e0; --accent-dim:rgba(52,211,224,.14);
+    --ok:#3fb950; --warn:#e3b341; --crit:#f85149; --violet:#9d8bff;
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1100px 600px at 82% -8%, rgba(52,211,224,.06), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 56px}
+
+  /* topnav */
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(11,16,22,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:30}
+  .topnav .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .topnav .navlinks{display:flex;gap:6px;flex-wrap:wrap}
+  .topnav .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;transition:color .12s,background .12s}
+  .topnav .navlinks a:hover{color:var(--accent);background:var(--accent-dim)}
+
+  /* header */
+  header{margin-bottom:22px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);margin:0 0 10px;display:flex;align-items:center;gap:9px}
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  h1{font-family:var(--mono);font-weight:600;font-size:clamp(26px,4.4vw,40px);letter-spacing:-.01em;margin:0 0 10px;text-wrap:balance}
+  .lede{max-width:70ch;color:var(--muted);font-size:15.5px;margin:0}
+  .lede b{color:var(--text);font-weight:600}
+
+  /* layout */
+  .grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:24px}
+  @media(min-width:900px){.grid{grid-template-columns:1.5fr 1fr}}
+
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);border-radius:14px}
+  .stage{position:relative;min-height:470px;overflow:hidden}
+  @media(min-width:900px){.stage{min-height:560px}}
+  canvas#seq{display:block;width:100%;height:100%;position:absolute;inset:0}
+  .legend{position:absolute;left:14px;bottom:12px;display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.04em;background:rgba(11,16,22,.6);padding:6px 10px;border-radius:8px;border:1px solid var(--border-soft);backdrop-filter:blur(3px);max-width:calc(100% - 28px)}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:16px;height:0;border-top:2px solid;display:inline-block}
+  .legend i.dash{border-top-style:dashed}
+
+  .side{display:flex;flex-direction:column;gap:16px}
+
+  /* step panel */
+  .steppanel{padding:16px 17px;border:1px solid var(--border);border-radius:14px;background:var(--panel);border-left:3px solid var(--accent)}
+  .steppanel .head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+  .step-num{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);font-variant-numeric:tabular-nums}
+  .chan-pill{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:3px 9px;border-radius:20px;border:1px solid var(--border)}
+  .chan-pill.front{color:var(--warn);border-color:rgba(227,179,65,.4);background:rgba(227,179,65,.1)}
+  .chan-pill.back{color:var(--accent);border-color:rgba(52,211,224,.4);background:var(--accent-dim)}
+  .chan-pill.internal{color:var(--violet);border-color:rgba(157,139,255,.4);background:rgba(157,139,255,.1)}
+  .steppanel h3{font-family:var(--mono);font-size:14px;font-weight:600;margin:0 0 8px;color:var(--text);letter-spacing:-.01em}
+  .steppanel p{margin:0 0 10px;font-size:13.5px;color:var(--text)}
+  .steppanel code{font-family:var(--mono);font-size:12px;color:var(--accent);background:var(--panel-2);padding:1px 5px;border-radius:4px;word-break:break-word}
+  .pkce-note{font-size:12.5px;color:var(--muted);border-top:1px solid var(--border-soft);padding-top:10px;margin-top:2px}
+  .pkce-note b{color:var(--text)} .pkce-note i{color:var(--accent);font-style:normal}
+  .verdict{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;font-weight:600;padding:6px 11px;border-radius:8px;margin-bottom:10px}
+  .verdict.ok{color:var(--ok);background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.4)}
+  .verdict.warn{color:var(--warn);background:rgba(227,179,65,.12);border:1px solid rgba(227,179,65,.4)}
+  .verdict.crit{color:var(--crit);background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.4)}
+  .verdict.hidden{display:none}
+
+  /* credentials / instrumentation */
+  .creds{padding:14px 16px;border:1px solid var(--border-soft);border-radius:14px;background:var(--panel-2)}
+  .creds .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 11px;display:flex;align-items:center;gap:7px}
+  .crow{display:flex;flex-direction:column;gap:2px;padding:7px 0;border-top:1px solid var(--border-soft)}
+  .crow:first-of-type{border-top:0;padding-top:0}
+  .crow .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  .crow .ck{font-family:var(--mono);font-size:11.5px;color:var(--text);font-weight:600}
+  .crow .tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);white-space:nowrap}
+  .crow .cv{font-family:var(--mono);font-size:11.5px;color:var(--accent);font-variant-numeric:tabular-nums;word-break:break-all;line-height:1.4;margin-top:1px}
+  .crow.dim .ck{color:var(--faint)} .crow.dim .cv{color:var(--faint)}
+  .crow .cv.crit{color:var(--crit)} .crow .cv.ok{color:var(--ok)} .crow .cv.warn{color:var(--warn)} .crow .cv.violet{color:var(--violet)}
+
+  /* coaching */
+  .coach{padding:15px 16px;border:1px solid var(--border);border-radius:14px;background:var(--panel);border-left:3px solid var(--violet)}
+  .coach .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--violet);margin:0 0 6px}
+  .coach p{margin:0;font-size:14px;color:var(--text)}
+
+  /* controls */
+  .controls{grid-column:1/-1;padding:18px;display:flex;flex-wrap:wrap;gap:22px;align-items:flex-end}
+  .ctrl{display:flex;flex-direction:column;gap:8px}
+  .ctrl>label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+  .seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px}
+  .seg button{font-family:var(--mono);font-size:12px;color:var(--muted);background:transparent;border:0;padding:8px 13px;border-radius:6px;cursor:pointer;transition:background .12s,color .12s;white-space:nowrap}
+  .seg button:hover:not(:disabled){color:var(--text)}
+  .seg button:disabled{color:var(--faint);cursor:not-allowed;opacity:.6}
+  .seg button.playing{background:var(--accent-dim);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(52,211,224,.35)}
+
+  .slider{display:flex;align-items:center;gap:12px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:150px;height:4px;background:var(--border);border-radius:3px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px rgba(52,211,224,.5)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--accent);cursor:pointer}
+  .rps-val{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--accent);min-width:70px;font-variant-numeric:tabular-nums}
+
+  .switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+  .switch input{position:absolute;opacity:0;width:0;height:0}
+  .track{width:42px;height:24px;background:var(--border);border-radius:12px;position:relative;transition:background .16s;flex-shrink:0}
+  .track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--muted);transition:transform .16s,background .16s}
+  .switch input:checked+.track{background:var(--accent-dim);box-shadow:inset 0 0 0 1px var(--accent)}
+  .switch input:checked+.track::after{transform:translateX(18px);background:var(--accent)}
+  .switch input#attacker:checked+.track{background:rgba(248,81,73,.16);box-shadow:inset 0 0 0 1px var(--crit)}
+  .switch input#attacker:checked+.track::after{background:var(--crit)}
+  .switch .txt{font-family:var(--mono);font-size:12px;color:var(--text)}
+
+  .ghost{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:9px 14px;cursor:pointer;transition:color .12s,border-color .12s}
+  .ghost:hover{color:var(--accent);border-color:var(--accent)}
+
+  /* experiments */
+  .labcard{grid-column:1/-1;padding:20px 22px;border:1px solid var(--border);border-radius:14px;background:linear-gradient(180deg,rgba(52,211,224,.03),transparent),var(--panel)}
+  .labcard h2{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  .labs{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:640px){.labs{grid-template-columns:1fr 1fr}}
+  .lab{display:flex;gap:12px;align-items:flex-start}
+  .lab .n{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(52,211,224,.3);width:24px;height:24px;border-radius:6px;display:grid;place-items:center;flex-shrink:0}
+  .lab p{margin:0;font-size:13.5px;color:var(--muted)}
+  .lab p b{color:var(--text);font-weight:600}
+
+  footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.03em}
+  footer b{color:var(--muted);font-weight:600}
+
+  button:focus-visible,input:focus-visible,a:focus-visible,.switch input:focus-visible+.track{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+  }
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <a class="brand" href="../index.html">◇ SD Mastery</a>
+  <div class="navlinks">
+    <a href="../index.html">Home</a>
+    <a href="../roadmap-dashboard.html">Roadmap</a>
+    <a href="../modules/15-security-architecture.html">Module 15 notes</a>
+    <a href="load-balancer-simulator.html">Load Balancer</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow"><span class="dot"></span>System Design · Module 15 — Security Architecture</p>
+    <h1>OAuth 2.0 Flow Visualizer</h1>
+    <p class="lede">Step through the <b>Authorization Code flow with PKCE</b> one message at a time and watch a token get issued without a single password ever reaching the app. Four actors, eight moves. The panel shows <b>real cryptographic values</b> — the verifier and its SHA-256 challenge are computed live in your browser. Then flip on <b>attacker mode</b> to intercept the code and see exactly why PKCE turns a stolen code into a worthless string.</p>
+  </header>
+
+  <div class="grid">
+    <!-- sequence diagram -->
+    <div class="panel stage" aria-label="Sequence diagram: OAuth 2.0 Authorization Code flow with PKCE across four actors.">
+      <canvas id="seq"></canvas>
+      <div class="legend" aria-hidden="true">
+        <span><i class="dash" style="border-color:#e3b341"></i>front channel (via browser · in URL)</span>
+        <span><i style="border-color:#34d3e0"></i>back channel (direct · in body)</span>
+        <span><i style="border-color:#9d8bff"></i>internal to app</span>
+      </div>
+    </div>
+
+    <!-- side -->
+    <div class="side">
+      <div class="steppanel">
+        <div class="head">
+          <span class="step-num" id="step-num">Step 1 / 8</span>
+          <span class="chan-pill internal" id="chan-pill">internal</span>
+        </div>
+        <div class="verdict hidden" id="verdict"></div>
+        <h3 id="step-title">—</h3>
+        <p id="step-body" aria-live="polite">—</p>
+        <div class="pkce-note" id="pkce-note">—</div>
+      </div>
+
+      <div class="coach">
+        <p class="lbl">What's happening</p>
+        <p id="coach" aria-live="polite">—</p>
+      </div>
+
+      <div class="creds" role="group" aria-label="Live wire values">
+        <p class="lbl">◆ Wire values <span style="color:var(--faint);text-transform:none;letter-spacing:0">— computed live</span></p>
+        <div class="crow dim" id="cr-verifier"><div class="top"><span class="ck">code_verifier</span><span class="tag">stays in app</span></div><div class="cv" id="cv-verifier">—</div></div>
+        <div class="crow dim" id="cr-challenge"><div class="top"><span class="ck">code_challenge</span><span class="tag">SHA-256 · sent step 2</span></div><div class="cv" id="cv-challenge">—</div></div>
+        <div class="crow dim" id="cr-code"><div class="top"><span class="ck">authorization_code</span><span class="tag">in browser URL</span></div><div class="cv" id="cv-code">—</div></div>
+        <div class="crow dim" id="cr-access"><div class="top"><span class="ck">access_token</span><span class="tag">back channel only</span></div><div class="cv" id="cv-access">—</div></div>
+        <div class="crow dim" id="cr-refresh"><div class="top"><span class="ck">refresh_token</span><span class="tag">back channel only</span></div><div class="cv" id="cv-refresh">—</div></div>
+      </div>
+    </div>
+
+    <!-- controls -->
+    <div class="panel controls">
+      <div class="ctrl">
+        <label id="nav-lbl">Walk the flow</label>
+        <div class="seg" role="group" aria-labelledby="nav-lbl">
+          <button id="prev" aria-label="Previous step">‹ Prev</button>
+          <button id="play" aria-label="Play the flow automatically">▶ Play</button>
+          <button id="next" aria-label="Next step">Next ›</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>PKCE protection</label>
+        <label class="switch">
+          <input type="checkbox" id="pkce" checked>
+          <span class="track"></span>
+          <span class="txt" id="pkce-txt">on</span>
+        </label>
+      </div>
+
+      <div class="ctrl">
+        <label>Attacker steals the code</label>
+        <label class="switch">
+          <input type="checkbox" id="attacker">
+          <span class="track"></span>
+          <span class="txt" id="attacker-txt">off</span>
+        </label>
+      </div>
+
+      <div class="ctrl">
+        <label for="speed">Auto-play pace</label>
+        <div class="slider">
+          <input type="range" id="speed" min="600" max="2400" step="200" value="1200">
+          <span class="rps-val" id="speed-out">1.2s / step</span>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>&nbsp;</label>
+        <button class="ghost" id="reset">↺ Reset &amp; regenerate</button>
+      </div>
+    </div>
+
+    <!-- experiments -->
+    <div class="labcard">
+      <h2>◆ Run these experiments</h2>
+      <div class="labs">
+        <div class="lab"><span class="n">1</span><p><b>Follow the channels.</b> Step to 8 and watch the colors flip at step 5. Everything sensitive — the verifier and the tokens — moves on the <b>back channel</b>. Only the authorization <b>code</b> ever rides the browser (front channel). <b>No token ever appears in a URL.</b></p></div>
+        <div class="lab"><span class="n">2</span><p><b>Steal the code.</b> Turn on <b>Attacker steals the code</b>, keep PKCE <b>on</b>, and step to 6. The exchange is <b>rejected</b> — the attacker has the code but not the verifier. That's PKCE stopping a real interception attack.</p></div>
+        <div class="lab"><span class="n">3</span><p><b>Remove the guardrail.</b> Leave the attacker on and switch PKCE <b>off</b>. Replay to step 6: the same stolen code is now redeemed and the attacker <b>walks away with tokens</b>. This is the pre-PKCE world the spec was written to fix.</p></div>
+        <div class="lab"><span class="n">4</span><p><b>Check the math.</b> Note that <code>code_challenge = SHA256(verifier)</code> — but you can't run SHA-256 backwards. Hit <b>Reset</b> a few times and watch fresh, real values regenerate. The server stores only the challenge; only the holder of the verifier can finish.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>interactive simulator &nbsp;·&nbsp; pairs with <b>Module 15 notes</b></footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var MONO = 'ui-monospace,Menlo,Consolas,monospace';
+  var el = function(id){ return document.getElementById(id); };
+
+  /* ============================================================
+     Crypto — real SHA-256 (pure JS) + base64url, no dependencies.
+     Used to compute code_challenge = BASE64URL(SHA256(verifier)).
+     ============================================================ */
+  var K = [
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+  ];
+  function ror(x,n){ return ((x>>>n)|(x<<(32-n)))>>>0; }
+  function sha256(bytes){
+    var H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+    var l = bytes.length, bitLen = l*8, withOne = l+1;
+    var k = ((56 - (withOne % 64)) + 64) % 64;
+    var total = withOne + k + 8;
+    var msg = new Uint8Array(total);
+    msg.set(bytes, 0);
+    msg[l] = 0x80;
+    var hi = Math.floor(bitLen / 0x100000000), lo = bitLen >>> 0;
+    msg[total-8]=(hi>>>24)&0xff; msg[total-7]=(hi>>>16)&0xff; msg[total-6]=(hi>>>8)&0xff; msg[total-5]=hi&0xff;
+    msg[total-4]=(lo>>>24)&0xff; msg[total-3]=(lo>>>16)&0xff; msg[total-2]=(lo>>>8)&0xff; msg[total-1]=lo&0xff;
+    var w = new Array(64), i, t;
+    for(i=0;i<total;i+=64){
+      for(t=0;t<16;t++){
+        w[t] = ((msg[i+t*4]<<24)|(msg[i+t*4+1]<<16)|(msg[i+t*4+2]<<8)|(msg[i+t*4+3]))>>>0;
+      }
+      for(t=16;t<64;t++){
+        var s0 = (ror(w[t-15],7) ^ ror(w[t-15],18) ^ (w[t-15]>>>3))>>>0;
+        var s1 = (ror(w[t-2],17) ^ ror(w[t-2],19) ^ (w[t-2]>>>10))>>>0;
+        w[t] = (w[t-16] + s0 + w[t-7] + s1)>>>0;
+      }
+      var a=H[0],b=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
+      for(t=0;t<64;t++){
+        var S1 = (ror(e,6) ^ ror(e,11) ^ ror(e,25))>>>0;
+        var ch = ((e&f) ^ ((~e)&g))>>>0;
+        var temp1 = (h + S1 + ch + K[t] + w[t])>>>0;
+        var S0 = (ror(a,2) ^ ror(a,13) ^ ror(a,22))>>>0;
+        var maj = ((a&b) ^ (a&c) ^ (b&c))>>>0;
+        var temp2 = (S0 + maj)>>>0;
+        h=g; g=f; f=e; e=(d+temp1)>>>0; d=c; c=b; b=a; a=(temp1+temp2)>>>0;
+      }
+      H[0]=(H[0]+a)>>>0; H[1]=(H[1]+b)>>>0; H[2]=(H[2]+c)>>>0; H[3]=(H[3]+d)>>>0;
+      H[4]=(H[4]+e)>>>0; H[5]=(H[5]+f)>>>0; H[6]=(H[6]+g)>>>0; H[7]=(H[7]+h)>>>0;
+    }
+    var out = new Uint8Array(32);
+    for(i=0;i<8;i++){ out[i*4]=(H[i]>>>24)&0xff; out[i*4+1]=(H[i]>>>16)&0xff; out[i*4+2]=(H[i]>>>8)&0xff; out[i*4+3]=H[i]&0xff; }
+    return out;
+  }
+  function b64url(bytes){
+    var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    var out = "", i, n;
+    for(i=0; i+2 < bytes.length; i+=3){
+      n = (bytes[i]<<16) | (bytes[i+1]<<8) | bytes[i+2];
+      out += chars[(n>>>18)&63] + chars[(n>>>12)&63] + chars[(n>>>6)&63] + chars[n&63];
+    }
+    var rem = bytes.length - i;
+    if(rem === 1){ n = bytes[i]<<16; out += chars[(n>>>18)&63] + chars[(n>>>12)&63]; }
+    else if(rem === 2){ n = (bytes[i]<<16) | (bytes[i+1]<<8); out += chars[(n>>>18)&63] + chars[(n>>>12)&63] + chars[(n>>>6)&63]; }
+    return out;
+  }
+  function strBytes(s){ var b = new Uint8Array(s.length), i; for(i=0;i<s.length;i++) b[i] = s.charCodeAt(i) & 0xff; return b; }
+  function randomBytes(n){
+    var b = new Uint8Array(n), i;
+    if(window.crypto && window.crypto.getRandomValues){ window.crypto.getRandomValues(b); }
+    else { for(i=0;i<n;i++) b[i] = Math.floor(Math.random()*256); }
+    return b;
+  }
+
+  /* ---- credentials generated per flow ---- */
+  var creds = {};
+  function genCreds(){
+    var verifier = b64url(randomBytes(32));                       // 43-char high-entropy verifier
+    var challenge = b64url(sha256(strBytes(verifier)));           // S256 challenge (real SHA-256)
+    var code = b64url(randomBytes(24));
+    var exp = Math.floor(Date.now()/1000) + 3600;
+    var header  = b64url(strBytes('{"alg":"RS256","typ":"JWT","kid":"as-2026"}'));
+    var payload = b64url(strBytes('{"sub":"user_7f3a","scope":"read:profile","exp":'+exp+'}'));
+    var access = header + "." + payload + "." + b64url(randomBytes(32));
+    var refresh = b64url(randomBytes(32));
+    creds = { verifier:verifier, challenge:challenge, code:code, access:access, refresh:refresh };
+  }
+  function midTrunc(s, head, tail){
+    if(s.length <= head + tail + 1) return s;
+    return s.slice(0, head) + "…" + s.slice(s.length - tail);
+  }
+
+  /* ============================================================
+     Flow definition — geometry per step. Lanes: 0 User, 1 Client,
+     2 Auth Server, 3 Resource Server.
+     ============================================================ */
+  var LANES = [
+    { name:"User",            sub:"browser" },
+    { name:"Client App",      sub:"public client" },
+    { name:"Auth Server",     sub:"/authorize · /token" },
+    { name:"Resource Server", sub:"protected API" }
+  ];
+  var STEPS = [
+    { n:1, kind:"self", lane:1,          channel:"internal" },
+    { n:2, kind:"msg",  from:0, to:2,    channel:"front" },
+    { n:3, kind:"msg",  from:0, to:2,    channel:"front" },
+    { n:4, kind:"msg",  from:2, to:0,    channel:"front" },
+    { n:5, kind:"msg",  from:1, to:2,    channel:"back" },
+    { n:6, kind:"msg",  from:2, to:1,    channel:"back" },
+    { n:7, kind:"msg",  from:1, to:3,    channel:"back" },
+    { n:8, kind:"msg",  from:3, to:1,    channel:"back" }
+  ];
+
+  /* ---- state ---- */
+  var step = 1, pkce = true, attacker = false, speed = 1200;
+  var animProg = 1, animating = false, animDur = 0.5, playing = false, playTimer = null;
+
+  function verdict(){
+    if(attacker && pkce)  return "blocked";
+    if(attacker && !pkce) return "compromised";
+    if(!attacker && pkce) return "verified";
+    return "nopkce";
+  }
+  var VERDICT_COLOR = { verified:"#3fb950", nopkce:"#e3b341", blocked:"#3fb950", compromised:"#f85149" };
+
+  /* ---- canvas label per step (short, drawn on the arrow) ---- */
+  function canvasLabel(n){
+    if(n===1) return pkce ? "PKCE: verifier → challenge" : "PKCE off — skipped";
+    if(n===2) return pkce ? "GET /authorize + challenge" : "GET /authorize (no PKCE)";
+    if(n===3) return "authenticate + consent";
+    if(n===4) return "302 → ?code=… (browser URL)";
+    if(n===5){
+      if(attacker) return "attacker redeems stolen code";
+      return pkce ? "POST /token + code_verifier" : "POST /token (no verifier)";
+    }
+    if(n===6){
+      var v = verdict();
+      if(v==="verified")     return "200 → access + refresh tokens";
+      if(v==="nopkce")       return "200 → tokens (no PKCE check)";
+      if(v==="blocked")      return "✗ invalid_grant — no verifier";
+      return "⚠ tokens issued to attacker";
+    }
+    if(n===7) return "GET /api + Bearer token";
+    if(n===8) return "200 → protected data";
+    return "";
+  }
+
+  /* ============================================================
+     Canvas rendering
+     ============================================================ */
+  var cv = el("seq"), ctx = cv.getContext("2d");
+  var stage = cv.parentElement, W = 0, H = 0, dpr = 1;
+  var HEADER_Y = 16, HEADER_H = 48, ROW_TOP = 100, BOT_PAD = 40;
+
+  function resize(){
+    var r = stage.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(r.width * dpr);
+    cv.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    W = r.width; H = r.height;
+  }
+  function laneX(i){
+    var margin = Math.max(14, W * 0.02);
+    var usable = W - margin*2;
+    return margin + (i + 0.5) * (usable / LANES.length);
+  }
+  function rowY(n){
+    var usable = H - ROW_TOP - BOT_PAD;
+    var gap = usable / STEPS.length;
+    return ROW_TOP + (n - 0.5) * gap;
+  }
+
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  }
+  function arrowHead(x,y,dir,color){
+    ctx.beginPath();
+    ctx.moveTo(x,y);
+    ctx.lineTo(x - dir*9, y - 5);
+    ctx.lineTo(x - dir*9, y + 5);
+    ctx.closePath();
+    ctx.fillStyle = color; ctx.fill();
+  }
+  function fitText(t, cx, cy, maxw){
+    var s = t;
+    while(ctx.measureText(s).width > maxw && s.length > 5){ s = s.slice(0, -2); }
+    if(s !== t) s = s.slice(0, -1) + "…";
+    ctx.fillText(s, cx, cy);
+  }
+  function stepColor(st){
+    if(st.n === 6) return VERDICT_COLOR[verdict()];
+    if(st.channel === "front")    return "#e3b341";
+    if(st.channel === "internal") return pkce ? "#9d8bff" : "#54626f";
+    return "#34d3e0";
+  }
+
+  function drawHeaders(){
+    var i;
+    for(i=0;i<LANES.length;i++){
+      var x = laneX(i);
+      var bw = Math.min(150, (W / LANES.length) - 10);
+      var bx = x - bw/2;
+      var active = false, s = STEPS[step-1];
+      if(s.kind === "self") active = (s.lane === i);
+      else active = (s.from === i || s.to === i);
+      // header box
+      roundRect(bx, HEADER_Y, bw, HEADER_H, 9);
+      ctx.fillStyle = "#131c26"; ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = active ? "rgba(52,211,224,.55)" : "rgba(255,255,255,.09)";
+      ctx.stroke();
+      // labels
+      ctx.textAlign = "center";
+      ctx.fillStyle = active ? "#cdd9e5" : "#9fb0c0";
+      ctx.font = "600 12px " + MONO;
+      fitText(LANES[i].name, x, HEADER_Y + 20, bw - 12);
+      ctx.fillStyle = "#7d8fa1";
+      ctx.font = "9px " + MONO;
+      fitText(LANES[i].sub, x, HEADER_Y + 35, bw - 10);
+      // lifeline
+      ctx.beginPath();
+      ctx.moveTo(x, HEADER_Y + HEADER_H);
+      ctx.lineTo(x, H - 14);
+      ctx.strokeStyle = active ? "rgba(52,211,224,.28)" : "rgba(255,255,255,.06)";
+      ctx.setLineDash([3,5]); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+
+  function drawMsg(st, active){
+    var x1 = laneX(st.from), x2 = laneX(st.to), y = rowY(st.n);
+    var color = stepColor(st);
+    var dir = x2 > x1 ? 1 : -1;
+    var v = verdict();
+    var dashed = (st.channel === "front") || (st.n === 6 && v === "blocked");
+    ctx.globalAlpha = active ? 1 : 0.3;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = active ? 2.2 : 1.4;
+    if(dashed) ctx.setLineDash([6,4]);
+    // pull the line endpoints slightly inside the lifelines
+    var sx = x1 + dir*2, ex = x2 - dir*10;
+    ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(ex, y); ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(x2 - dir*2, y, dir, color);
+    // label above the line
+    ctx.globalAlpha = active ? 1 : 0.45;
+    ctx.fillStyle = active ? "#cdd9e5" : "#7d8fa1";
+    ctx.font = (active ? "600 " : "") + "10.5px " + MONO;
+    ctx.textAlign = "center";
+    fitText(canvasLabel(st.n), (x1 + x2) / 2, y - 8, Math.abs(x2 - x1) - 12);
+    // step number bubble at source
+    ctx.globalAlpha = active ? 1 : 0.4;
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(x1 + dir*2, y, active ? 4 : 3, 0, 6.2832); ctx.fill();
+    // travelling dot
+    if(active && !reduceMotion && animating){
+      var t = animProg, dx = sx + (ex - sx) * t;
+      ctx.beginPath(); ctx.arc(dx, y, 4.5, 0, 6.2832);
+      ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 9;
+      ctx.fill(); ctx.shadowBlur = 0;
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawSelf(st, active){
+    var x = laneX(st.lane), y = rowY(st.n);
+    var color = pkce ? "#9d8bff" : "#54626f";
+    var w = 46, h = 15;
+    ctx.globalAlpha = active ? 1 : 0.3;
+    ctx.strokeStyle = color; ctx.lineWidth = active ? 2.2 : 1.4;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x, y - h/2);
+    ctx.lineTo(x + w, y - h/2);
+    ctx.lineTo(x + w, y + h/2);
+    ctx.lineTo(x + 10, y + h/2);
+    ctx.stroke();
+    arrowHead(x + 4, y + h/2, -1, color);
+    ctx.globalAlpha = active ? 1 : 0.45;
+    ctx.fillStyle = active ? "#cdd9e5" : "#7d8fa1";
+    ctx.font = (active ? "600 " : "") + "10.5px " + MONO;
+    ctx.textAlign = "left";
+    fitText(canvasLabel(st.n), x + w + 9, y + 3.5, W - (x + w) - 16);
+    if(active && !reduceMotion && animating){
+      ctx.beginPath();
+      ctx.arc(x + w, y - h/2 + (h * animProg), 4.5, 0, 6.2832);
+      ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 9;
+      ctx.fill(); ctx.shadowBlur = 0;
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function render(){
+    ctx.clearRect(0,0,W,H);
+    drawHeaders();
+    var i, st;
+    for(i=0;i<STEPS.length;i++){
+      st = STEPS[i];
+      if(st.n > step) continue;               // future steps hidden
+      var active = (st.n === step);
+      if(st.kind === "self") drawSelf(st, active);
+      else drawMsg(st, active);
+    }
+  }
+
+  /* ============================================================
+     Textual content per step
+     ============================================================ */
+  function coachText(n){
+    if(n===1) return pkce
+      ? "The client mints a random code_verifier and derives code_challenge = SHA256(verifier). Only the challenge will leave the app."
+      : "PKCE is off, so the client skips the verifier/challenge entirely — the flow relies on the code alone being secret.";
+    if(n===2) return pkce
+      ? "Front channel: the browser is redirected to /authorize carrying the challenge — the verifier stays behind in the app."
+      : "Front channel: the browser is redirected to /authorize. With no PKCE, nothing binds this request to the app that made it.";
+    if(n===3) return "The user logs in and consents at the Auth Server. Credentials go only to the Auth Server — the client app never sees the password.";
+    if(n===4) return "The Auth Server drops a short-lived authorization code into the browser's URL. This is the value an attacker would try to steal.";
+    if(n===5){
+      if(attacker) return "An attacker grabbed the code from the browser and races to /token — but they never had the verifier.";
+      return pkce
+        ? "Back channel: the client sends the code plus the original code_verifier to /token — a direct request, not a redirect."
+        : "Back channel: the client sends just the code to /token. Anyone holding the code could send this exact request.";
+    }
+    if(n===6){
+      var v = verdict();
+      if(v==="verified")     return "The Auth Server checks SHA256(verifier) == challenge, they match, and it returns access + refresh tokens — never in a URL.";
+      if(v==="nopkce")       return "No verifier to check — the Auth Server issues tokens to whoever holds the code. Fine here, dangerous if the code leaks.";
+      if(v==="blocked")      return "No verifier, no match — the Auth Server rejects the stolen code with invalid_grant. PKCE just blocked the attack.";
+      return "No PKCE means no binding — the stolen code is redeemed and the attacker walks off with real tokens.";
+    }
+    if(n===7) return "The client calls the Resource Server, presenting the access token in an Authorization: Bearer header.";
+    if(n===8) return "The Resource Server validates the token — signature, expiry, scope — and returns the protected data. Flow complete.";
+    return "";
+  }
+
+  function stepContent(n){
+    var title, body, note;
+    if(n===1){
+      title = pkce ? "Client generates the PKCE pair" : "PKCE disabled — no proof-of-possession";
+      body = pkce
+        ? 'The client app generates a cryptographically random <b>code_verifier</b> and hashes it: <b>code_challenge = BASE64URL(SHA256(verifier))</b>, method <code>S256</code>. The verifier is held in memory; only the challenge will travel out. Because SHA-256 is one-way, the challenge reveals nothing about the verifier.'
+        : 'With PKCE off the client generates no verifier or challenge. The flow now depends entirely on the authorization code staying secret between the Auth Server, the browser, and the client — an assumption that fails on mobile apps and SPAs.';
+      note = pkce
+        ? 'PKCE (RFC 7636) exists so a <b>public</b> client — a SPA or mobile app that can’t safely store a secret — can still prove, later, that it’s the same app that started the flow.'
+        : 'Toggle PKCE back on to restore that proof. The <i>OAuth 2.1 / Security BCP</i> recommends PKCE for <b>every</b> client, not just public ones.';
+      return { title:title, body:body, note:note };
+    }
+    if(n===2){
+      title = "Redirect the user to the Auth Server";
+      body = 'The client redirects the user’s browser to the Auth Server’s <code>/authorize</code> endpoint. This is the <b>front channel</b> — a browser navigation whose parameters ride in the <b>URL</b>: <code>response_type=code</code>, ' + (pkce ? 'the <b>code_challenge</b>, <code>code_challenge_method=S256</code>, ' : '') + 'and a <b>state</b> value for CSRF protection. ' + (pkce ? 'The verifier is <i>not</i> sent.' : '');
+      note = 'Anything on the front channel is visible to the browser, extensions, and anyone who can read the URL. ' + (pkce ? 'That’s why only the hash (challenge) goes here, never the verifier.' : 'Without PKCE there is no hash to hide behind.');
+      return { title:title, body:body, note:note };
+    }
+    if(n===3){
+      title = "User authenticates and consents";
+      body = 'The Auth Server shows its own login page. The user authenticates and approves the requested scopes. Credentials are entered directly into the Auth Server — <b>the client app never sees the password</b>. That separation is the core value of OAuth: apps get scoped access without ever handling credentials.';
+      note = 'The <code>state</code> value you sent in step 2 will be echoed back and checked in step 4 to defend against CSRF on the redirect.';
+      return { title:title, body:body, note:note };
+    }
+    if(n===4){
+      title = "Auth Server returns the authorization code";
+      body = 'The Auth Server redirects the browser back to the client’s registered <b>redirect_uri</b> with a short-lived, single-use <b>authorization code</b> in the URL: <code>?code=…&state=…</code>. The code now sits in the browser’s address bar — this is precisely the value an attacker tries to intercept.';
+      note = pkce
+        ? 'The code alone is useless without the verifier. That binding is what makes an intercepted code worthless — the whole point of PKCE.'
+        : 'With PKCE off, this code <b>is</b> the only secret. Whoever grabs it from the browser can redeem it.';
+      return { title:title, body:body, note:note };
+    }
+    if(n===5){
+      title = attacker ? "Attacker attempts the token exchange" : "Client exchanges the code for tokens";
+      if(attacker){
+        body = pkce
+          ? 'An attacker intercepted the authorization code from the browser (step 4) and races the client to the <code>/token</code> endpoint. But PKCE requires a <b>code_verifier</b>, and the attacker never had it — it never left the real client.'
+          : 'An attacker intercepted the code and POSTs it to the <code>/token</code> endpoint. With PKCE off, the Auth Server asks for nothing beyond the code itself.';
+        note = pkce
+          ? 'The attacker can replay the code, but not the secret that binds it. This is the exact attack PKCE was designed to stop.'
+          : 'Nothing binds the code to the original client, so the Auth Server can’t tell attacker from client.';
+      } else {
+        body = pkce
+          ? 'The client makes a direct <b>back-channel</b> request to <code>/token</code> — an HTTPS POST whose parameters live in the request <b>body</b>, not a URL. It sends <code>grant_type=authorization_code</code>, the <b>code</b>, the <b>redirect_uri</b>, and — critically — the original <b>code_verifier</b>. Being a direct request, not a redirect, none of this appears in an address bar.'
+          : 'The client POSTs the <b>code</b> to <code>/token</code> to exchange it for tokens. With PKCE disabled there is no verifier — the Auth Server will accept the code from anyone who presents it.';
+        note = pkce
+          ? 'This is the moment the client proves it owns the flow, by revealing the verifier that matches the challenge from step 2.'
+          : 'A public client can’t safely rely on this: if the code was intercepted, the interceptor can run this identical request.';
+      }
+      return { title:title, body:body, note:note };
+    }
+    if(n===6){
+      var v = verdict();
+      title = "Auth Server verifies PKCE and responds";
+      if(v==="verified"){
+        body = 'The Auth Server recomputes <b>SHA256(code_verifier)</b> and compares it to the <b>code_challenge</b> it stored in step 2. They match — proving the caller is the same app that began the flow — so it issues an <b>access token</b> and a <b>refresh token</b> in the response body. <b>These tokens never appear in a browser URL.</b>';
+        note = 'PKCE verified: <i>challenge == SHA256(verifier)</i>. The code was successfully bound to its originator.';
+      } else if(v==="nopkce"){
+        body = 'With PKCE disabled, the Auth Server only confirms the code is valid and unused, then issues an <b>access token</b> and <b>refresh token</b>. It works — but nothing proved the caller started the flow. On mobile / SPA clients where codes can be intercepted, this is the gap PKCE closes.';
+        note = 'The <i>OAuth 2.1 / Security BCP</i> now recommends PKCE for <b>all</b> clients — turn it on and re-run to see the difference.';
+      } else if(v==="blocked"){
+        body = 'The attacker presents the stolen code but has <b>no code_verifier</b>. The Auth Server hashes what it was given, finds it can’t match the stored challenge, and rejects the exchange with <code>invalid_grant</code>. <b>The stolen code is worthless</b> — the attacker gets nothing.';
+        note = 'This is PKCE stopping an <i>authorization-code interception</i> attack — the exact threat it was invented for.';
+      } else {
+        body = 'With PKCE off, the Auth Server sees a valid code and nothing else to check, so it hands the <b>attacker</b> a real access token and refresh token. <b>The account is compromised.</b> The attacker never needed the user’s password — just a stolen code.';
+        note = 'Turn PKCE back on and replay: the same stolen code becomes useless.';
+      }
+      return { title:title, body:body, note:note };
+    }
+    if(n===7){
+      title = "Client calls the Resource Server";
+      body = 'The client makes a direct <b>back-channel</b> API call to the Resource Server, putting the token in an <code>Authorization: Bearer &lt;access_token&gt;</code> header — in the request, never in the URL. The token proves the client may act on the user’s behalf for the granted scopes.';
+      note = 'The access token is a <b>bearer</b> token: whoever holds it can use it. Keep it off the front channel, keep it short-lived, and scope it tightly.';
+      return { title:title, body:body, note:note };
+    }
+    if(n===8){
+      title = "Resource Server validates and returns data";
+      body = 'The Resource Server validates the access token — checking signature or introspection, expiry, and that its scope covers this request — then returns the protected data. No password, no code, and no verifier ever reached this server.';
+      note = 'The Resource Server and Auth Server are separate roles: one <b>issues</b> tokens, the other <b>trusts and validates</b> them.';
+      return { title:title, body:body, note:note };
+    }
+    return { title:"", body:"", note:"" };
+  }
+
+  /* ---- verdict badge (step 6 only) ---- */
+  function verdictBadge(){
+    var box = el("verdict");
+    if(step !== 6){ box.className = "verdict hidden"; box.textContent = ""; return; }
+    var v = verdict(), cls, txt;
+    if(v==="verified"){ cls="ok"; txt="✓ PKCE verified — tokens issued"; }
+    else if(v==="nopkce"){ cls="warn"; txt="⚠ No PKCE — no interception defense"; }
+    else if(v==="blocked"){ cls="ok"; txt="🛡 Attack blocked — stolen code rejected"; }
+    else { cls="crit"; txt="✗ Account compromised — attacker got tokens"; }
+    box.className = "verdict " + cls;
+    box.textContent = txt;
+  }
+
+  /* ============================================================
+     Credentials / wire-value panel
+     ============================================================ */
+  function setRow(rowId, valId, shown, value, valueClass, title){
+    var row = el(rowId), val = el(valId);
+    if(shown){
+      row.classList.remove("dim");
+      val.textContent = value;
+      val.className = "cv" + (valueClass ? " " + valueClass : "");
+      val.title = title || value;
+    } else {
+      row.classList.add("dim");
+      val.textContent = value;
+      val.className = "cv";
+      val.title = "";
+    }
+  }
+  function updateCreds(){
+    var v = verdict();
+    // verifier + challenge
+    if(pkce){
+      setRow("cr-verifier","cv-verifier", step>=1, midTrunc(creds.verifier,14,8), "violet", creds.verifier);
+      setRow("cr-challenge","cv-challenge", step>=1, midTrunc(creds.challenge,14,8), "violet", creds.challenge);
+    } else {
+      setRow("cr-verifier","cv-verifier", false, "not used (PKCE off)", null, "");
+      setRow("cr-challenge","cv-challenge", false, "not used (PKCE off)", null, "");
+    }
+    // authorization code
+    setRow("cr-code","cv-code", step>=4, step>=4 ? midTrunc(creds.code,16,6) : "—",
+           attacker && step>=5 ? "crit" : "warn",
+           creds.code);
+    // tokens
+    var tokensShown = step>=6 && v!=="blocked";
+    if(step>=6 && v==="blocked"){
+      setRow("cr-access","cv-access", false, "✗ not issued (PKCE blocked)", null, "");
+      setRow("cr-refresh","cv-refresh", false, "✗ not issued (PKCE blocked)", null, "");
+      el("cv-access").className = "cv"; el("cv-refresh").className = "cv";
+    } else {
+      var tokClass = v==="compromised" ? "crit" : v==="nopkce" ? "warn" : "ok";
+      setRow("cr-access","cv-access", tokensShown, tokensShown ? midTrunc(creds.access,18,6) : "—", tokClass, creds.access);
+      setRow("cr-refresh","cv-refresh", tokensShown, tokensShown ? midTrunc(creds.refresh,16,6) : "—", tokClass, creds.refresh);
+    }
+  }
+
+  /* ============================================================
+     Sync all panels to current state
+     ============================================================ */
+  function syncPanels(){
+    var st = STEPS[step-1];
+    el("step-num").textContent = "Step " + step + " / 8";
+    var pill = el("chan-pill");
+    pill.className = "chan-pill " + st.channel;
+    pill.textContent = st.channel === "front" ? "front channel"
+                     : st.channel === "back" ? "back channel" : "internal";
+    var c = stepContent(step);
+    el("step-title").textContent = c.title;
+    el("step-body").innerHTML = c.body;
+    el("pkce-note").innerHTML = c.note;
+    el("coach").textContent = coachText(step);
+    verdictBadge();
+    updateCreds();
+    el("prev").disabled = (step <= 1);
+    el("next").disabled = (step >= 8);
+  }
+
+  /* ============================================================
+     Navigation + animation
+     ============================================================ */
+  function goStep(n){
+    n = Math.max(1, Math.min(8, n));
+    if(n === step && animProg >= 1) { syncPanels(); return; }
+    step = n;
+    if(reduceMotion){ animProg = 1; animating = false; }
+    else { animProg = 0; animating = true; }
+    syncPanels();
+  }
+  function stopPlay(){
+    playing = false;
+    if(playTimer){ clearTimeout(playTimer); playTimer = null; }
+    var p = el("play");
+    p.classList.remove("playing");
+    p.textContent = "▶ Play";
+  }
+  function tickPlay(){
+    if(!playing) return;
+    if(step >= 8){ stopPlay(); return; }
+    goStep(step + 1);
+    playTimer = setTimeout(tickPlay, speed);
+  }
+  function startPlay(){
+    if(step >= 8) goStep(1);
+    playing = true;
+    var p = el("play");
+    p.classList.add("playing");
+    p.textContent = "⏸ Pause";
+    playTimer = setTimeout(tickPlay, Math.max(500, speed - animDur*1000));
+  }
+  function togglePlay(){ if(playing) stopPlay(); else startPlay(); }
+
+  function resetFlow(){
+    stopPlay();
+    genCreds();
+    goStep(1);
+  }
+
+  /* ---- wiring ---- */
+  el("prev").addEventListener("click", function(){ stopPlay(); goStep(step - 1); });
+  el("next").addEventListener("click", function(){ stopPlay(); goStep(step + 1); });
+  el("play").addEventListener("click", function(){ togglePlay(); });
+  el("reset").addEventListener("click", function(){ resetFlow(); });
+
+  el("pkce").addEventListener("change", function(e){
+    pkce = e.target.checked;
+    el("pkce-txt").textContent = pkce ? "on" : "off";
+    syncPanels();
+  });
+  el("attacker").addEventListener("change", function(e){
+    attacker = e.target.checked;
+    el("attacker-txt").textContent = attacker ? "on" : "off";
+    syncPanels();
+  });
+  el("speed").addEventListener("input", function(e){
+    speed = +e.target.value;
+    el("speed-out").textContent = (speed/1000).toFixed(1) + "s / step";
+  });
+
+  // keyboard: arrows step, space toggles play (unless typing in a control)
+  document.addEventListener("keydown", function(e){
+    var tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+    if(tag === "input" || tag === "textarea" || tag === "select") return;
+    if(e.key === "ArrowRight"){ stopPlay(); goStep(step + 1); e.preventDefault(); }
+    else if(e.key === "ArrowLeft"){ stopPlay(); goStep(step - 1); e.preventDefault(); }
+    else if(e.key === " " || e.code === "Space"){ togglePlay(); e.preventDefault(); }
+  });
+
+  /* ============================================================
+     Boot
+     ============================================================ */
+  var ro = ("ResizeObserver" in window) ? new ResizeObserver(resize) : null;
+  if(ro) ro.observe(stage); else window.addEventListener("resize", resize);
+
+  genCreds();
+  resize();
+  syncPanels();
+
+  var last = 0;
+  function frame(ts){
+    if(!last) last = ts;
+    var dt = (ts - last) / 1000; last = ts; if(dt > 0.05) dt = 0.05;
+    if(animating){
+      animProg += dt / animDur;
+      if(animProg >= 1){ animProg = 1; animating = false; }
+    }
+    render();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

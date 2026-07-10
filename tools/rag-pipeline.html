@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG Pipeline Visualizer — System Design</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b1016;
+    --panel:#121a23;
+    --panel-2:#0e151d;
+    --border:#223140;
+    --border-soft:#1a2530;
+    --text:#cdd9e5;
+    --muted:#7d8fa1;
+    --faint:#54626f;
+    --accent:#34d3e0;
+    --accent-dim:rgba(52,211,224,.14);
+    --ok:#3fb950;
+    --ok-dim:rgba(63,185,80,.10);
+    --warn:#e3b341;
+    --warn-dim:rgba(227,179,65,.10);
+    --crit:#f85149;
+    --violet:#9d8bff;
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1100px 600px at 82% -8%, rgba(52,211,224,.06), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 56px}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(11,16,22,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:30}
+  .topnav .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .topnav .navlinks{display:flex;gap:6px;flex-wrap:wrap}
+  .topnav .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;transition:color .12s,background .12s}
+  .topnav .navlinks a:hover{color:var(--accent);background:var(--accent-dim)}
+
+  header{margin-bottom:22px}
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 10px;display:flex;align-items:center;gap:9px;
+  }
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  h1{
+    font-family:var(--mono);font-weight:600;font-size:clamp(26px,4.4vw,40px);
+    letter-spacing:-.01em;margin:0 0 10px;text-wrap:balance;
+  }
+  .lede{max-width:70ch;color:var(--muted);font-size:15.5px;margin:0}
+  .lede b{color:var(--text);font-weight:600}
+
+  .grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:24px}
+  @media(min-width:900px){.grid{grid-template-columns:1.55fr 1fr}}
+
+  .panel{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--border);border-radius:14px;
+  }
+  .stage{position:relative;min-height:400px;overflow:hidden}
+  @media(min-width:900px){.stage{min-height:452px}}
+  canvas#pipe{display:block;width:100%;height:100%;position:absolute;inset:0}
+
+  .legend{
+    position:absolute;left:14px;bottom:12px;right:14px;display:flex;gap:14px;flex-wrap:wrap;
+    font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.04em;
+    background:rgba(11,16,22,.55);padding:6px 10px;border-radius:8px;border:1px solid var(--border-soft);
+    backdrop-filter:blur(3px);
+  }
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:8px;height:8px;border-radius:2px;display:inline-block}
+
+  .side{display:flex;flex-direction:column;gap:16px}
+
+  .metrics{padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border-soft);border-radius:14px;overflow:hidden}
+  .metric{background:var(--panel);padding:13px 14px}
+  .metric .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:0 0 4px}
+  .metric .v{font-family:var(--mono);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .metric .v small{font-size:12px;color:var(--muted);font-weight:400;margin-left:3px}
+  .metric.wide{grid-column:1/-1}
+  .v.ok{color:var(--ok)} .v.warn{color:var(--warn)} .v.crit{color:var(--crit)} .v.accent{color:var(--accent)} .v.violet{color:var(--violet)}
+
+  .coach{padding:15px 16px;border:1px solid var(--border);border-radius:14px;background:var(--panel);border-left:3px solid var(--accent)}
+  .coach .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+  .coach p{margin:0;font-size:14px;color:var(--text)}
+
+  .events{padding:13px 16px;border:1px solid var(--border-soft);border-radius:14px;background:var(--panel-2)}
+  .events .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+  .events ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;min-height:96px}
+  .events li{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;gap:8px;animation:slideIn .3s ease}
+  .events li .ts{color:var(--accent);flex-shrink:0;min-width:66px}
+  .events li b{color:var(--text);font-weight:600}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+  .controls{grid-column:1/-1;padding:18px;display:flex;flex-wrap:wrap;gap:22px;align-items:flex-end}
+  .ctrl{display:flex;flex-direction:column;gap:8px}
+  .ctrl>label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+  .seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px;flex-wrap:wrap}
+  .seg button{
+    font-family:var(--mono);font-size:12px;color:var(--muted);background:transparent;border:0;
+    padding:7px 11px;border-radius:6px;cursor:pointer;transition:background .12s,color .12s;white-space:nowrap;
+  }
+  .seg button:hover{color:var(--text)}
+  .seg button[aria-pressed="true"]{background:var(--accent-dim);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(52,211,224,.35)}
+
+  .slider{display:flex;align-items:center;gap:12px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:150px;height:4px;background:var(--border);border-radius:3px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px rgba(52,211,224,.5)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--accent);cursor:pointer}
+  .kval{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--accent);min-width:54px;font-variant-numeric:tabular-nums}
+
+  .switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+  .switch input{position:absolute;opacity:0;width:0;height:0}
+  .track{width:42px;height:24px;background:var(--border);border-radius:12px;position:relative;transition:background .16s;flex-shrink:0}
+  .track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--muted);transition:transform .16s,background .16s}
+  .switch input:checked+.track{background:var(--accent-dim);box-shadow:inset 0 0 0 1px var(--accent)}
+  .switch input:checked+.track::after{transform:translateX(18px);background:var(--accent)}
+  .switch .txt{font-family:var(--mono);font-size:12px;color:var(--text)}
+
+  .ghost{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:9px 14px;cursor:pointer;transition:color .12s,border-color .12s}
+  .ghost:hover{color:var(--accent);border-color:var(--accent)}
+  .ghost.run{color:var(--accent);border-color:rgba(52,211,224,.4)}
+  .ghost.run:hover{background:var(--accent-dim)}
+
+  /* results */
+  .results{grid-column:1/-1;padding:20px 22px}
+  .results h2{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 4px;display:flex;align-items:center;gap:8px}
+  .results .rsub{font-size:12.5px;color:var(--faint);margin:0 0 16px;max-width:78ch}
+  .results .rsub b{color:var(--muted)}
+  .rgrid{display:grid;grid-template-columns:1fr;gap:16px}
+  @media(min-width:820px){.rgrid{grid-template-columns:1.05fr .95fr}}
+  .rcard{background:var(--panel-2);border:1px solid var(--border-soft);border-radius:12px;padding:14px 15px;position:relative;min-height:150px}
+  .rcard h3{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;display:flex;justify-content:space-between;gap:8px}
+  .rcard h3 .tally{color:var(--faint)}
+
+  .chunklist{display:flex;flex-direction:column;gap:8px}
+  .chunk{border:1px solid var(--border-soft);border-radius:9px;padding:8px 10px;background:var(--panel);transition:opacity .25s,border-color .25s}
+  .chunk.dim{opacity:.38}
+  .chunk.used{border-color:rgba(63,185,80,.5)}
+  .chunk.noise{border-color:rgba(227,179,65,.4)}
+  .chunk .ch-top{display:flex;align-items:center;gap:8px;justify-content:space-between}
+  .ch-id{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text);background:var(--panel-2);border:1px solid var(--border);border-radius:5px;padding:1px 6px;flex-shrink:0}
+  .ch-tag{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;border-radius:5px;white-space:nowrap}
+  .ch-tag.used{color:var(--ok);background:var(--ok-dim);border:1px solid rgba(63,185,80,.35)}
+  .ch-tag.noise{color:var(--warn);background:var(--warn-dim);border:1px solid rgba(227,179,65,.3)}
+  .ch-tag.skip{color:var(--faint);border:1px solid var(--border-soft)}
+  .ch-txt{font-size:11.5px;color:var(--muted);margin:6px 0;line-height:1.45}
+  .ch-meter{display:flex;align-items:center;gap:9px}
+  .ch-bar{flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+  .ch-bar i{display:block;height:100%;border-radius:3px;background:var(--accent);transition:width .4s}
+  .ch-bar i.lo{background:var(--warn)} .ch-bar i.zero{background:var(--faint)}
+  .ch-score{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums;min-width:44px;text-align:right}
+  .ch-score.lo{color:var(--warn)} .ch-score.zero{color:var(--faint)}
+
+  .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;border-radius:12px;background:rgba(14,21,29,.78);backdrop-filter:blur(2px);padding:16px}
+  .overlay p{font-family:var(--mono);font-size:12px;color:var(--warn);margin:0;max-width:34ch;line-height:1.6}
+  .overlay p b{color:var(--text)}
+
+  .promptpre{font-family:var(--mono);font-size:11.5px;line-height:1.7;color:var(--text);white-space:pre-wrap;word-break:break-word;margin:0;max-height:280px;overflow:auto}
+  .promptpre .sys{color:var(--faint)}
+  .promptpre .ctx{color:var(--ok)}
+  .promptpre .cid{color:var(--violet)}
+  .promptpre .q{color:var(--accent)}
+  .promptpre .none{color:var(--warn)}
+
+  .answerbox{margin-top:16px;border:1px solid var(--border);border-left-width:3px;border-radius:12px;padding:15px 17px;transition:border-color .25s,background .25s}
+  .answerbox.grounded{border-color:rgba(63,185,80,.4);border-left-color:var(--ok);background:linear-gradient(180deg,var(--ok-dim),transparent)}
+  .answerbox.guess{border-color:rgba(227,179,65,.4);border-left-color:var(--warn);background:linear-gradient(180deg,var(--warn-dim),transparent)}
+  .answerbox .albl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;margin:0 0 8px;display:flex;align-items:center;gap:8px}
+  .answerbox.grounded .albl{color:var(--ok)} .answerbox.guess .albl{color:var(--warn)}
+  .answerbox .badge{font-family:var(--mono);font-size:9px;letter-spacing:.08em;padding:2px 7px;border-radius:5px}
+  .answerbox.grounded .badge{color:var(--ok);background:var(--ok-dim);border:1px solid rgba(63,185,80,.35)}
+  .answerbox.guess .badge{color:var(--warn);background:var(--warn-dim);border:1px solid rgba(227,179,65,.3)}
+  .answerbox p.ans{margin:0;font-size:15px;color:var(--text);line-height:1.55}
+  .answerbox .cite{font-family:var(--mono);font-size:11px;color:var(--faint);margin:10px 0 0;padding-top:9px;border-top:1px solid var(--border-soft)}
+  .answerbox .cite b{color:var(--muted)}
+
+  .labcard{grid-column:1/-1;padding:20px 22px;border:1px solid var(--border);border-radius:14px;background:
+    linear-gradient(180deg,rgba(52,211,224,.03),transparent),var(--panel)}
+  .labcard h2{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  .labs{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:640px){.labs{grid-template-columns:1fr 1fr}}
+  .lab{display:flex;gap:12px;align-items:flex-start}
+  .lab .n{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(52,211,224,.3);width:24px;height:24px;border-radius:6px;display:grid;place-items:center;flex-shrink:0}
+  .lab p{margin:0;font-size:13.5px;color:var(--muted)}
+  .lab p b{color:var(--text);font-weight:600}
+
+  footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.03em}
+  footer b{color:var(--muted);font-weight:600}
+  a{color:var(--accent)}
+
+  button:focus-visible,input:focus-visible,a:focus-visible,.switch input:focus-visible+.track{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+  }
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <a class="brand" href="../index.html">◇ SD Mastery</a>
+  <div class="navlinks">
+    <a href="../index.html">Home</a>
+    <a href="../roadmap-dashboard.html">Roadmap</a>
+    <a href="../modules/20-serverless-edge-ai.html">Module 20 notes</a>
+    <a href="load-balancer-simulator.html">Load Balancer</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow"><span class="dot"></span>System Design · Module 20 — AI-Integrated Systems</p>
+    <h1>RAG Pipeline Visualizer</h1>
+    <p class="lede">Watch a question travel through a <b>Retrieval-Augmented Generation</b> pipeline against a tiny private knowledge base: <b>embed → search the vector DB for the top-k nearest chunks → assemble a prompt → hand it to the LLM → get a grounded answer</b>. Then flip <b>retrieval off</b> and watch the same model guess from memory — inventing plausible-but-wrong specifics. The lesson in one screen: <b>RAG grounds the model in retrieved facts to cut hallucination.</b></p>
+  </header>
+
+  <div class="grid">
+    <!-- pipeline canvas -->
+    <div class="panel stage" aria-label="Live diagram: a query flowing through the RAG pipeline stages.">
+      <canvas id="pipe"></canvas>
+      <div class="legend" aria-hidden="true">
+        <span><i style="background:#34d3e0"></i>query packet</span>
+        <span><i style="background:#3fb950"></i>active stage</span>
+        <span><i style="background:#54626f"></i>skipped (retrieval off)</span>
+        <span>similarity = keyword overlap (stand-in for embeddings)</span>
+      </div>
+    </div>
+
+    <!-- side -->
+    <div class="side">
+      <div class="metrics" role="group" aria-label="Live metrics">
+        <div class="metric"><p class="k">Mode</p><p class="v accent" id="m-mode">RAG</p></div>
+        <div class="metric"><p class="k">Retrieved (k)</p><p class="v" id="m-k">—</p></div>
+        <div class="metric"><p class="k">Top match</p><p class="v" id="m-top">—</p></div>
+        <div class="metric"><p class="k">Context tokens</p><p class="v" id="m-tok">—<small>~est</small></p></div>
+        <div class="metric wide"><p class="k">Grounding</p><p class="v" id="m-ground">—</p></div>
+      </div>
+
+      <div class="coach">
+        <p class="lbl">What's happening</p>
+        <p id="coach" aria-live="polite">Pick a question and press Run. In RAG mode the query is embedded, the vector DB returns the top-k most-similar chunks, and the LLM answers only from them.</p>
+      </div>
+
+      <div class="events">
+        <p class="lbl">Pipeline trace</p>
+        <ul id="trace" aria-live="polite"><li><span class="ts">idle</span>Ready — press Run to send a query through.</li></ul>
+      </div>
+    </div>
+
+    <!-- controls -->
+    <div class="panel controls">
+      <div class="ctrl">
+        <label id="q-lbl">Sample question</label>
+        <div class="seg" role="group" aria-labelledby="q-lbl" id="qsel">
+          <button data-q="0" aria-pressed="true">Refund policy?</button>
+          <button data-q="1" aria-pressed="false">Free-tier storage?</button>
+          <button data-q="2" aria-pressed="false">Is 2FA required?</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label for="k">Top-k retrieved</label>
+        <div class="slider">
+          <input type="range" id="k" min="1" max="6" step="1" value="3">
+          <span class="kval" id="k-out">k = 3</span>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>Retrieval</label>
+        <label class="switch">
+          <input type="checkbox" id="rag" checked>
+          <span class="track"></span>
+          <span class="txt" id="rag-txt">RAG on</span>
+        </label>
+      </div>
+
+      <div class="ctrl">
+        <label>&nbsp;</label>
+        <button class="ghost run" id="run">▶ Run query</button>
+      </div>
+      <div class="ctrl">
+        <label>&nbsp;</label>
+        <button class="ghost" id="reset">↺ Reset</button>
+      </div>
+    </div>
+
+    <!-- results -->
+    <div class="panel results">
+      <h2>◆ Retrieval → Context → Answer</h2>
+      <p class="rsub">Similarity here is <b>lexical keyword overlap (TF-IDF weighted)</b> — a transparent, deterministic stand-in for the semantic vector similarity a real embedding model computes. Real RAG matches <b>meaning</b>, not just shared words; the pipeline shape is identical. The knowledge base is a fictional company (<b>Nimbus Cloud</b>) so the base model genuinely can't know these facts — exactly when RAG earns its place.</p>
+      <div class="rgrid">
+        <div class="rcard">
+          <h3><span>Vector DB · similarity ranking</span><span class="tally" id="ret-tally"></span></h3>
+          <div class="chunklist" id="retrieval"></div>
+          <div class="overlay" id="ret-overlay" hidden><p><b>Retrieval off.</b> No embedding, no vector search — the model answers from frozen training memory alone.</p></div>
+        </div>
+        <div class="rcard">
+          <h3><span>Assembled prompt → LLM</span></h3>
+          <pre class="promptpre" id="prompt">Press Run to build the prompt.</pre>
+        </div>
+      </div>
+      <div class="answerbox grounded" id="answerbox">
+        <p class="albl"><span id="ans-lbl">LLM answer</span><span class="badge" id="ans-badge">grounded</span></p>
+        <p class="ans" id="answer">Run a query to see the answer.</p>
+        <p class="cite" id="cite"></p>
+      </div>
+    </div>
+
+    <!-- experiments -->
+    <div class="labcard">
+      <h2>◆ Run these experiments</h2>
+      <div class="labs">
+        <div class="lab"><span class="n">1</span><p><b>Turn retrieval off.</b> Ask "Refund policy?" with <b>RAG on</b>, read the sourced answer, then flip <b>Retrieval off</b> and re-run. Same model, but now it <b>guesses "14-day money-back"</b> — a confident, wrong specific it invented. That gap is hallucination, and grounding is what closes it.</p></div>
+        <div class="lab"><span class="n">2</span><p><b>Crank k up.</b> On "Free-tier storage?" set <b>k = 1</b> (just the bull's-eye chunk), then slide to <b>k = 6</b>. The answer doesn't improve — but <b>C8 "free trial"</b> and other <b>off-topic</b> chunks get pulled in (amber "noise" tags) and the <b>context-token count climbs</b>. More k past the relevant chunk = more cost, more distraction.</p></div>
+        <div class="lab"><span class="n">3</span><p><b>Watch the near-miss.</b> On "Free-tier storage?", note <b>C8 scores ~21%</b> because it shares the word "free" — but it's about the <em>trial</em>, not the tier. This is why real systems add <b>re-ranking</b> and <b>hybrid (keyword + vector) search</b>: raw similarity alone lets look-alikes sneak in.</p></div>
+        <div class="lab"><span class="n">4</span><p><b>Read the prompt, not just the answer.</b> Expand the <b>Assembled prompt</b> panel: the retrieved chunks are literally pasted in as context with a <b>"answer only from the context"</b> system instruction. RAG isn't magic — it's <b>disciplined prompt construction</b> plus a good retriever.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>interactive simulator · pairs with <a href="../modules/20-serverless-edge-ai.html">Module 20 notes</a></footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var el = function(id){ return document.getElementById(id); };
+
+  // ---------- knowledge base (fictional company: Nimbus Cloud) ----------
+  var KB = [
+    { id:"C1", topic:"refund policy", text:"Refund policy: a customer can request a full refund within 30 days of purchase. After 30 days Nimbus offers only prorated account credit toward a future plan." },
+    { id:"C2", topic:"free tier",     text:"The Nimbus free tier includes 5 GB of storage and 100,000 API calls each month. Overage is billed at 2 cents per extra 1,000 calls." },
+    { id:"C3", topic:"data residency",text:"Customer data is stored in the us-east-1 and eu-west-1 regions. Data belonging to EU customers never leaves eu-west-1 to satisfy GDPR residency rules." },
+    { id:"C4", topic:"2FA",           text:"Two-factor authentication is mandatory for every admin account. Nimbus supports authenticator apps and hardware security keys; SMS one-time codes were deprecated in 2024." },
+    { id:"C5", topic:"support hours", text:"Standard support runs 9am to 6pm Pacific, Monday through Friday. Enterprise plans add 24/7 on-call support with a one-hour response target." },
+    { id:"C6", topic:"rate limit",    text:"The public API rate limit is 50 requests per second per key. Short bursts up to 100 per second are allowed for ten seconds before throttling starts." },
+    { id:"C7", topic:"backups",       text:"A full backup runs nightly at 02:00 UTC and every backup is retained for 35 days. Point-in-time restore is available on Business and Enterprise plans." },
+    { id:"C8", topic:"free trial",    text:"Every paid plan comes with a 14-day free trial and no credit card is required to start the trial." }
+  ];
+
+  var QUESTIONS = [
+    { q:"What is Nimbus's refund policy?", target:"C1",
+      grounded:"You can request a full refund within 30 days of purchase. After 30 days, Nimbus gives only prorated account credit toward a future plan — no cash refund.",
+      noRag:"Refund policies vary by company, but most SaaS products offer a 14-day money-back guarantee, so you can probably get a full refund within about two weeks of signing up." },
+    { q:"How much storage does the Nimbus free tier include?", target:"C2",
+      grounded:"The free tier includes 5 GB of storage, along with 100,000 API calls per month. Beyond that, overage is billed at 2 cents per extra 1,000 calls.",
+      noRag:"Free tiers are usually fairly limited — typically around 1 to 2 GB of storage, though some providers go up to 10 GB. I'd estimate Nimbus offers something in that range." },
+    { q:"Is two-factor authentication required for Nimbus admin accounts?", target:"C4",
+      grounded:"Yes. Two-factor authentication is mandatory for every admin account. Nimbus supports authenticator apps and hardware security keys; SMS one-time codes were deprecated in 2024.",
+      noRag:"Two-factor authentication is generally optional — it's a widely recommended best practice, but most platforms let admins decide whether to turn it on for their accounts." }
+  ];
+
+  var SYSTEM = "You are Nimbus Support. Answer ONLY from the provided context. If the context does not contain the answer, say you don't know.";
+  var THRESH = 0.30; // used/on-topic vs noise, chosen from observed score gaps
+
+  // ---------- retrieval scoring: lexical keyword overlap, TF-IDF weighted ----------
+  var STOP = {"the":1,"a":1,"an":1,"is":1,"are":1,"was":1,"were":1,"of":1,"to":1,"in":1,"on":1,"at":1,"by":1,"for":1,"and":1,"or":1,"how":1,"much":1,"many":1,"does":1,"do":1,"did":1,"what":1,"which":1,"who":1,"per":1,"each":1,"it":1,"its":1,"with":1,"within":1,"be":1,"as":1,"that":1,"this":1,"you":1,"your":1,"can":1,"will":1,"not":1,"no":1,"my":1,"i":1,"we":1,"us":1,"from":1,"into":1,"about":1,"there":1,"here":1,"when":1,"where":1,"if":1,"has":1,"have":1,"had":1,"me":1,"our":1,"s":1};
+
+  function stem(w){
+    if(w.length>3 && w.charAt(w.length-1)==="s" && w.slice(-2)!=="ss") return w.slice(0,-1);
+    return w;
+  }
+  function tokenize(text){
+    var raw = text.toLowerCase().replace(/[^a-z0-9\s-]/g," ").split(/[\s-]+/);
+    var out=[];
+    for(var i=0;i<raw.length;i++){
+      var w=raw[i];
+      if(!w || STOP[w] || w.length<2) continue;
+      out.push(stem(w));
+    }
+    return out;
+  }
+
+  // Precompute chunk term sets + df/idf (stemming applied identically everywhere via tokenize)
+  var chunkTerms = KB.map(function(c){ var set={}; tokenize(c.text).forEach(function(t){ set[t]=1; }); return set; });
+  var N = KB.length, df = {};
+  chunkTerms.forEach(function(set){ for(var t in set){ df[t]=(df[t]||0)+1; } });
+  function idf(t){ var d = df[t]||0; return Math.log(1 + (N+1)/(d+0.5)); }
+
+  function scoreAll(query){
+    var qset={}; tokenize(query).forEach(function(t){ qset[t]=1; });
+    var qterms=Object.keys(qset), denom=0;
+    qterms.forEach(function(t){ denom+=idf(t); });
+    var rows = KB.map(function(c,i){
+      var num=0, matched=[];
+      qterms.forEach(function(t){ if(chunkTerms[i][t]){ num+=idf(t); matched.push(t); } });
+      return { chunk:c, idx:i, score: denom>0? num/denom : 0, matched:matched };
+    });
+    rows.sort(function(a,b){ return b.score-a.score; });
+    return rows;
+  }
+
+  // Illustrative "embedding" — purely cosmetic; the real matching above is keyword overlap
+  function fakeVector(query){
+    var seed=0; for(var i=0;i<query.length;i++) seed=(seed*31+query.charCodeAt(i))>>>0;
+    var v=[]; for(var j=0;j<4;j++){ seed=(seed*1103515245+12345)>>>0; v.push(((seed%2000)/1000-1).toFixed(2)); }
+    return "["+v.join(", ")+", …]";
+  }
+
+  // ---------- state ----------
+  var state = { qid:0, k:3, rag:true };
+
+  function compute(){
+    var Q = QUESTIONS[state.qid];
+    var ranked = scoreAll(Q.q);
+    var topK = ranked.slice(0, state.k);
+    var onTopic = topK.filter(function(r){ return r.score>=THRESH; });
+    var targetIncluded = topK.some(function(r){ return r.chunk.id===Q.target; });
+    // assembled prompt
+    var promptText, tokens, grounded, answer, cites=[];
+    if(state.rag){
+      // naive RAG stuffs ALL top-k into the prompt; noise chunks still cost tokens
+      var ctxLines = topK.map(function(r){ return "["+r.chunk.id+"] "+r.chunk.text; });
+      cites = onTopic.map(function(r){ return r.chunk.id; });
+      var ctxBlock = ctxLines.length ? ctxLines.join("\n") : "(nothing retrieved)";
+      promptText = SYSTEM + "\n\nContext:\n" + ctxBlock + "\n\nQuestion: " + Q.q;
+      grounded = onTopic.length>0 && targetIncluded;
+      answer = grounded ? Q.grounded : "I don't have that in the retrieved context, so I can't answer confidently.";
+    } else {
+      promptText = SYSTEM + "\n\nQuestion: " + Q.q;
+      tokens = Math.ceil(promptText.length/4);
+      grounded = false;
+      answer = Q.noRag;
+    }
+    tokens = Math.ceil(promptText.length/4);
+    return { Q:Q, ranked:ranked, topK:topK, onTopic:onTopic, targetIncluded:targetIncluded,
+             promptText:promptText, tokens:tokens, grounded:grounded, answer:answer, cites:cites };
+  }
+
+  // ---------- canvas pipeline ----------
+  var STAGES = [
+    { t1:"USER",       t2:"query" },
+    { t1:"EMBED",      t2:"→ vector" },
+    { t1:"VECTOR DB",  t2:"top-k search" },
+    { t1:"ASSEMBLE",   t2:"context" },
+    { t1:"LLM",        t2:"generate" },
+    { t1:"ANSWER",     t2:"grounded" }
+  ];
+  var RAG_PATH  = [0,1,2,3,4,5];
+  var BASE_PATH = [0,4,5];
+
+  var cv = el("pipe"), ctx = cv.getContext("2d");
+  var stageEl = cv.parentElement, W=0, H=0, dpr=1, vertical=false;
+  var nodes = STAGES.map(function(){ return {x:0,y:0,w:0,h:0,flash:0,visited:false}; });
+
+  function resize(){
+    var r = stageEl.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio||1, 2);
+    cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    W = r.width; H = r.height; layout();
+  }
+  function layout(){
+    var pad=18, n=STAGES.length;
+    vertical = W < 560;
+    if(!vertical){
+      var gap=Math.max(8, Math.min(16,(W-2*pad)/40));
+      var nw=(W-2*pad-(n-1)*gap)/n; nw=Math.max(64,nw);
+      var nh=Math.min(88, H*0.34), y=H*0.30;
+      for(var i=0;i<n;i++){ var s=nodes[i]; s.w=nw; s.h=nh; s.x=pad+i*(nw+gap); s.y=y; }
+    } else {
+      var vgap=Math.max(6,(H-2*pad)/60);
+      var vnh=(H-2*pad-(n-1)*vgap)/n; vnh=Math.max(30,vnh);
+      var vnw=Math.min(260, W-2*pad), vx=(W-vnw)/2;
+      for(var j=0;j<n;j++){ var t=nodes[j]; t.w=vnw; t.h=vnh; t.x=vx; t.y=pad+j*(vnh+vgap); }
+    }
+  }
+  function center(i){ var s=nodes[i]; return { x:s.x+s.w/2, y:s.y+s.h/2 }; }
+  function mono(){ return "ui-monospace,Menlo,Consolas,monospace"; }
+  function rrect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+  function drawLink(a,b,active){
+    var ca=center(a), cb=center(b), gap=Math.abs(b-a);
+    ctx.beginPath();
+    if(gap>1){
+      // bowed bypass over skipped stages
+      if(!vertical){ var mx=(ca.x+cb.x)/2, my=ca.y - 46;
+        ctx.moveTo(ca.x, ca.y); ctx.quadraticCurveTo(mx, my, cb.x, cb.y);
+      } else { var my2=(ca.y+cb.y)/2, mx2=ca.x - 46;
+        ctx.moveTo(ca.x, ca.y); ctx.quadraticCurveTo(mx2, my2, cb.x, cb.y);
+      }
+    } else { ctx.moveTo(ca.x, ca.y); ctx.lineTo(cb.x, cb.y); }
+    if(active){ ctx.strokeStyle="rgba(52,211,224,.55)"; ctx.lineWidth=2; ctx.setLineDash([]); }
+    else { ctx.strokeStyle="rgba(84,98,111,.30)"; ctx.lineWidth=1.4; ctx.setLineDash([4,4]); }
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  var anim = { path:RAG_PATH, seg:0, prog:0, active:false, packet:{x:0,y:0} };
+
+  function render(){
+    ctx.clearRect(0,0,W,H);
+    var path = anim.path, inPath={}; path.forEach(function(i){ inPath[i]=true; });
+
+    // skeleton (all adjacent), faint
+    for(var s=0;s<STAGES.length-1;s++) drawLink(s,s+1,false);
+    // active path links
+    for(var p=0;p<path.length-1;p++) drawLink(path[p],path[p+1],true);
+
+    // nodes
+    for(var i=0;i<STAGES.length;i++){
+      var nd=nodes[i], on=inPath[i];
+      var flash=nd.flash>0? nd.flash:0;
+      if(flash>0){ ctx.shadowColor="#34d3e0"; ctx.shadowBlur=18*flash; }
+      rrect(nd.x,nd.y,nd.w,nd.h,10);
+      ctx.fillStyle = on ? "#131c26" : "#0d141c"; ctx.fill(); ctx.shadowBlur=0;
+      var border = nd.visited ? "rgba(52,211,224,.8)" : (on ? "rgba(255,255,255,.10)" : "rgba(84,98,111,.28)");
+      ctx.strokeStyle=border; ctx.lineWidth=1.3; ctx.stroke();
+
+      var cx=nd.x+nd.w/2, cy=nd.y+nd.h/2;
+      ctx.textAlign="center";
+      ctx.fillStyle = on ? (nd.visited? "#34d3e0" : "#cdd9e5") : "#54626f";
+      var big = nd.w<86 ? 10 : 11.5;
+      ctx.font="600 "+big+"px "+mono();
+      ctx.fillText(STAGES[i].t1, cx, cy-3);
+      ctx.fillStyle = on ? "#7d8fa1" : "#3d4854";
+      ctx.font="9px "+mono();
+      ctx.fillText(STAGES[i].t2, cx, cy+11);
+      // stage index chip
+      ctx.fillStyle = on ? "rgba(52,211,224,.5)":"rgba(84,98,111,.4)";
+      ctx.font="8px "+mono(); ctx.textAlign="left";
+      ctx.fillText((i+1)+"", nd.x+6, nd.y+12);
+    }
+
+    // packet
+    if(!reduceMotion){
+      var pk=anim.packet;
+      ctx.beginPath(); ctx.arc(pk.x,pk.y,5,0,6.2832);
+      ctx.fillStyle="#7fe9f1"; ctx.shadowColor="#34d3e0"; ctx.shadowBlur=12; ctx.fill(); ctx.shadowBlur=0;
+    }
+  }
+
+  function updateAnim(dt){
+    for(var i=0;i<nodes.length;i++){ if(nodes[i].flash>0) nodes[i].flash-=dt*1.6; }
+    if(!anim.active){
+      if(anim.path.length){ var lastc=center(anim.path[anim.path.length-1]); anim.packet.x=lastc.x; anim.packet.y=lastc.y; }
+      return;
+    }
+    anim.prog += dt/0.55;
+    var a=center(anim.path[anim.seg]), b=center(anim.path[anim.seg+1]);
+    var t=Math.min(anim.prog,1);
+    anim.packet.x = a.x+(b.x-a.x)*t; anim.packet.y = a.y+(b.y-a.y)*t;
+    if(anim.prog>=1){
+      anim.prog=0; anim.seg++;
+      onArrive(anim.path[anim.seg]);
+      if(anim.seg>=anim.path.length-1) anim.active=false;
+    }
+  }
+
+  // ---------- DOM population (progressive, keyed to stages) ----------
+  var R = null; // current computed result
+
+  function pushTrace(tag, html){
+    var ul=el("trace");
+    var li=document.createElement("li");
+    li.innerHTML='<span class="ts">'+tag+'</span>'+html;
+    ul.insertBefore(li, ul.firstChild);
+    while(ul.children.length>6) ul.removeChild(ul.lastChild);
+  }
+  function setV(id, html, cls){ var e=el(id); e.innerHTML=html; e.className="v"+(cls?(" "+cls):""); }
+
+  function onArrive(idx){
+    nodes[idx].flash=1; nodes[idx].visited=true;
+    var Q=R.Q;
+    if(idx===0){
+      pushTrace("① query", 'User asks: <b>"'+esc(Q.q)+'"</b>');
+      el("m-mode").textContent = state.rag ? "RAG" : "Baseline";
+      el("m-mode").className = "v " + (state.rag?"accent":"warn");
+    } else if(idx===1){
+      pushTrace("② embed", 'Query → vector <b>'+fakeVector(Q.q)+'</b>');
+    } else if(idx===2){
+      renderRetrieval();
+      var top=R.ranked[0];
+      setV("m-k", state.k+"", "");
+      setV("m-top", (top.score*100).toFixed(0)+'<small>%</small>', top.score>=THRESH?"ok":"warn");
+      pushTrace("③ search", 'Ranked '+N+' chunks, kept top-<b>'+state.k+'</b> · best <b>'+R.ranked[0].chunk.id+' '+(top.score*100).toFixed(0)+'%</b>');
+    } else if(idx===3){
+      renderPrompt();
+      setV("m-tok", R.tokens+'<small>~tok</small>', "");
+      pushTrace("④ assemble", 'Prompt = system + <b>'+R.topK.length+'</b> chunk(s) + question · <b>~'+R.tokens+' tokens</b>');
+    } else if(idx===4){
+      if(!state.rag){ renderPrompt(); setV("m-tok", R.tokens+'<small>~tok</small>', ""); pushTrace("④ prompt", 'No retrieval — prompt is just the question · <b>~'+R.tokens+' tokens</b>'); }
+      pushTrace("⑤ LLM", state.rag ? 'Generating answer constrained to the context…' : 'Generating from <b>training memory only</b>…');
+    } else if(idx===5){
+      renderAnswer();
+      if(state.rag){ setV("m-ground", R.grounded?"Grounded":"No match", R.grounded?"ok":"warn"); pushTrace("⑥ answer", R.grounded? 'Grounded answer ready — cites <b>'+R.cites.join(", ")+'</b>' : 'Nothing relevant retrieved — model abstains'); }
+      else { setV("m-ground", "Guessing", "crit"); pushTrace("⑥ answer", '<b>Unsourced</b> answer — plausible but unverifiable'); }
+      updateCoach();
+    }
+  }
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+  function scoreClass(sc){ return sc>=THRESH ? "" : (sc>0 ? "lo" : "zero"); }
+  function renderRetrieval(){
+    var list=el("retrieval"); list.innerHTML="";
+    el("ret-overlay").hidden = state.rag;
+    var topIds={}; R.topK.forEach(function(r){ topIds[r.chunk.id]=true; });
+    var usedN=0, noiseN=0;
+    R.ranked.forEach(function(r){
+      var picked = topIds[r.chunk.id];
+      var used = picked && r.score>=THRESH;
+      var noise = picked && r.score<THRESH;
+      if(used) usedN++; if(noise) noiseN++;
+      var d=document.createElement("div");
+      d.className="chunk"+(picked?(used?" used":" noise"):" dim");
+      var tag = used ? '<span class="ch-tag used">used</span>' : (noise? '<span class="ch-tag noise">noise</span>' : '<span class="ch-tag skip">not selected</span>');
+      var scls=scoreClass(r.score);
+      var pct=(r.score*100).toFixed(0);
+      d.innerHTML =
+        '<div class="ch-top"><span style="display:flex;gap:8px;align-items:center"><span class="ch-id">'+r.chunk.id+'</span>'+tag+'</span>'+
+        '<span class="ch-score '+scls+'">'+pct+'%</span></div>'+
+        '<div class="ch-txt">'+esc(r.chunk.text)+'</div>'+
+        '<div class="ch-meter"><span class="ch-bar"><i class="'+scls+'" style="width:'+Math.max(2,Math.round(r.score*100))+'%"></i></span></div>';
+      list.appendChild(d);
+    });
+    el("ret-tally").textContent = state.rag ? ("top-"+state.k+" · "+usedN+" used, "+noiseN+" noise") : "retrieval off";
+  }
+
+  function renderPrompt(){
+    var pre=el("prompt");
+    if(!state.rag){
+      pre.innerHTML='<span class="sys">'+esc(SYSTEM)+'</span>\n\n<span class="q">Question: '+esc(R.Q.q)+'</span>\n\n<span class="none">‹ no retrieved context — model relies on training memory ›</span>';
+      return;
+    }
+    var ctxHtml;
+    if(R.topK.length){
+      ctxHtml = R.topK.map(function(r){
+        var cls = r.score>=THRESH ? "ctx" : "none";
+        return '<span class="cid">['+r.chunk.id+']</span> <span class="'+cls+'">'+esc(r.chunk.text)+'</span>';
+      }).join("\n");
+    } else {
+      ctxHtml = '<span class="none">(nothing retrieved)</span>';
+    }
+    pre.innerHTML='<span class="sys">'+esc(SYSTEM)+'</span>\n\nContext:\n'+ctxHtml+'\n\n<span class="q">Question: '+esc(R.Q.q)+'</span>';
+  }
+
+  function renderAnswer(){
+    var box=el("answerbox");
+    box.className="answerbox "+(R.grounded?"grounded":"guess");
+    el("ans-badge").textContent = R.grounded ? "grounded" : (state.rag? "no match" : "unsourced guess");
+    el("answer").textContent = R.answer;
+    var cite=el("cite");
+    if(state.rag && R.grounded) cite.innerHTML='<b>Sources:</b> '+R.cites.join(", ")+' — every claim traces to a retrieved chunk you can audit above.';
+    else if(state.rag) cite.innerHTML='<b>No sources</b> — retrieval returned nothing above the relevance bar, so a well-behaved RAG system abstains.';
+    else cite.innerHTML='<b>No sources.</b> Guessed from training priors — note the invented specifics vs. the grounded answer. This is the hallucination RAG removes.';
+  }
+
+  function updateCoach(){
+    var c=el("coach"), msg, Q=R.Q;
+    if(!state.rag){
+      msg='Retrieval is OFF, so the LLM answers "'+Q.q.replace(/\?$/,'')+'" from frozen training memory. Nimbus is fictional, so it can\'t know — it produces a fluent, confident guess with wrong specifics. Turn retrieval on to ground it.';
+    } else if(!R.grounded){
+      msg='Nothing cleared the '+Math.round(THRESH*100)+'% relevance bar, so the model abstains rather than invent — the "grounding guardrail" that makes RAG safe to ship.';
+    } else {
+      var noise=R.topK.filter(function(r){ return r.score<THRESH; }).length;
+      msg='Grounded: the LLM answered from '+R.cites.join(", ")+', the chunk(s) the vector search ranked highest. Similarity here is keyword overlap standing in for semantic embeddings.';
+      if(noise>0) msg+=' You retrieved '+noise+' extra low-similarity chunk'+(noise>1?'s':'')+' (amber "noise") — padding the prompt and its token cost without helping the answer. Try lowering k.';
+      else if(state.k===1) msg+=' At k=1 you fetched exactly the bull\'s-eye chunk — lean and precise. In real corpora the best chunk isn\'t always rank 1, so k>1 buys recall insurance.';
+    }
+    c.textContent=msg;
+  }
+
+  // ---------- run orchestration ----------
+  function resetPanels(){
+    el("retrieval").innerHTML="";
+    el("ret-overlay").hidden = state.rag;               // baseline → show "retrieval off" overlay
+    el("ret-tally").textContent = state.rag ? "" : "retrieval off";
+    el("prompt").textContent = state.rag ? "Embedding + searching…" : "Building prompt…";
+    el("answerbox").className="answerbox";
+    el("ans-badge").textContent="…"; el("answer").textContent="Generating…"; el("cite").innerHTML="";
+    for(var i=0;i<nodes.length;i++){ nodes[i].visited=false; nodes[i].flash=0; }
+  }
+
+  function run(){
+    R = compute();
+    anim.path = state.rag ? RAG_PATH.slice() : BASE_PATH.slice();
+    resetPanels();
+    el("trace").innerHTML="";
+    // reset metrics that fill progressively as the packet reaches each stage
+    setV("m-k","—",""); setV("m-top","—",""); setV("m-tok","—<small>~est</small>",""); setV("m-ground","—","");
+    onArrive(anim.path[0]);
+    if(reduceMotion){
+      for(var i=1;i<anim.path.length;i++) onArrive(anim.path[i]);
+      anim.seg=anim.path.length-1; anim.prog=1; anim.active=false;
+    } else {
+      anim.seg=0; anim.prog=0; anim.active=true;
+    }
+  }
+
+  // ---------- input wiring ----------
+  var qBtns=document.querySelectorAll("#qsel button");
+  qBtns.forEach(function(b){
+    b.addEventListener("click",function(){
+      state.qid=+b.getAttribute("data-q");
+      qBtns.forEach(function(x){ x.setAttribute("aria-pressed", x===b?"true":"false"); });
+      run();
+    });
+  });
+  el("k").addEventListener("input",function(e){ state.k=+e.target.value; el("k-out").textContent="k = "+state.k; run(); });
+  el("rag").addEventListener("change",function(e){
+    state.rag=e.target.checked;
+    el("rag-txt").textContent=state.rag?"RAG on":"RAG off";
+    run();
+  });
+  el("run").addEventListener("click",run);
+  el("reset").addEventListener("click",function(){
+    state={ qid:0, k:3, rag:true };
+    qBtns.forEach(function(x){ x.setAttribute("aria-pressed", x.getAttribute("data-q")==="0"?"true":"false"); });
+    el("k").value=3; el("k-out").textContent="k = 3";
+    el("rag").checked=true; el("rag-txt").textContent="RAG on";
+    run();
+  });
+
+  // ---------- boot ----------
+  var ro = ("ResizeObserver" in window) ? new ResizeObserver(resize) : null;
+  if(ro) ro.observe(stageEl); else window.addEventListener("resize", resize);
+  resize();
+  run();
+
+  var last=0;
+  function frame(ts){ if(!last) last=ts; var dt=(ts-last)/1000; last=ts; if(dt>0.05) dt=0.05; updateAnim(dt); render(); requestAnimationFrame(frame); }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

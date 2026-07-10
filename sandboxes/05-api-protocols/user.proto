@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+// The gRPC contract for the same 'user' resource served over REST and GraphQL.
+// A .proto is a strongly-typed schema: fields have numbered slots, and the
+// wire format is compact binary (no field names on the wire).
+package user;
+
+service UserService {
+  // Fetch one user by id.
+  rpc GetUser (UserRequest) returns (User);
+}
+
+message UserRequest {
+  string id = 1;
+}
+
+message User {
+  string id    = 1;
+  string name  = 2;
+  string email = 3;
+  int32  age    = 4;
+  string city  = 5;
+  string role  = 6;
+}

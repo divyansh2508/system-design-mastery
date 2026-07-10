@@ -1,0 +1,15 @@
+# Redis caching & eviction sandbox — System Design, Module 5-6.
+# Bring up : docker compose up -d
+# Tear down: docker compose down -v
+# No top-level `version:` key — Compose v2 treats this as the modern schema.
+
+services:
+  # One Redis node, capped tiny (10 MB) with LRU eviction so TTL expiry and
+  # allkeys-lru eviction are visible live via `docker compose exec redis redis-cli`.
+  redis:
+    image: redis:7-alpine
+    container_name: sandbox-redis
+    command: ["redis-server", "--maxmemory", "10mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "6379:6379"          # host:container — reach it from your machine too
+    restart: unless-stopped

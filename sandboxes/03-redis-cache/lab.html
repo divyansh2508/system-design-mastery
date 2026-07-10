@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redis Caching &amp; Eviction — Sandbox Lab</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#0ca678; --accent-soft:rgba(12,166,120,.10);
+    --hue:#0ca678; --hue-soft:rgba(12,166,120,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#28c39a;--accent-soft:rgba(40,195,154,.13);--hue:#28c39a;--hue-soft:rgba(40,195,154,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#0ca678;--accent-soft:rgba(12,166,120,.10);--hue:#0ca678;--hue-soft:rgba(12,166,120,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#28c39a;--accent-soft:rgba(40,195,154,.13);--hue:#28c39a;--hue-soft:rgba(40,195,154,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .steplbl{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:26px 0 2px}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../../index.html">Home</a>
+      <a href="../../roadmap-dashboard.html">Roadmap</a>
+      <a href="../../modules/05-caching-fundamentals.html">Module 5 notes</a>
+      <a href="../../tools/cache-playground.html">🗃️ the simulator</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Sandbox Lab · Module 5-6 — Caching</span></p>
+      <h1>Redis Caching &amp; Eviction</h1>
+      <p class="sub">Run a real <strong>Redis</strong> node capped at a tiny 10&nbsp;MB, then watch — with your own eyes, live from <code>redis-cli</code> — a key <strong>expire on its TTL</strong> and old keys get <strong>evicted by LRU</strong> when the cache fills up.</p>
+    </header>
+
+    <div class="callout tip">
+      <p class="lbl">Prerequisites</p>
+      <p><strong>Docker Desktop must be running</strong> (check the whale icon in your menu bar / system tray). Then open a terminal and <code>cd</code> into this lab's folder — every command below runs from there:</p>
+      <pre><code>cd "System Design/sandboxes/03-redis-cache"</code></pre>
+    </div>
+
+    <section id="build">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>What you'll build</h2>
+      <p class="lead">A single <strong>Redis</strong> server — the same in-memory key/value store that fronts real production read paths — deliberately shrunk to <strong>10&nbsp;MB</strong> so its two most important cache behaviours become visible in seconds.</p>
+      <p>Caches don't grow forever. Two mechanisms keep them bounded, and this lab makes you feel both: <strong>TTL expiry</strong> (a key you tag with a lifetime vanishes when the clock runs out) and <strong>eviction</strong> (when the memory cap is hit, Redis throws out keys to make room). We set <code>--maxmemory-policy allkeys-lru</code>, so the key it throws out is the <strong>Least Recently Used</strong> one — exactly the policy a read cache wants.</p>
+      <pre><code>            docker compose exec redis redis-cli
+                            │
+                            ▼
+        ┌───────────────────────────────────┐
+        │   redis   (image: redis:7-alpine)  │   host :6379  ->  container :6379
+        │   service "redis"                  │
+        │                                    │
+        │   --maxmemory 10mb                 │   capped tiny ON PURPOSE, so the
+        │   --maxmemory-policy allkeys-lru   │   limit is easy to hit and eviction
+        │                                    │   is visible within seconds
+        └───────────────────────────────────┘
+      in-memory key/value store  ·  TTL expiry  ·  LRU eviction</code></pre>
+      <p>There is <strong>no application code</strong> in this lab — you <em>are</em> the application. You talk to Redis directly with <code>redis-cli</code>, running each command inside the container via <code>docker compose exec</code>. That keeps every mechanism in plain sight instead of hidden behind a client library.</p>
+    </section>
+
+    <section id="stack">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>The stack</h2>
+      <p>One file defines the whole lab. <code>docker-compose.yml</code> — a single official Redis node, started with the two flags that make it a bounded, LRU cache:</p>
+      <pre><code><span class="cmt"># Redis caching &amp; eviction sandbox — System Design, Module 5-6.</span>
+<span class="cmt"># Bring up : docker compose up -d</span>
+<span class="cmt"># Tear down: docker compose down -v</span>
+<span class="cmt"># No top-level `version:` key — Compose v2 treats this as the modern schema.</span>
+
+services:
+  <span class="cmt"># One Redis node, capped tiny (10 MB) with LRU eviction so TTL expiry and</span>
+  <span class="cmt"># allkeys-lru eviction are visible live via `docker compose exec redis redis-cli`.</span>
+  redis:
+    image: redis:7-alpine
+    container_name: sandbox-redis
+    command: ["redis-server", "--maxmemory", "10mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "6379:6379"          <span class="cmt"># host:container — reach it from your machine too</span>
+    restart: unless-stopped</code></pre>
+      <div class="callout">
+        <p class="lbl">Why this is the real thing</p>
+        <p>This is not a toy shim — it's the <em>same</em> official <code>redis-server</code> that runs in production, driven by the exact flags (<code>maxmemory</code> + a <code>maxmemory-policy</code>) an SRE tunes on a real cache tier. Everything you observe here — TTLs, eviction counts, <code>INFO</code> stats — behaves identically at scale.</p>
+      </div>
+    </section>
+
+    <section id="up">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Bring it up</h2>
+      <p>Pull the image and start Redis in the background:</p>
+      <pre><code>docker compose up -d</code></pre>
+      <p>Verify it's healthy — you should see one service, <code>running</code>, mapping <code>0.0.0.0:6379-&gt;6379/tcp</code>:</p>
+      <pre><code>docker compose ps</code></pre>
+      <p>Now confirm Redis answers <em>and</em> that our two flags actually took effect:</p>
+      <pre><code>docker compose exec redis redis-cli PING
+<span class="cmt"># -> PONG</span>
+
+docker compose exec redis redis-cli CONFIG GET maxmemory
+<span class="cmt"># -> 1) "maxmemory"  2) "10485760"   (10 MB, in bytes)</span>
+
+docker compose exec redis redis-cli CONFIG GET maxmemory-policy
+<span class="cmt"># -> 1) "maxmemory-policy"  2) "allkeys-lru"</span></code></pre>
+      <div class="callout">
+        <p class="lbl">What to observe</p>
+        <p><code>PONG</code> means the server is up. The two <code>CONFIG GET</code> lines are the proof that matters: the cap is <strong>10485760 bytes (10&nbsp;MB)</strong> and the policy is <strong>allkeys-lru</strong>. Those two settings are what make Exercises 2 and 3 do something interesting.</p>
+      </div>
+    </section>
+
+    <section id="exercises">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>The exercises</h2>
+      <p>Four steps. Run the commands exactly, and read the <strong>“what to observe”</strong> note after each — that's where the learning is.</p>
+
+      <p class="steplbl">Exercise 1 — SET and GET a key</p>
+      <h3>The two commands the whole cache is built on</h3>
+      <p>A cache is, at heart, a dictionary. You put a value under a key, then you fetch it back. Store one, then read it:</p>
+      <pre><code>docker compose exec redis redis-cli SET user:42 "Ada Lovelace"
+<span class="cmt"># -> OK</span>
+
+docker compose exec redis redis-cli GET user:42
+<span class="cmt"># -> "Ada Lovelace"</span></code></pre>
+      <div class="callout">
+        <p class="lbl">What to observe</p>
+        <p><code>SET</code> replies <code>OK</code> and <code>GET</code> hands the value straight back from RAM — no disk, no query planner. This is the ~100&nbsp;ns memory read that makes a cache worth having. The key name (<code>user:42</code>) is just a string; the <code>namespace:id</code> convention is pure convention, and it's the one every real codebase uses.</p>
+      </div>
+
+      <p class="steplbl">Exercise 2 — Give a key a TTL and watch it expire</p>
+      <h3>SET … EX, then watch TTL count down to nothing</h3>
+      <p>Cached data goes stale, so you attach a <strong>time-to-live</strong>. <code>SET … EX 15</code> stores a key that self-destructs in 15 seconds — perfect for a session token or a short-lived cache entry. Store one, then sample its TTL three times, five seconds apart:</p>
+      <pre><code>docker compose exec redis redis-cli SET session:abc "token-xyz" EX 15
+<span class="cmt"># -> OK</span>
+
+<span class="cmt"># Sample the remaining life 3 times, 5s apart, and watch it fall:</span>
+for i in 1 2 3; do docker compose exec redis redis-cli TTL session:abc; sleep 5; done
+<span class="cmt"># -> (integer) 15   (roughly — could be 14)</span>
+<span class="cmt"># -> (integer) 10</span>
+<span class="cmt"># -> (integer) 5</span></code></pre>
+      <p>Now let the last few seconds elapse, then try to read the key that has expired:</p>
+      <pre><code>docker compose exec redis redis-cli GET session:abc
+<span class="cmt"># -> (nil)          the key is gone — expired and deleted</span>
+
+docker compose exec redis redis-cli TTL session:abc
+<span class="cmt"># -> (integer) -2   -2 means "no such key"</span></code></pre>
+      <div class="callout tip">
+        <p class="lbl">What to observe</p>
+        <p>The TTL counts down in real time, and the instant it hits zero the key is <strong>deleted</strong> — <code>GET</code> returns <code>(nil)</code>, not a stale value. Note the two special TTL return codes you'll see everywhere: <code>-2</code> = the key doesn't exist; <code>-1</code> = the key exists but has <em>no</em> expiry set (try <code>TTL user:42</code> from Exercise 1 to see <code>-1</code>). This automatic expiry is how caches stay fresh without anyone sweeping them by hand.</p>
+      </div>
+
+      <p class="steplbl">Exercise 3 — Overflow the 10 MB cap and watch LRU eviction</p>
+      <h3>Fill Redis past its limit, then read the eviction stats</h3>
+      <p>First, take a baseline of an empty-ish cache so you have something to compare against:</p>
+      <pre><code>docker compose exec redis redis-cli DBSIZE
+<span class="cmt"># -> (integer) 1   (just user:42 from Exercise 1 — small)</span>
+
+docker compose exec redis redis-cli INFO stats | grep evicted_keys
+<span class="cmt"># -> evicted_keys:0   nothing evicted yet</span></code></pre>
+      <p>Now the fill loop. We build one ~128&nbsp;KB value with a pure-shell doubling trick (no extra tools needed), then <code>SET</code> 500 big keys — roughly <strong>64&nbsp;MB of data aimed at a 10&nbsp;MB cache</strong>. It's a plain <code>for</code> loop calling <code>redis-cli SET</code>, run <em>inside</em> the container in a single <code>exec</code> (500 separate host-side <code>exec</code>s would crawl):</p>
+      <pre><code>docker compose exec redis sh -c '
+  <span class="cmt"># Build a ~128 KB value: start with "x" and double it 17 times (2^17 = 131072 bytes).</span>
+  val=x; for i in $(seq 1 17); do val=$val$val; done
+
+  <span class="cmt"># Write 500 big keys. Far more than 10 MB, so Redis MUST start evicting.</span>
+  for i in $(seq 1 500); do redis-cli SET "bigkey:$i" "$val" >/dev/null; done
+
+  echo "wrote 500 keys x ~128KB into a 10MB cap"
+'
+<span class="cmt"># -> wrote 500 keys x ~128KB into a 10MB cap   (takes a few seconds)</span></code></pre>
+      <p>Now read what actually happened — how many keys survived, how many got evicted, and how memory stayed pinned under the cap:</p>
+      <pre><code>docker compose exec redis redis-cli DBSIZE
+<span class="cmt"># -> (integer) ~70   FAR fewer than the 500+1 you wrote — the rest were evicted</span>
+
+docker compose exec redis redis-cli INFO stats | grep evicted_keys
+<span class="cmt"># -> evicted_keys:430+   Redis threw out this many keys to stay under 10 MB</span>
+
+docker compose exec redis redis-cli INFO memory | grep -E 'used_memory:|used_memory_human:|maxmemory:|maxmemory_human:|maxmemory_policy:'
+<span class="cmt"># -> used_memory:~10000000        parked just below the cap</span>
+<span class="cmt"># -> used_memory_human:~9.5M</span>
+<span class="cmt"># -> maxmemory:10485760</span>
+<span class="cmt"># -> maxmemory_human:10.00M</span>
+<span class="cmt"># -> maxmemory_policy:allkeys-lru</span></code></pre>
+      <p>Finally, prove it was the <em>Least Recently Used</em> keys that got dropped. The very first keys you wrote are the coldest; the last ones are the warmest:</p>
+      <pre><code>docker compose exec redis redis-cli EXISTS bigkey:1
+<span class="cmt"># -> (integer) 0   the oldest, coldest key is gone — evicted first</span>
+
+docker compose exec redis redis-cli EXISTS bigkey:500
+<span class="cmt"># -> (integer) 1   the newest key is still here</span></code></pre>
+      <div class="callout">
+        <p class="lbl">What to observe</p>
+        <p>You wrote ~64&nbsp;MB but <code>used_memory</code> settled just under <strong>10&nbsp;MB</strong> — Redis refuses to exceed its cap. <code>evicted_keys</code> jumped from 0 into the hundreds, and <code>DBSIZE</code> is a fraction of what you inserted: every write past the limit forced an eviction. And <code>bigkey:1</code> (coldest) is gone while <code>bigkey:500</code> (warmest) survives — that's <strong>allkeys-lru</strong> doing its job. Exact numbers vary run to run: LRU is <em>approximate</em> (Redis samples a handful of keys rather than tracking a perfect global order), and memory includes per-key overhead — so treat DBSIZE and evicted_keys as “roughly,” not to the digit.</p>
+      </div>
+
+      <p class="steplbl">Exercise 4 — The cache-aside read pattern (the reason this all matters)</p>
+      <h3>How a real app actually uses everything above</h3>
+      <p>You've now seen the three primitives a cache is made of: fast <code>GET</code>/<code>SET</code>, TTL freshness, and bounded memory via eviction. <strong>Cache-aside</strong> (also called <em>lazy loading</em>) is the pattern that wires them into an application's read path. It's the most common caching strategy in the industry, and it works like this:</p>
+      <ol>
+        <li>A request comes in for some data. The app <strong>checks the cache first</strong> — <code>GET user:42</code>.</li>
+        <li><strong>Cache hit:</strong> Redis returns the value instantly (~100&nbsp;ns from RAM). The app returns it and is done. The database was never touched.</li>
+        <li><strong>Cache miss</strong> (<code>(nil)</code>): the data isn't cached. The app <strong>reads the source of truth — the database</strong> — which is slower (a network hop plus a disk/query).</li>
+        <li>Before returning, the app <strong>populates the cache</strong> with what it just fetched — <code>SET user:42 &lt;value&gt; EX 300</code> — usually with a TTL so the entry can't go stale forever.</li>
+        <li>The <em>next</em> read of <code>user:42</code> is now a hit, served from Redis until its TTL expires or LRU evicts it under memory pressure.</li>
+      </ol>
+      <pre><code><span class="cmt"># The read path, in pseudocode — every line maps to a redis-cli command you just ran:</span>
+value = redis.GET(key)                 <span class="cmt"># check cache first</span>
+if value is nil:                       <span class="cmt"># MISS</span>
+    value = db.query(key)              <span class="cmt"># fall back to the source of truth</span>
+    redis.SET(key, value, EX=300)      <span class="cmt"># populate cache (with a TTL) for next time</span>
+return value                           <span class="cmt"># HIT path returns here directly</span></code></pre>
+      <div class="callout tool">
+        <p class="lbl">The payoff</p>
+        <p>Cache-aside is why a read-heavy service can serve millions of requests without melting its database: the <strong>hot</strong> working set lives in Redis (the ~100&nbsp;ns path), and only <strong>misses</strong> — cold or first-time reads — reach the DB. TTL keeps entries from going stale; LRU eviction keeps the cache pinned to the hottest data when memory is tight. You just operated all three by hand — that's exactly the machinery running under a real app's cache layer.</p>
+      </div>
+    </section>
+
+    <section id="teardown">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Teardown</h2>
+      <p>Stop and remove the container, the network, and any named volumes in one command:</p>
+      <pre><code>docker compose down -v</code></pre>
+      <div class="callout">
+        <p class="lbl">What to observe</p>
+        <p>Everything this lab created is gone — <code>docker compose ps</code> shows nothing for this project, and port <code>6379</code> is free again. Because Redis kept all your keys in RAM (no persistence configured), tearing down wipes the data too — which is exactly how a pure cache should behave. The one source file (<code>docker-compose.yml</code>) stays on disk, so <code>docker compose up -d</code> rebuilds the whole thing in seconds.</p>
+      </div>
+    </section>
+
+    <section id="taught">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>What this taught — and the simulator pairing</h2>
+      <p>In a handful of commands you drove the full mechanics of a production cache tier:</p>
+      <ul>
+        <li><strong>GET / SET</strong> — the in-memory key/value core; the ~100&nbsp;ns read that makes caching worth it.</li>
+        <li><strong>TTL expiry</strong> — <code>SET … EX</code> gives entries a lifetime so cached data can't go stale forever; <code>-2</code>/<code>-1</code> are the “gone” / “no expiry” signals.</li>
+        <li><strong>Bounded memory + LRU eviction</strong> — <code>maxmemory</code> plus <code>allkeys-lru</code> keep the cache pinned to its hottest keys and drop the coldest, visible in <code>INFO stats</code> (<code>evicted_keys</code>) and <code>INFO memory</code> (<code>used_memory</code>).</li>
+        <li><strong>Cache-aside</strong> — the read pattern (check cache → miss → read DB → populate cache) that ties all of the above into a real application.</li>
+      </ul>
+      <div class="callout tool">
+        <p class="lbl">Pair it with the simulator</p>
+        <p>You just watched eviction and TTL on <em>real</em> Redis. Now open the <a href="../../tools/cache-playground.html">🗃️ Cache Playground</a> to explore what's hard to eyeball here — how <strong>hit ratio</strong> moves as you change cache size, TTL, and access skew, and how eviction policies (LRU vs LFU vs FIFO) compare on the same workload. The lab gives you the ground truth; the simulator lets you sweep the knobs and watch the curves. For the theory behind both, see the <a href="../../modules/05-caching-fundamentals.html">Module 5 notes</a>.</p>
+      </div>
+    </section>
+
+    <div class="nextnav">
+      <a href="../../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../../tools/cache-playground.html">Open the Cache Playground →</a>
+    </div>
+
+    <footer>Sandbox Lab 03 · Module 5-6 — Caching · System Design Mastery · official <code>redis:7-alpine</code>, run locally — nothing here reaches the internet.</footer>
+  </div>
+</body>
+</html>

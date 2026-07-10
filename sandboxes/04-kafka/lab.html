@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kafka Partitions &amp; Consumer Groups — Sandbox Lab</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#7048e8; --hue-soft:rgba(112,72,232,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#9775fa;--hue-soft:rgba(151,117,250,.14);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#7048e8;--hue-soft:rgba(112,72,232,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#9775fa;--hue-soft:rgba(151,117,250,.14);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .step{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 20px 6px;margin:22px 0;box-shadow:var(--shadow)}
+  .step > h3{margin-top:2px;display:flex;align-items:baseline;gap:10px}
+  .step .sn{font-family:var(--mono);font-size:12px;font-weight:700;color:#fff;background:var(--hue);border-radius:7px;padding:3px 8px;flex-shrink:0}
+  .step .term{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+  .ok{color:var(--teal)}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../../index.html">Home</a>
+      <a href="../../roadmap-dashboard.html">Roadmap</a>
+      <a href="../../modules/07-messaging-systems.html">Module 7 notes</a>
+      <a href="../../tools/message-queue.html">🧩 the simulator</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Sandbox Lab</span><span class="sep">·</span><span>Module 7 — Messaging</span></p>
+      <h1>Kafka Partitions &amp; Consumer Groups</h1>
+      <p class="sub">Run a real single-broker Kafka in KRaft mode on your own machine, split a topic into three partitions, then watch a consumer group rebalance and its lag move — the exact mechanics behind every "add a queue to absorb load" answer.</p>
+    </header>
+
+    <div class="callout tip">
+      <p class="lbl">Prerequisites</p>
+      <p><strong>Docker Desktop must be running</strong> (check the whale icon / <code>docker info</code> succeeds). Then open a terminal and <code>cd</code> into this folder — every command below is run from here:</p>
+    </div>
+    <pre><code>cd "System Design/sandboxes/04-kafka"</code></pre>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this lab</h2>
+      <ol>
+        <li><a href="#build">What you'll build</a></li>
+        <li><a href="#stack">The stack</a></li>
+        <li><a href="#up">Bring it up</a></li>
+        <li><a href="#exercises">The exercises</a></li>
+        <li><a href="#teardown">Teardown</a></li>
+        <li><a href="#recap">What this taught</a></li>
+      </ol>
+    </nav>
+
+    <section id="build">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>What you'll build</h2>
+      <p class="lead">One Kafka broker, one topic named <code>orders</code> with <strong>three partitions</strong>, and one consumer group <code>g1</code> that you'll grow from one member to two — so you can see partitions get <em>reassigned</em> live.</p>
+      <p>Kafka 3.x runs in <strong>KRaft mode</strong>: the cluster's metadata quorum lives inside Kafka itself, so there is <strong>no ZooKeeper</strong> to run. Our single node wears both hats — it is the <em>broker</em> (serves produce/consume) and the <em>controller</em> (owns the metadata log). That is the whole stack: one container.</p>
+      <p>A <strong>partition</strong> is the unit of parallelism and ordering. A topic's messages are spread across its partitions; order is guaranteed <em>within</em> a partition, not across them. A <strong>consumer group</strong> is a set of consumers that share the work: Kafka assigns each partition to exactly one member of the group. So with 3 partitions, a group can have up to 3 active consumers pulling in parallel — a 4th would sit idle. Add or remove a member and Kafka <strong>rebalances</strong> the assignment.</p>
+
+      <pre><code>                       host  ─  localhost:9092  (published)
+                                     │
+        ┌────────────────────────────▼──────────────────────────────┐
+        │  docker compose service: broker                            │
+        │  apache/kafka:3.7.0   ·   KRaft mode   ·   no ZooKeeper     │
+        │                                                            │
+        │   node 1  =  broker + controller     (quorum on :9093)     │
+        │                                                            │
+        │   topic "orders"                                           │
+        │     ┌───────────┐   ┌───────────┐   ┌───────────┐          │
+        │     │ partition │   │ partition │   │ partition │          │
+        │     │     0     │   │     1     │   │     2     │          │
+        │     └───────────┘   └───────────┘   └───────────┘          │
+        └──────▲───────────────────────────────────────────▲────────┘
+               │ produce                             consume │
+     kafka-console-producer                    consumer group "g1"
+       (writes messages)                         c1  ── owns 2 partitions
+                                                 c2  ── owns 1 partition
+                                                        (after the rebalance)</code></pre>
+
+      <div class="callout">
+        <p class="lbl">The whole point</p>
+        <p>You never write a line of application code here. You drive Kafka's own bundled shell scripts (under <code>/opt/kafka/bin</code>) through <code>docker compose exec</code> — the same tools operators use in production to poke a real cluster.</p>
+      </div>
+    </section>
+
+    <section id="stack">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>The stack</h2>
+      <p>The entire lab is one file — <code>docker-compose.yml</code>. It's a single service using the official Apache image, pinned to <code>3.7.0</code>, configured for single-node KRaft. Read the comments; every environment variable earns its place.</p>
+      <pre><code><span class="cmt"># Sandbox 04 — Kafka Partitions &amp; Consumer Groups</span>
+<span class="cmt"># Single-broker Apache Kafka in KRaft mode (NO ZooKeeper).</span>
+
+services:
+  <span class="cmt"># The one node plays BOTH roles (broker + controller) — quorum self-hosted.</span>
+  broker:
+    image: apache/kafka:3.7.0          <span class="cmt"># official Apache image, pinned tag</span>
+    container_name: kafka-sandbox
+    hostname: broker
+    ports:
+      - "9092:9092"                    <span class="cmt"># bootstrap port, published to the host</span>
+    environment:
+      <span class="cmt"># --- node identity + roles (KRaft) ---</span>
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      <span class="cmt"># --- listeners: bind on 0.0.0.0, advertise localhost ---</span>
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      <span class="cmt"># --- single-node replication factors (must be 1 with one broker) ---</span>
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      <span class="cmt"># --- lab ergonomics: rebalance instantly when a 2nd consumer joins ---</span>
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 1
+    <span class="cmt"># Broker is "up" once the admin API answers a topic list.</span>
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 20s</code></pre>
+      <div class="callout tip">
+        <p class="lbl">Why advertise <code>localhost</code>?</p>
+        <p>A client first asks the broker "where do I send data?" and the broker replies with its <em>advertised</em> address. Because we drive everything from <em>inside</em> the container with <code>docker compose exec</code>, <code>localhost:9092</code> is the address that always resolves — for both the in-container CLI and a host client hitting the published port.</p>
+      </div>
+    </section>
+
+    <section id="up">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Bring it up</h2>
+      <p>Start the broker in the background:</p>
+      <pre><code>docker compose up -d</code></pre>
+      <p>The first run pulls the image (~350 MB) and formats the KRaft storage automatically — give it a moment. Confirm the container is healthy:</p>
+      <pre><code>docker compose ps</code></pre>
+      <p>You want to see <code>kafka-sandbox</code> with state <code>running</code> and, after ~20 s, <code class="ok">healthy</code>. Tail the logs if you're curious:</p>
+      <pre><code>docker compose logs -f broker   <span class="cmt"># Ctrl-C to stop tailing (the broker keeps running)</span></code></pre>
+      <p>Look for <code>Kafka Server started</code>. A quick end-to-end sanity check — list topics (there are none yet, so this returns nothing and exits 0):</p>
+      <pre><code>docker compose exec broker /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 --list</code></pre>
+    </section>
+
+    <section id="exercises">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>The exercises</h2>
+      <p>Do these in order. A couple of steps run <strong>long-lived, foreground</strong> processes (a producer, then consumers) — those need their own terminal windows, all <code>cd</code>'d into this same folder. You'll end up with up to three terminals open at once.</p>
+
+      <div class="step">
+        <h3><span class="sn">4.1</span> Create the topic — 3 partitions <span class="term">terminal 1</span></h3>
+        <pre><code>docker compose exec broker /opt/kafka/bin/kafka-topics.sh \
+  --create \
+  --topic orders \
+  --partitions 3 \
+  --replication-factor 1 \
+  --bootstrap-server localhost:9092</code></pre>
+        <p>Then describe it to see the partition layout:</p>
+        <pre><code>docker compose exec broker /opt/kafka/bin/kafka-topics.sh \
+  --describe --topic orders --bootstrap-server localhost:9092</code></pre>
+        <div class="callout">
+          <p class="lbl">What to observe</p>
+          <p>Three lines, one per partition (<code>Partition: 0</code>, <code>1</code>, <code>2</code>). Each shows <code>Leader: 1</code> and <code>Replicas: 1</code> — our single broker leads every partition. <code>ReplicationFactor: 1</code> means no copies (fine for a lab, never for production). This is the parallelism you just carved out.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <h3><span class="sn">4.2</span> Produce a first batch <span class="term">terminal 1</span></h3>
+        <p>Open the console producer. It reads one message per line from your keyboard until you exit:</p>
+        <pre><code>docker compose exec broker /opt/kafka/bin/kafka-console-producer.sh \
+  --topic orders --bootstrap-server localhost:9092</code></pre>
+        <p>At the <code>&gt;</code> prompt, type a few lines, pressing Enter after each:</p>
+        <pre><code>&gt; order-1
+&gt; order-2
+&gt; order-3
+&gt; order-4
+&gt; order-5
+&gt; order-6</code></pre>
+        <p>Press <strong>Ctrl-C</strong> (or Ctrl-D) to quit the producer and return to your shell.</p>
+        <div class="callout">
+          <p class="lbl">What to observe</p>
+          <p>No key was given, so Kafka's default partitioner spreads these messages across partitions 0/1/2 in batches. You've now seeded the topic — the messages sit durably in their partitions, waiting for a consumer.</p>
+        </div>
+        <div class="callout tip">
+          <p class="lbl">Optional: route by key</p>
+          <p>Want deterministic placement? Produce keyed records — the same key always lands on the same partition: <code>--property parse.key=true --property key.separator=:</code>, then type lines like <code>eu:order-7</code> and <code>us:order-8</code>.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <h3><span class="sn">4.3</span> Consume in group <code>g1</code> <span class="term">terminal 2</span></h3>
+        <p>In a <strong>second</strong> terminal (also <code>cd</code>'d here), start a consumer that joins group <code>g1</code> and reads the topic from the very beginning:</p>
+        <pre><code>docker compose exec broker /opt/kafka/bin/kafka-console-consumer.sh \
+  --topic orders \
+  --group g1 \
+  --from-beginning \
+  --bootstrap-server localhost:9092</code></pre>
+        <div class="callout">
+          <p class="lbl">What to observe</p>
+          <p>All six messages print (order may look shuffled — that's expected, because ordering is per-partition, not global). Leave this consumer <strong>running</strong>. Right now one member owns all three partitions, so it receives everything.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <h3><span class="sn">4.4</span> Add a second consumer — watch the rebalance <span class="term">terminal 3</span></h3>
+        <p>In a <strong>third</strong> terminal, start a <em>second</em> consumer in the <strong>same</strong> group <code>g1</code> (no <code>--from-beginning</code> this time — it should pick up new work, not replay):</p>
+        <pre><code>docker compose exec broker /opt/kafka/bin/kafka-console-consumer.sh \
+  --topic orders \
+  --group g1 \
+  --bootstrap-server localhost:9092</code></pre>
+        <p>Now go back to <strong>terminal 1</strong> and produce a fresh batch so there's new traffic to split:</p>
+        <pre><code>docker compose exec broker /opt/kafka/bin/kafka-console-producer.sh \
+  --topic orders --bootstrap-server localhost:9092</code></pre>
+        <pre><code>&gt; order-7
+&gt; order-8
+&gt; order-9
+&gt; order-10
+&gt; order-11
+&gt; order-12</code></pre>
+        <div class="callout">
+          <p class="lbl">What to observe</p>
+          <p>The instant the second consumer joined, Kafka <strong>rebalanced</strong>: the three partitions are now split across the two members — one gets two partitions, the other gets one. The new messages arrive <em>split between the two terminals</em> instead of all in one. You just watched a consumer group scale out horizontally, live. (Kill one consumer with Ctrl-C and the survivor picks up all three partitions again — another rebalance.)</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <h3><span class="sn">4.5</span> Inspect offsets &amp; LAG <span class="term">terminal 1</span></h3>
+        <p>This is the operator's-eye view. While both consumers are still running, describe the group:</p>
+        <pre><code>docker compose exec broker /opt/kafka/bin/kafka-consumer-groups.sh \
+  --describe --group g1 --bootstrap-server localhost:9092</code></pre>
+        <p>You'll see one row per partition. To make <strong>LAG</strong> jump above zero, stop <em>both</em> consumers (Ctrl-C in terminals 2 and 3), produce another batch, then describe again:</p>
+        <pre><code><span class="cmt"># terminal 1 — with NO consumers running, add a backlog</span>
+docker compose exec broker /opt/kafka/bin/kafka-console-producer.sh \
+  --topic orders --bootstrap-server localhost:9092
+<span class="cmt"># type order-13 … order-18, then Ctrl-C</span>
+
+docker compose exec broker /opt/kafka/bin/kafka-consumer-groups.sh \
+  --describe --group g1 --bootstrap-server localhost:9092</code></pre>
+        <div class="callout">
+          <p class="lbl">What to observe</p>
+          <p>Read the columns per partition: <code>CURRENT-OFFSET</code> (how far the group has read), <code>LOG-END-OFFSET</code> (how far the log has been written), and <code>LAG = LOG-END-OFFSET − CURRENT-OFFSET</code> — the backlog waiting to be processed. With the consumers stopped and 6 new messages produced, total LAG across the partitions is <strong>6</strong>. Restart a consumer in <code>g1</code> and it drains the backlog; describe once more and LAG falls back to <strong>0</strong>. That single number is what on-call engineers page on.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="teardown">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Teardown</h2>
+      <p>Ctrl-C any consumers/producers still in the foreground, then stop and remove everything — container, network, and volumes — with one command:</p>
+      <pre><code>docker compose down -v</code></pre>
+      <p>The <code>-v</code> flag removes the broker's storage too, so the topic, its partitions, and all committed offsets are gone. Next <code>docker compose up -d</code> gives you a pristine cluster.</p>
+    </section>
+
+    <section id="recap">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>What this taught</h2>
+      <p>You now have hands-on, not-just-slideware intuition for the load-bearing ideas of Module 7:</p>
+      <ul>
+        <li><strong>Partitions are parallelism + ordering.</strong> Splitting <code>orders</code> into three let a group process it three-ways; order held <em>within</em> each partition, never across.</li>
+        <li><strong>Consumer groups scale out — up to the partition count.</strong> Two members shared three partitions; a hypothetical fourth would idle. Partition count is the ceiling on consumer parallelism.</li>
+        <li><strong>Rebalancing is automatic and observable.</strong> Membership changed, assignments moved — no code, no downtime.</li>
+        <li><strong>LAG is the health metric.</strong> <code>LOG-END-OFFSET − CURRENT-OFFSET</code> tells you whether consumers are keeping up. Rising lag is the universal "we're falling behind" signal.</li>
+        <li><strong>KRaft removes ZooKeeper.</strong> A modern single-binary Kafka — one image, one process, both roles.</li>
+      </ul>
+      <div class="callout tool">
+        <p class="lbl">Pair it with the simulator</p>
+        <p>You've felt the real mechanics; now build the intuition faster by <em>playing</em> with them. Open the <a href="../../tools/message-queue.html">🧩 Message Queue &amp; Consumer Groups simulator</a> — drag the producer rate up, add and remove consumers, and watch partition assignment and lag react in real time, without waiting on containers. The container taught you it's real; the simulator lets you explore the whole parameter space in seconds. Then read the theory back in the <a href="../../modules/07-messaging-systems.html">Module 7 notes</a>.</p>
+      </div>
+    </section>
+
+    <div class="nextnav">
+      <a href="../../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../../tools/message-queue.html">Open the simulator →</a>
+    </div>
+
+    <footer>Sandbox 04 · System Design Mastery · Module 7 — Messaging Systems · Single-broker Apache Kafka 3.7.0 (KRaft). Nothing here talks to the internet after the image pull.</footer>
+  </div>
+</body>
+</html>

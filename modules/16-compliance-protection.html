@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compliance &amp; Protection | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#d97b2e; --hue-soft:rgba(217,123,46,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#e8934a;--hue-soft:rgba(232,147,74,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#e8934a;--hue-soft:rgba(232,147,74,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 4 · Production-Grade</span><span class="sep">·</span><span>Module 16</span><span class="sep">·</span><span>Weeks 6-8 · ~13 hrs</span></p>
+      <h1>Compliance &amp; Protection</h1>
+      <p class="sub">A design that works isn't done — it has to survive hostile traffic, prove it protects user data, and stand up to an auditor. This module adds the <strong>security and compliance layer</strong> that separates a demo from something you can actually run in production.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#threat">Threat model &amp; defense in depth</a></li>
+        <li><a href="#waf">Web Application Firewall (WAF)</a></li>
+        <li><a href="#ratelimit">Rate limiting &amp; abuse prevention</a></li>
+        <li><a href="#authz">Authorization: RBAC vs ABAC</a></li>
+        <li><a href="#owasp">OWASP Top 10, mapped to architecture</a></li>
+        <li><a href="#compliance">Data residency &amp; compliance</a></li>
+        <li><a href="#supplychain">Supply-chain security</a></li>
+        <li><a href="#casestudy">Worked example: Price Tracking Service</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="threat">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>Threat model &amp; defense in depth</h2>
+      <p class="lead">Security is not a component you bolt on at the end — it's a <strong>property of every layer</strong>, from the edge that receives a packet to the dependency that parses it. The senior move in an interview is to reason about <em>who the attacker is</em> and <em>what they're after</em> before naming a single control.</p>
+      <p>A quick, repeatable threat-modeling lens is <strong>STRIDE</strong>: Spoofing (pretending to be someone else), Tampering (altering data in transit or at rest), Repudiation (denying an action with no audit trail), Information disclosure (leaking data), Denial of service (overwhelming the system), and Elevation of privilege (gaining rights you shouldn't have). Walk any design against those six and the missing controls announce themselves.</p>
+      <p>The organizing principle is <strong>defense in depth</strong>: assume every single layer will eventually fail, and make sure the next one still catches the attack. A WAF might miss a novel injection — but parameterized queries stop it at the database. An auth token might leak — but least-privilege scoping limits the blast radius. No single control is trusted to be perfect.</p>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>A WAF, rate limiting, and encryption are <strong>compensating controls</strong>, not substitutes for secure code. The interviewer wants to hear "and even if that's bypassed, the next layer…". Never present one control as the whole answer.</p>
+      </div>
+      <p>The rest of this module is the toolkit for each layer: the edge (WAF, rate limiting), the application (authorization), the code (OWASP), the data (compliance), and the build (supply chain). Then we run all of it end-to-end on one system.</p>
+    </section>
+
+    <section id="waf">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>Web Application Firewall (WAF)</h2>
+      <p>A <strong>WAF</strong> is a filter that sits in front of your application and inspects <strong>Layer-7 (HTTP/HTTPS)</strong> traffic — the request path, headers, query string, and body — deciding to <em>allow, block, or challenge</em> each request before it reaches your servers. A traditional network firewall reasons about IPs and ports (Layers 3–4); a WAF understands the <em>content</em> of a web request, which is where application attacks live.</p>
+
+      <h3>Two security models</h3>
+      <ul>
+        <li><strong>Negative security model (blocklist)</strong> — match requests against signatures of known attacks (SQL injection patterns, XSS payloads, path traversal). Easy to deploy, but only stops what it recognizes.</li>
+        <li><strong>Positive security model (allowlist)</strong> — permit only traffic that matches a known-good schema and reject everything else. Far stronger, but expensive to build and maintain as the app changes.</li>
+      </ul>
+      <p>Most real WAFs run a <strong>managed ruleset</strong> — commonly the <strong>OWASP Core Rule Set (CRS)</strong> — as a negative baseline, then layer your own custom rules on top. Cloud offerings (Cloudflare, AWS WAF, Azure Front Door) ship these rulesets plus rate-based rules and bot management as a service; a change is often just a DNS/proxy update.</p>
+
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>Always deploy a new WAF in <strong>detection (count) mode</strong> first, watch for <strong>false positives</strong>, tune the rules, <em>then</em> switch to blocking. Saying "I'd run it in count mode and tune before enforcing" signals you've operated one, not just read about it.</p>
+      </div>
+
+      <p>Where does it sit? At the edge, inline on the request path, typically fused with your CDN and load balancer:</p>
+      <pre><code>client ──▶ CDN / edge ──▶ [ WAF ] ──▶ load balancer ──▶ app servers
+                            │
+                            ├─ SQLi / XSS / path-traversal signatures (OWASP CRS)
+                            ├─ rate-based rules  (per-IP, per-path floods)
+                            ├─ IP reputation + geo / bot rules
+                            └─ custom rules  (block unused verbs, oversized bodies)</code></pre>
+      <p>A WAF is your <em>first</em> layer, not your only one. It buys time against automated scanners and known payloads and gives you a place to push an emergency "virtual patch" while you fix the real bug — but a determined attacker with a novel payload can slip past it, which is exactly why the application code behind it still has to be secure.</p>
+    </section>
+
+    <section id="ratelimit">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Rate limiting &amp; abuse prevention</h2>
+      <p><strong>Rate limiting</strong> caps how many requests a client may make in a window. It protects you three ways: it blunts <strong>DoS/brute-force</strong> attacks, it enforces <strong>fairness</strong> (one noisy tenant can't starve the rest), and it maps directly to <strong>plan tiers and cost</strong> (free = 100 req/min, pro = 10k). Nearly every public API needs it.</p>
+
+      <h3>The four algorithms to know</h3>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Algorithm</th><th>How it works</th><th>Trade-off</th></tr></thead>
+          <tbody>
+            <tr><td>Fixed window</td><td>Counter per fixed clock window (e.g. per minute)</td><td>Dead simple; allows a 2× burst straddling the boundary</td></tr>
+            <tr><td>Sliding window log</td><td>Store timestamp of every request, count those in the last N sec</td><td>Exact and smooth; memory grows with traffic</td></tr>
+            <tr><td>Sliding window counter</td><td>Weighted blend of current + previous window counts</td><td>Near-exact, cheap memory — the common production choice</td></tr>
+            <tr><td>Token bucket</td><td>Bucket refills at a steady rate; each request spends a token</td><td>Allows controlled bursts; the default for most API gateways</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The <strong>fixed-window boundary burst</strong> is the classic gotcha: a client sending 100 requests at 00:00:59 and another 100 at 00:01:00 gets 200 through in one second while never breaking a per-minute limit. Sliding-window and token-bucket approaches exist precisely to smooth that out.</p>
+
+      <h3>Where to enforce, and on what key</h3>
+      <p>Push rate limiting as far to the <strong>edge / API gateway</strong> as you can, so junk traffic dies before it touches app servers. In a distributed fleet, every node must agree on the count — so the counter lives in a shared store, typically <strong>Redis</strong>, keyed by the dimension you're protecting:</p>
+      <pre><code><span class="cmt"># Token bucket in Redis, keyed per API key (atomic via Lua / MULTI)</span>
+key   = "rl:{api_key}:{route}"
+allow = redis.call_lua(refill_and_take, key, rate=100, per=60s, cost=1)
+
+<span class="cmt"># On reject — be a good API citizen:</span>
+HTTP/1.1 429 Too Many Requests
+Retry-After: 30
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1720368000</code></pre>
+      <p>Choose the <strong>key</strong> deliberately: per-IP catches crude floods but punishes users behind shared NATs; per-API-key or per-user is fairer and ties to billing; per-endpoint protects an expensive route specifically. Real systems combine several.</p>
+
+      <div class="callout">
+        <p class="lbl">Beyond simple counting</p>
+        <p>Rate limiting is necessary but not sufficient for <strong>abuse prevention</strong>. Layer on: <strong>bot detection</strong> and CAPTCHA/JS challenges for scripted traffic, <strong>credential-stuffing</strong> defenses (device fingerprinting, exponential backoff, breached-password checks) on login, <strong>per-plan quotas</strong> for sustained fairness, and always return <code>429</code> with <code>Retry-After</code> so well-behaved clients back off gracefully.</p>
+      </div>
+    </section>
+
+    <section id="authz">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>Authorization: RBAC vs ABAC</h2>
+      <p>First, separate two words people blur. <strong>Authentication (authn)</strong> is <em>"who are you?"</em> — proving identity (password, OAuth token, mTLS). <strong>Authorization (authz)</strong> is <em>"what are you allowed to do?"</em> — the decision this section is about. You authenticate once; you authorize on <em>every</em> request.</p>
+
+      <h3>RBAC — Role-Based Access Control</h3>
+      <p>Users are assigned <strong>roles</strong> (<code>viewer</code>, <code>editor</code>, <code>admin</code>); roles carry <strong>permissions</strong>. The check is "does this user's role include this permission?" It's simple, easy to audit, and correct for the vast majority of systems. Its weakness is <strong>role explosion</strong>: once you need "editors, but only for their own team's documents, on weekdays," you end up minting a combinatorial pile of hyper-specific roles.</p>
+
+      <h3>ABAC — Attribute-Based Access Control</h3>
+      <p>Access is decided by a <strong>policy</strong> that evaluates <strong>attributes</strong> of four things: the <em>subject</em> (user's department, clearance), the <em>resource</em> (owner, sensitivity, tier), the <em>action</em> (read/write/delete), and the <em>environment</em> (time, IP, region). It's dynamic and fine-grained — "allow if <code>resource.owner == user.id</code>" — but harder to reason about and audit, because a decision now depends on live data, not a static grant.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Dimension</th><th>RBAC</th><th>ABAC</th></tr></thead>
+          <tbody>
+            <tr><td>Decision basis</td><td>Static role → permission</td><td>Live attributes + policy rules</td></tr>
+            <tr><td>Granularity</td><td>Coarse (per role)</td><td>Fine (per request context)</td></tr>
+            <tr><td>Context-aware</td><td>No (role is fixed)</td><td>Yes (time, ownership, location)</td></tr>
+            <tr><td>Auditability</td><td>Easy — list who has a role</td><td>Harder — must evaluate policies</td></tr>
+            <tr><td>Best when</td><td>Stable, well-defined job functions</td><td>Ownership, tenancy, dynamic rules</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>In practice you <strong>combine them</strong>: RBAC for the coarse cut (is this a <code>free</code>, <code>pro</code>, or <code>admin</code> user?), ABAC for the fine cut (does this user <em>own</em> the specific record they're touching?). That ownership check is the one interviewers care about most — skipping it is the single most common real-world vulnerability, which you'll meet as OWASP <strong>A01</strong> in the next section.</p>
+
+      <div class="callout tip">
+        <p class="lbl">Architecture pattern</p>
+        <p>Decouple the decision from the enforcement: a <strong>Policy Decision Point (PDP)</strong> answers "allow or deny?" while a <strong>Policy Enforcement Point (PEP)</strong> in each service asks and obeys. Tools like <strong>Open Policy Agent (OPA)</strong> or AWS <strong>Cedar</strong> externalize policy as code; <strong>ReBAC</strong> (relationship-based, à la Google Zanzibar / SpiceDB) is the modern take for "can user X access object Y through some relationship?" — the model behind Google Docs sharing.</p>
+      </div>
+    </section>
+
+    <section id="owasp">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>OWASP Top 10, mapped to architecture</h2>
+      <p>The <strong>OWASP Top 10</strong> is the industry's consensus list of the most critical web application security risks, refreshed every few years. You are not expected to recite all ten in an interview — but you <em>are</em> expected to name the relevant ones for <em>your</em> design and point to the architectural control that mitigates each. Here is the 2021 list, each mapped to where it lives in a system.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>#</th><th>Risk</th><th>Architectural mitigation</th></tr></thead>
+          <tbody>
+            <tr><td>A01</td><td>Broken Access Control</td><td>Enforce ownership on every object (ABAC), deny-by-default, no IDOR — server checks, never the client</td></tr>
+            <tr><td>A02</td><td>Cryptographic Failures</td><td>TLS everywhere, encrypt PII at rest, managed KMS, no home-rolled crypto or secrets in code</td></tr>
+            <tr><td>A03</td><td>Injection (SQL/NoSQL/cmd)</td><td>Parameterized queries, ORM, input validation, WAF as backstop</td></tr>
+            <tr><td>A04</td><td>Insecure Design</td><td>Threat-model early, secure defaults, rate limits and quotas designed in</td></tr>
+            <tr><td>A05</td><td>Security Misconfiguration</td><td>Hardened images, least-privilege IAM, no default creds, disable debug endpoints</td></tr>
+            <tr><td>A06</td><td>Vulnerable &amp; Outdated Components</td><td>Dependency scanning + SBOM (see §07); patch on a cadence</td></tr>
+            <tr><td>A07</td><td>Identification &amp; Auth Failures</td><td>MFA, strong session handling, lockout &amp; rate limiting on login</td></tr>
+            <tr><td>A08</td><td>Software &amp; Data Integrity Failures</td><td>Signed artifacts, verified CI/CD, no unsigned deserialization</td></tr>
+            <tr><td>A09</td><td>Logging &amp; Monitoring Failures</td><td>Centralized audit logs, alerting, tamper-evident trails (also SOC 2 evidence)</td></tr>
+            <tr><td>A10</td><td>Server-Side Request Forgery (SSRF)</td><td>Allowlist outbound hosts, block link-local/metadata IPs, no raw user URLs to <code>fetch</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Two of these dominate modern designs. <strong>A01 (Broken Access Control)</strong> is consistently #1 — usually an <strong>IDOR</strong> (Insecure Direct Object Reference): <code>GET /orders/1043</code> returns someone else's order because the code checked <em>authentication</em> but never re-checked <em>ownership</em>. The fix is the ABAC ownership check from §04, on every read and write, server-side.</p>
+      <p><strong>A10 (SSRF)</strong> matters the instant your backend fetches a URL supplied by a user — image proxies, webhooks, link previews, scrapers. An attacker points you at <code>http://169.254.169.254/</code> (the cloud metadata endpoint) and exfiltrates your instance credentials. The control is a strict outbound <strong>allowlist</strong> plus blocking private/link-local ranges. Keep this one in your pocket — it's the deep-dive that wins the Price Tracking case study below.</p>
+    </section>
+
+    <section id="compliance">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>Data residency &amp; compliance</h2>
+      <p>Compliance is where <em>legal</em> requirements become <em>architectural</em> ones. You don't need to be a lawyer, but a senior engineer must know what these three regimes <strong>force into the design</strong> — because "we'll store all users in one US database" can be an illegal architecture, not just a suboptimal one.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Regime</th><th>Scope</th><th>What it forces into your design</th></tr></thead>
+          <tbody>
+            <tr><td>GDPR</td><td>Personal data of people in the EU</td><td>Lawful basis + consent, data-subject rights, breach notice, minimization, residency</td></tr>
+            <tr><td>SOC 2</td><td>B2B service providers (trust report)</td><td>Auditable controls: access, change mgmt, monitoring, encryption — with evidence</td></tr>
+            <tr><td>HIPAA</td><td>US healthcare data (PHI)</td><td>Technical safeguards, encryption, access logs, signed BAAs with vendors</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>GDPR — the one that reshapes architecture</h3>
+      <p>The EU's General Data Protection Regulation grants users concrete <strong>data-subject rights</strong> that you must be able to satisfy on demand: access (export their data), <strong>erasure</strong> ("right to be forgotten"), rectification, and portability. It also mandates <strong>data minimization</strong> (collect only what you need), <strong>privacy by design and by default</strong>, and <strong>breach notification within 72 hours</strong>. Penalties reach the greater of <strong>€20M or 4% of global annual revenue</strong> — which is why this drives design, not just paperwork.</p>
+      <p>Two implications hit your architecture hardest:</p>
+      <ul>
+        <li><strong>Right to erasure → cascade deletes.</strong> "Delete my account" must actually purge PII across every store — primary DB, replicas, caches, search indexes, backups (or documented, time-bounded backup expiry), and analytics. If you denormalized a user's email into five tables, you now own five deletes. Design for this from day one; retrofitting it is brutal.</li>
+        <li><strong>Data residency → regional pinning.</strong> Some data legally must <em>stay in region</em>. That pushes you toward <strong>geo-sharding</strong>: an EU user's PII lives in an EU region; cross-border transfer needs an adequacy decision or Standard Contractual Clauses. "Shard by region" becomes a compliance requirement, not a performance one.</li>
+      </ul>
+
+      <p><strong>SOC 2</strong> is a report, not a law — an independent auditor attests that your controls meet the Trust Services Criteria (security, availability, processing integrity, confidentiality, privacy). <em>Type I</em> checks design at a point in time; <em>Type II</em> checks that controls <em>operated</em> over 6–12 months. Practically, it forces the boring-but-real work: centralized audit logging, least-privilege access reviews, change management, and encryption — the same A09 controls from the OWASP table, now with evidence.</p>
+      <p><strong>HIPAA</strong> governs US health data (PHI) and demands administrative, physical, and technical safeguards — encryption in transit and at rest, strict access controls, immutable audit logs of who viewed what — plus a signed <strong>Business Associate Agreement (BAA)</strong> with every vendor that touches PHI (your cloud provider included).</p>
+
+      <div class="callout">
+        <p class="lbl">The design takeaway</p>
+        <p>Compliance turns into three concrete architectural moves: <strong>encrypt PII</strong> (at rest + in transit), <strong>log every access</strong> to sensitive data immutably, and <strong>be able to find and delete a single user's data</strong> across the whole system. If your design can do those three, most of GDPR/SOC 2/HIPAA falls out naturally.</p>
+      </div>
+    </section>
+
+    <section id="supplychain">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Supply-chain security</h2>
+      <p>Modern services are mostly other people's code — a typical app pulls in hundreds of transitive dependencies. Attackers noticed. <strong>Log4Shell</strong> (a single logging library, 2021), <strong>SolarWinds</strong> (a poisoned build pipeline, 2020), and the <strong>xz backdoor</strong> (a maintainer-level social-engineering attack, 2024) all weaponized the supply chain rather than your code. This is OWASP <strong>A06</strong> and <strong>A08</strong> made concrete.</p>
+
+      <h3>The core controls</h3>
+      <ul>
+        <li><strong>SBOM (Software Bill of Materials)</strong> — a machine-readable inventory of every component and version in a build, in a standard format (<strong>SPDX</strong> or <strong>CycloneDX</strong>). When the next Log4Shell drops, an SBOM answers "are we affected, and where?" in seconds instead of a frantic week.</li>
+        <li><strong>Dependency / SCA scanning</strong> — Software Composition Analysis tools (Dependabot, Snyk, OWASP Dependency-Check, Trivy) match your dependency tree against CVE databases and open PRs to bump vulnerable versions. Run it in CI, gate on severity.</li>
+        <li><strong>Pin &amp; lock</strong> — commit lockfiles and pin versions so a build is reproducible and a compromised upstream release can't silently slide in. Beware <strong>typosquatting</strong> (<code>reqeusts</code> vs <code>requests</code>).</li>
+        <li><strong>Sign &amp; verify provenance</strong> — sign artifacts (Sigstore/cosign) and generate provenance attestations so a deploy can verify <em>this artifact was built from that source by our pipeline</em>. The <strong>SLSA</strong> framework grades exactly this maturity.</li>
+      </ul>
+
+      <pre><code><span class="cmt"># Supply-chain gate, wired into CI</span>
+commit ──▶ CI build
+             ├─ generate SBOM        (CycloneDX)          <span class="cmt"># what's in here?</span>
+             ├─ SCA scan vs CVE DB   (fail on HIGH/CRIT)  <span class="cmt"># A06 gate</span>
+             ├─ sign artifact        (cosign)             <span class="cmt"># A08 integrity</span>
+             └─ attach provenance    (SLSA attestation)
+                     │
+                     ▼
+              deploy verifies signature + provenance before running</code></pre>
+
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>When asked "how do you keep dependencies safe?", don't just say "we update them." Say: <em>"SBOM for inventory, SCA scanning gated in CI, pinned lockfiles for reproducibility, and signed artifacts with provenance so we know what we deployed."</em> That four-part answer reads as production experience.</p>
+      </div>
+    </section>
+
+    <section id="casestudy">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Worked example: Price Tracking Service</h2>
+      <p>Let's run the 5-step framework on a system that touches <em>every</em> concept above — <em>"Design a service that tracks product prices across e-commerce sites and alerts users when a price drops."</em> It has a public API (WAF, rate limiting), user PII (GDPR), plan tiers (RBAC/ABAC), a URL-fetching scraper (SSRF), and a big dependency tree (supply chain). Perfect stress test.</p>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Functional:</strong> user adds a product URL + target price; the system scrapes prices on a schedule; on a drop below target, notify by email/push; user views price history and manages watches via a dashboard and public API.</li>
+        <li><strong>Non-functional:</strong> a hardened public API (untrusted callers), <strong>PII protection + GDPR</strong> (we store emails and behavioral data on EU users), high availability of alerts, correctness of price data, <strong>abuse resistance</strong> (both attackers hitting our API and us over-scraping target sites), and auditability (heading toward SOC 2).</li>
+        <li><strong>Out of scope (say it):</strong> the payment/billing flow, the ML "is this a genuine deal" model — keep the core tight.</li>
+      </ul>
+
+      <h3>② Estimate</h3>
+      <pre><code>users               = 5M,  avg 20 watches each  → 100M watch rows
+distinct products   ≈ 10M    <span class="cmt">(many users watch the SAME item → dedupe!)</span>
+scrape cadence      = hourly → 10M ÷ 3,600s ≈ ~2,800 scrapes/s   <span class="cmt">(outbound = the real load)</span>
+price samples       = 10M × 24 = 240M rows/day
+history storage     = 240M × 365 × 3yr × ~50 B ≈ ~13 TB          <span class="cmt">→ time-series store, downsample old data</span>
+dashboard reads     ≈ a few hundred QPS, bursty                  <span class="cmt">→ cache latest price per product</span></code></pre>
+      <p>The estimate already made the key decision: <strong>scrape the product, not the watch.</strong> Deduping 100M watches down to 10M distinct products cuts outbound load 10× and keeps us from hammering target sites — a correctness <em>and</em> a good-citizen win.</p>
+
+      <h3>③ Interface</h3>
+      <pre><code><span class="cmt"># Create a watch (auth: OAuth token or API key; rate-limited per key)</span>
+POST /api/v1/watches
+  body:    { "productUrl": "https://shop.example/item/42", "targetPrice": 59.99 }
+  returns: 201 { "watchId": "w_8xK2", "productId": "p_5521" }
+
+<span class="cmt"># Read a product's price history (only if you own a watch on it)</span>
+GET /api/v1/products/{productId}/history?from=...&amp;to=...
+  returns: 200 { "points": [ { "t": ..., "price": ... }, ... ] }
+
+<span class="cmt"># GDPR: export or erase all of my data</span>
+GET    /api/v1/me/export        → 200 (async job → signed download)
+DELETE /api/v1/me               → 202 (cascade-delete PII across all stores)</code></pre>
+
+      <h3>④ High-level design</h3>
+      <pre><code>                         ┌── WAF + rate limit (per API key, Redis token bucket) ──┐
+client ──▶ CDN / edge ──▶│  API gateway  (authn → authz: RBAC tier + ABAC owner)  │──▶ app services
+                         └────────────────────────────────────────────────────────┘        │
+                                                                                             ▼
+  users │ watches │ products │ price_history        ◀── primary DB (PII encrypted, EU-sharded)
+                                   ▲                                                          │
+        scrape scheduler ──▶ job queue ──▶ scraper workers ──▶ fetch target site ──▶ write price
+                                                  │                                           │
+                                                  └─ on drop below target ──▶ notification service ──▶ email/push</code></pre>
+      <p>One request path for humans/API clients (guarded by WAF → gateway → authz), and a separate scraping pipeline (scheduler → queue → workers) that produces the price data the alerts run on.</p>
+
+      <h3>⑤ Deep-dive &amp; scale — the security &amp; compliance layer</h3>
+      <p>This is where the module pays off. Walk each control against the design:</p>
+      <ul>
+        <li><strong>Edge (WAF + rate limiting).</strong> The public API sits behind a WAF running the OWASP CRS, with per-API-key token-bucket limits in Redis enforcing plan tiers (free = 100 req/min, pro = 10k) and returning <code>429 + Retry-After</code>. This is A04-by-design plus DoS protection.</li>
+        <li><strong>Authorization (RBAC + ABAC).</strong> <strong>RBAC</strong> handles the coarse tier — <code>free</code> caps at 5 watches, <code>pro</code> at 1,000, <code>admin</code> for support. <strong>ABAC</strong> handles the fine cut: <code>GET /products/{id}/history</code> must verify the caller <em>owns a watch</em> on that product. Skip that ownership check and you've shipped an <strong>IDOR / A01</strong> — the top risk on the list.</li>
+        <li><strong>SSRF (A10) — the signature deep-dive.</strong> Our scraper fetches <em>user-supplied URLs</em>. Naïvely, an attacker submits <code>productUrl = http://169.254.169.254/latest/meta-data/</code> and the worker cheerfully returns our cloud credentials. Mitigation: resolve the host and <strong>block private, loopback, and link-local ranges</strong>, enforce an <strong>allowlist of real e-commerce domains</strong>, disable redirects to internal targets, and run scraper workers in an <strong>egress-restricted sandbox</strong>. Naming SSRF here, unprompted, is the strongest single signal in this interview.</li>
+        <li><strong>Injection (A03).</strong> Product URLs and search terms hit the DB via parameterized queries only; the WAF is the backstop, not the primary defense.</li>
+        <li><strong>Compliance (GDPR).</strong> We store minimal PII (email), encrypted at rest with a managed KMS. <code>DELETE /me</code> triggers a cascade purge across primary DB, replicas, caches, the search index, and analytics, with backups on a documented expiry. EU users' PII is pinned to an EU shard (residency). Every access to a user's data is written to an immutable audit log — which doubles as SOC 2 (A09) evidence.</li>
+        <li><strong>Supply chain.</strong> The scrapers pull a large tree of HTTP/HTML-parsing libraries — prime A06/A08 surface. CI generates an SBOM, runs SCA gated on HIGH/CRITICAL CVEs, pins lockfiles, and signs artifacts with provenance so we deploy only what we built.</li>
+        <li><strong>Scale.</strong> Shard <code>price_history</code> by <code>product_id</code> in a time-series store (write-heavy, 240M rows/day) and downsample data older than 90 days; cache the latest price per product for dashboard reads; the job queue absorbs scrape spikes; and per-target-domain rate limits keep us a good citizen of the sites we scrape.</li>
+      </ul>
+
+      <div class="callout">
+        <p class="lbl">Why this design scores</p>
+        <p>A junior answer draws the boxes and stops. A senior answer walks the <strong>same</strong> boxes a second time through the security lens — WAF, ownership checks, SSRF, cascade deletes, signed builds — naming the OWASP category and compliance driver at each step. That second pass <em>is</em> this module.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Your reps this week</h2>
+      <p>Reading security is not doing security — reps are. Work these in order:</p>
+      <ol>
+        <li><strong>Whiteboard the Price Tracking Service yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design it end-to-end with the 5-step framework, timed to ~35 minutes, <em>before</em> re-reading Section 08. Force yourself to add the security layer on a second pass — WAF, authz, SSRF, GDPR deletes, supply chain.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your design against security pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff security-minded engineer running a system design interview. Give me the prompt: "Design a Price Tracking Service that scrapes product prices and alerts users on a price drop." Then act as the interviewer — let me drive through requirements, estimation, API, and high-level design. Push hard on the security and compliance layer: ask how I stop one user reading another's data, what happens when a user submits a malicious productUrl, how "delete my account" works under GDPR, how I rate-limit the public API, and how I keep my scraper's dependencies safe. Push back on anything hand-wavy and keep asking "why?" and "what if that's bypassed?". Do NOT give me the answer. After ~35 minutes (or when I say "done"), grade me 1–5 on each of: requirements gathering, capacity estimation, API design, high-level design, security &amp; compliance depth (WAF, RBAC/ABAC, OWASP mapping, GDPR, supply chain), and communication — with specific feedback and what a strong candidate would have added.</div>
+        <ol start="3">
+        <li><strong>Threat-model it.</strong> Walk your Price Tracking design against the OWASP Top 10 table in §05, one row at a time. For each risk, either name your mitigation or write "GAP" — then fix the gaps. Bonus: run the same design through STRIDE.</li>
+        <li><strong>Explain RBAC vs ABAC back</strong> to a rubber duck (or me) without notes, then justify which one guards the "can this user see this product's history?" check. If you can't explain why the ownership check is ABAC, not RBAC, that's a gap you don't have yet.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>Which OWASP category is reading another user's record via a guessed ID, and the fix? · Which OWASP risk does a URL-fetching scraper introduce, and how do you block it? · Fixed-window vs token bucket — which avoids the boundary burst? · What three things must "delete my account" do to satisfy GDPR? · Name the four supply-chain controls (inventory → scan → pin → sign).</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the OWASP and authorization ones <em>before</em> your reps; save the deeper GDPR talk for when you want to go past the basics.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=hryt-rCLJUA" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>OWASP Top 10 2021 — The List and How You Should Use It</b><div class="ch">Cyber Citadel <span class="dur">· ~9 min · OWASP overview</span></div><p>Clear walk through all ten risks — the mental checklist for §05. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=gLKkvDRj5fs" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>OWASP Top 10 API Security Risks: How To Protect Your APIs from Hackers</b><div class="ch">apiguru <span class="dur">· ~14 min · API security</span></div><p>The API-specific angle — broken auth, IDOR, and resource abuse on public endpoints.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=rvZ35YW4t5k" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Role-Based Access Control (RBAC) vs. Attribute-Based Access Control (ABAC)</b><div class="ch">IBM Technology <span class="dur">· ~8 min · authorization</span></div><p>The clearest short explainer of the two models and when each fits.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=ZMwK-w4pyGY" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>RBAC vs. ABAC: Which Should You Use?</b><div class="ch">Keeper Security <span class="dur">· ~2 min · decision guide</span></div><p>A fast decision-oriented take to lock in the §04 trade-off.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=UlInbFEOlqg" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>How Does a WAF Work? — Web Application Firewall Explained</b><div class="ch">Indusface <span class="dur">· ~2 min · WAF</span></div><p>A crisp animation of L7 filtering — signatures, rules, and where the WAF sits.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=6SHc7DWDDs4" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Privacy and GDPR: What All Developers Should Know</b><div class="ch">NDC Conferences <span class="dur">· ~60 min · GDPR for engineers</span></div><p>A full conference talk on what GDPR actually asks of the people writing the code. The deep dive — save it for after the basics.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> the <a href="https://github.com/donnemartin/system-design-primer#security" target="_blank" rel="noopener">System Design Primer — Security</a> section (free) for the interview-shaped summary, and the <a href="https://owasp.org/www-project-application-security-verification-standard/" target="_blank" rel="noopener">OWASP ASVS</a> plus the OWASP Cheat Sheet Series as the definitive control checklists. (DDIA has no security chapter — this is the topic where the OWASP references beat the textbook.)</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/17-cloud-architecture-aws.html">Next module →</a>
+    </div>
+
+    <footer>Module 16 of 24 · System Design Mastery · Phase 4 · Production-Grade · Next up: Module 17 — Cloud Architecture on AWS.</footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Real-Time Transport Compare — System Design</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b1016;
+    --panel:#121a23;
+    --panel-2:#0e151d;
+    --border:#223140;
+    --border-soft:#1a2530;
+    --text:#cdd9e5;
+    --muted:#7d8fa1;
+    --faint:#54626f;
+    --accent:#34d3e0;
+    --accent-dim:rgba(52,211,224,.14);
+    --violet:#9d8bff;
+    --ok:#3fb950;
+    --warn:#e3b341;
+    --crit:#f85149;
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1100px 600px at 82% -8%, rgba(52,211,224,.06), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 56px}
+
+  /* header */
+  header{margin-bottom:22px}
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 10px;display:flex;align-items:center;gap:9px;
+  }
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  h1{
+    font-family:var(--mono);font-weight:600;font-size:clamp(26px,4.4vw,40px);
+    letter-spacing:-.01em;margin:0 0 10px;text-wrap:balance;
+  }
+  .lede{max-width:70ch;color:var(--muted);font-size:15.5px;margin:0}
+  .lede b{color:var(--text);font-weight:600}
+
+  /* layout */
+  .grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:24px}
+  @media(min-width:900px){.grid{grid-template-columns:1.5fr 1fr}}
+
+  .panel{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--border);border-radius:14px;
+  }
+  .stage{position:relative;min-height:420px;overflow:hidden}
+  @media(min-width:900px){.stage{min-height:488px}}
+  canvas#stagec{display:block;width:100%;height:100%;position:absolute;inset:0}
+  .stage-min{min-height:420px}
+  @media(min-width:900px){.stage-min{min-height:488px}}
+
+  .legend{
+    position:absolute;left:14px;bottom:12px;display:flex;gap:14px;flex-wrap:wrap;
+    font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.04em;
+    background:rgba(11,16,22,.55);padding:6px 10px;border-radius:8px;border:1px solid var(--border-soft);
+    backdrop-filter:blur(3px);
+  }
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:8px;height:8px;border-radius:2px;display:inline-block}
+
+  .side{display:flex;flex-direction:column;gap:16px}
+
+  /* comparison table */
+  .cmpcard{padding:14px 15px;border:1px solid var(--border);border-radius:14px;background:var(--panel)}
+  .cmpcard .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 10px}
+  .tablewrap{overflow-x:auto}
+  table.cmp{border-collapse:collapse;width:100%;font-family:var(--mono);font-variant-numeric:tabular-nums}
+  table.cmp th,table.cmp td{text-align:right;padding:8px 9px;white-space:nowrap}
+  table.cmp th{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:500;border-bottom:1px solid var(--border-soft)}
+  table.cmp th:first-child,table.cmp td:first-child{text-align:left}
+  table.cmp td{font-size:13px;border-bottom:1px solid var(--border-soft)}
+  table.cmp tr:last-child td{border-bottom:0}
+  table.cmp td.name{font-weight:600}
+  table.cmp .tag{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:7px;vertical-align:middle}
+  .lat{font-weight:600}
+  .lat.ok{color:var(--ok)} .lat.warn{color:var(--warn)} .lat.crit{color:var(--crit)}
+  .bidi-y{color:var(--ok)} .bidi-n{color:var(--faint)}
+  .cell-sub{color:var(--faint);font-weight:400}
+  .overhead{margin-top:11px;font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.02em;line-height:1.55;font-variant-numeric:tabular-nums}
+  .overhead b{color:var(--text);font-weight:600}
+  .overhead .hot{color:var(--warn)}
+
+  /* aside chip */
+  .aside{margin-top:11px;padding:9px 11px;border:1px dashed var(--border);border-radius:10px;background:var(--panel-2);
+    font-size:11.5px;color:var(--faint);line-height:1.55}
+  .aside b{color:var(--muted);font-weight:600}
+
+  /* coaching */
+  .coach{padding:15px 16px;border:1px solid var(--border);border-radius:14px;background:var(--panel);border-left:3px solid var(--accent)}
+  .coach .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+  .coach p{margin:0;font-size:14px;color:var(--text)}
+
+  /* events */
+  .events{padding:13px 16px;border:1px solid var(--border-soft);border-radius:14px;background:var(--panel-2)}
+  .events .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+  .events ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;min-height:54px}
+  .events li{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;gap:8px;animation:slideIn .3s ease}
+  .events li .ts{color:var(--faint);flex-shrink:0}
+  .events li b{color:var(--text);font-weight:600}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+  /* controls */
+  .controls{grid-column:1/-1;padding:18px;display:flex;flex-wrap:wrap;gap:22px;align-items:flex-end}
+  .ctrl{display:flex;flex-direction:column;gap:8px}
+  .ctrl>label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+  .slider{display:flex;align-items:center;gap:12px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:200px;height:4px;background:var(--border);border-radius:3px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px rgba(52,211,224,.5)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--accent);cursor:pointer}
+  .rps-val{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--accent);min-width:96px;font-variant-numeric:tabular-nums}
+
+  .switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+  .switch input{position:absolute;opacity:0;width:0;height:0}
+  .track{width:42px;height:24px;background:var(--border);border-radius:12px;position:relative;transition:background .16s;flex-shrink:0}
+  .track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--muted);transition:transform .16s,background .16s}
+  .switch input:checked+.track{background:var(--accent-dim);box-shadow:inset 0 0 0 1px var(--accent)}
+  .switch input:checked+.track::after{transform:translateX(18px);background:var(--accent)}
+  .switch .txt{font-family:var(--mono);font-size:12px;color:var(--text)}
+
+  .act{font-family:var(--mono);font-size:12px;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(52,211,224,.35);border-radius:9px;padding:9px 14px;cursor:pointer;transition:background .12s,box-shadow .12s}
+  .act:hover{background:rgba(52,211,224,.22);box-shadow:0 0 0 1px rgba(52,211,224,.4)}
+  .ghost{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:9px 14px;cursor:pointer;transition:color .12s,border-color .12s}
+  .ghost:hover{color:var(--crit);border-color:var(--crit)}
+
+  /* experiments */
+  .labcard{grid-column:1/-1;padding:20px 22px;border:1px solid var(--border);border-radius:14px;background:
+    linear-gradient(180deg,rgba(52,211,224,.03),transparent),var(--panel)}
+  .labcard h2{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  .labs{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:640px){.labs{grid-template-columns:1fr 1fr}}
+  .lab{display:flex;gap:12px;align-items:flex-start}
+  .lab .n{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(52,211,224,.3);width:24px;height:24px;border-radius:6px;display:grid;place-items:center;flex-shrink:0}
+  .lab p{margin:0;font-size:13.5px;color:var(--muted)}
+  .lab p b{color:var(--text);font-weight:600}
+
+  footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.03em}
+  footer b{color:var(--muted);font-weight:600}
+
+  button:focus-visible,input:focus-visible,.switch input:focus-visible+.track{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+  }
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(11,16,22,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:30}
+  .topnav .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .topnav .navlinks{display:flex;gap:6px;flex-wrap:wrap}
+  .topnav .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;transition:color .12s,background .12s}
+  .topnav .navlinks a:hover{color:var(--accent);background:var(--accent-dim)}
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <a class="brand" href="../index.html">◇ SD Mastery</a>
+  <div class="navlinks">
+    <a href="../index.html">Home</a>
+    <a href="../roadmap-dashboard.html">Roadmap</a>
+    <a href="../modules/10-realtime-async-apis.html">Module 10 notes</a>
+    <a href="load-balancer-simulator.html">Load Balancer</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow"><span class="dot"></span>System Design · Module 10 — Real-Time APIs</p>
+    <h1>Real-Time Transport Compare</h1>
+    <p class="lede">Three ways to get server events into a browser, racing side by side. A server emits events at a rate <b>you control</b>; watch <b>WebSocket</b> push instantly over a two-way channel, <b>SSE</b> stream one-way over a held connection, and <b>long-polling</b> re-open a fresh request for every single event. Push the rate up and see long-poll's <b>reconnect gap</b> turn into backlog and latency — the exact tradeoff you defend in the interview.</p>
+  </header>
+
+  <div class="grid">
+    <!-- stage -->
+    <div class="panel stage stage-min" aria-label="Live diagram: one server emitting the same event stream to three browser clients over WebSocket, SSE, and long-polling.">
+      <canvas id="stagec"></canvas>
+      <div class="legend" aria-hidden="true">
+        <span><i style="background:#34d3e0"></i>WebSocket</span>
+        <span><i style="background:#9d8bff"></i>SSE</span>
+        <span><i style="background:#e3b341"></i>long-poll</span>
+        <span><i style="background:#f85149"></i>separate request</span>
+      </div>
+    </div>
+
+    <!-- side -->
+    <div class="side">
+      <div class="cmpcard" role="group" aria-label="Live transport comparison">
+        <p class="lbl">Live comparison</p>
+        <div class="tablewrap">
+          <table class="cmp">
+            <thead>
+              <tr>
+                <th scope="col">Transport</th>
+                <th scope="col">Latency</th>
+                <th scope="col">Open conn</th>
+                <th scope="col">Req / event</th>
+                <th scope="col">Bidi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="name"><span class="tag" style="background:#34d3e0"></span>WebSocket</td>
+                <td><span class="lat ok" id="ws-lat">50<span class="cell-sub">ms</span></span></td>
+                <td>1</td>
+                <td>0</td>
+                <td class="bidi-y" id="ws-bidi">yes</td>
+              </tr>
+              <tr>
+                <td class="name"><span class="tag" style="background:#9d8bff"></span>SSE</td>
+                <td><span class="lat ok" id="sse-lat">50<span class="cell-sub">ms</span></span></td>
+                <td>1</td>
+                <td>0</td>
+                <td class="bidi-n">no</td>
+              </tr>
+              <tr>
+                <td class="name"><span class="tag" style="background:#e3b341"></span>Long-poll</td>
+                <td><span class="lat ok" id="lp-lat">50<span class="cell-sub">ms</span></span></td>
+                <td>1<span class="cell-sub">&#8635;</span></td>
+                <td>&#8776;1</td>
+                <td class="bidi-n">no</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="overhead" id="overhead">Requests opened so far — <b>WebSocket</b> 1 · <b>SSE</b> 1 · <b>long-poll</b> 0.</p>
+        <p class="aside"><b>Where do webhooks fit?</b> They don't — a webhook is the <b>server-to-server</b> cousin: one backend HTTP-POSTs an event to another backend's URL. It can't push to a browser tab, so it isn't in this race. These three are the browser-facing options.</p>
+      </div>
+
+      <div class="coach">
+        <p class="lbl">What's happening</p>
+        <p id="coach" aria-live="polite">All three transports deliver in about the same time at a low event rate — the difference isn't speed, it's cost. Turn up the rate to expose it.</p>
+      </div>
+
+      <div class="events">
+        <p class="lbl">Event log</p>
+        <ul id="events" aria-live="polite"><li><span class="ts">0s</span>Simulator started · server emitting to 3 clients</li></ul>
+      </div>
+    </div>
+
+    <!-- controls -->
+    <div class="panel controls">
+      <div class="ctrl">
+        <label for="rate">Server event rate</label>
+        <div class="slider">
+          <input type="range" id="rate" min="1" max="20" step="1" value="5" aria-describedby="rate-out">
+          <span class="rps-val" id="rate-out">5 events/s</span>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>Bidirectional test</label>
+        <button class="act" id="send" aria-label="Send a message from the client to the server">Client &#8594; server</button>
+      </div>
+
+      <div class="ctrl">
+        <label>Stream</label>
+        <label class="switch">
+          <input type="checkbox" id="pause">
+          <span class="track"></span>
+          <span class="txt">live</span>
+        </label>
+      </div>
+
+      <div class="ctrl">
+        <label>&nbsp;</label>
+        <button class="ghost" id="reset">&#8635; Reset</button>
+      </div>
+    </div>
+
+    <!-- experiments -->
+    <div class="labcard">
+      <h2>◆ Run these experiments</h2>
+      <div class="labs">
+        <div class="lab"><span class="n">1</span><p><b>Watch the cost, not the clock.</b> At <b>5 events/s</b> all three latencies read ~50 ms — long-poll is <b>not slower here</b>. But watch the "requests opened" line: long-poll racks up one request per event while WebSocket and SSE stay at 1. <b>The tax is overhead, not latency.</b></p></div>
+        <div class="lab"><span class="n">2</span><p><b>Break long-poll.</b> Drag the rate past <b>~10 events/s</b> — its throughput ceiling. Now events arrive faster than the client can re-request, the server buffer backs up, and long-poll's latency climbs into the <b>hundreds of ms, then seconds</b>. WebSocket and SSE never flinch.</p></div>
+        <div class="lab"><span class="n">3</span><p><b>Prove bidirectionality.</b> Hit <b>Client &#8594; server</b>. Only WebSocket carries it back up the <b>same open channel</b>. SSE and long-poll flash a red "separate request" — their stream is server&#8594;client only, so upstream needs a whole extra HTTP call.</p></div>
+        <div class="lab"><span class="n">4</span><p><b>Pick the right tool.</b> Need two-way (chat, multiplayer, presence)? <b>WebSocket</b>. One-way feed (notifications, live scores, token streaming)? <b>SSE</b> — simpler, auto-reconnects, rides plain HTTP. Neither available through a hostile proxy? <b>Long-poll</b>, the universal fallback you pay overhead for.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>interactive simulator · pairs with Module 10 notes</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---- tuning (simulation seconds) ----
+  var NET = 0.05;              // one-way network hop -> reported as 50 ms
+  var SIM_SPEED = 0.12;        // sim runs at 12% of wall-clock so the physics is watchable
+  var MAXQ = 40;               // long-poll server buffer cap
+  var LATWIN = 40;             // rolling latency window (samples)
+  var THRESH = Math.round(1/(2*NET)); // long-poll throughput ceiling (events/s) = 10
+  var baseMs = Math.round(NET*1000);  // 50
+
+  var laneColor = { ws:"#34d3e0", sse:"#9d8bff", lp:"#e3b341" };
+
+  // ---- state ----
+  var rate = 5, paused = false;
+  var clock = 0, nextEmit = 0, eventId = 0, metricAcc = 0;
+  var totalReq = { ws:1, sse:1, lp:0 };
+
+  function mkLane(kind){ return { kind:kind, dots:[], lat:[], latAvg:baseMs, delivered:0 }; }
+  var ws, sse, lp;
+
+  function reset(){
+    ws = mkLane("ws"); sse = mkLane("sse"); lp = mkLane("lp");
+    lp.phase = "out"; lp.timer = 0; lp.queue = []; lp.grabbed = null; lp.backlog = 0; lp.dropped = 0;
+    lp.dots.push({ dir:-1, kind:"poll", prog:0, travel:NET });   // first poll heading to the server
+    clock = 0; eventId = 0; metricAcc = 0; nextEmit = 0;
+    totalReq = { ws:1, sse:1, lp:0 };
+    scheduleNext();
+    events.innerHTML = "";
+    pushEvent("Simulator reset · server emitting to 3 clients");
+  }
+
+  function lane(k){ return k==="ws"?ws:k==="sse"?sse:lp; }
+
+  // ---- canvas ----
+  var cv = document.getElementById("stagec"), ctx = cv.getContext("2d");
+  var stage = cv.parentElement, W = 0, H = 0, dpr = 1, geo = [];
+
+  function resize(){
+    var r = stage.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio||1, 2);
+    cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    W = r.width; H = r.height; layout();
+  }
+  function layout(){
+    geo = [];
+    var padY = 16, laneH = (H - 2*padY)/3;
+    for(var i=0;i<3;i++){
+      var yc = padY + laneH*(i+0.5);
+      var sw = 58, sh = 46, sx = 16, sy = yc - sh/2;
+      var cw = 66, ch = 46, cx = W - 16 - cw, cy = yc - ch/2;
+      geo.push({ yc:yc, sx:sx, sy:sy, sw:sw, sh:sh, cx:cx, cy:cy, cw:cw, ch:ch, x0:sx+sw+10, x1:cx-10 });
+    }
+  }
+  function monoFont(){ return "ui-monospace,Menlo,Consolas,monospace"; }
+  function rrect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+  // ---- simulation ----
+  function scheduleNext(){
+    var r = rate>0 ? rate : 0.0001;
+    // moderately bursty source: mean interval 1/r with +/-50% jitter.
+    // Below long-poll's ~1/(2*NET) ceiling the buffer stays empty (latency ~= one hop);
+    // as the rate nears the ceiling, bursts start clipping the reconnect gap and latency climbs.
+    nextEmit = clock + (1/r)*(0.5 + Math.random());
+  }
+  function jitTravel(){ return NET*(0.88 + Math.random()*0.34); }
+
+  function emitEvent(){
+    eventId++;
+    ws.dots.push({ dir:1, kind:"evt", emit:clock, prog:0, travel:jitTravel() });
+    sse.dots.push({ dir:1, kind:"evt", emit:clock, prog:0, travel:jitTravel() });
+    lpOnEvent(clock);
+  }
+
+  function lpOnEvent(t){
+    if(lp.phase === "held"){ lpGrab({ emit:t }); }
+    else if(lp.queue.length < MAXQ){ lp.queue.push({ emit:t }); }
+    else { lp.dropped++; }
+    lp.backlog = lp.queue.length;
+  }
+  function lpGrab(ev){
+    lp.grabbed = ev; lp.phase = "back"; lp.timer = 0;
+    lp.dots.push({ dir:1, kind:"resp", emit:ev.emit, prog:0, travel:NET });
+  }
+  function lpUpdate(dt){
+    lp.timer += dt;
+    if(lp.phase === "out"){
+      if(lp.timer >= NET){
+        lp.phase = "held"; lp.timer = 0;
+        if(lp.queue.length){ var ev = lp.queue.shift(); lp.backlog = lp.queue.length; lpGrab(ev); }
+      }
+    } else if(lp.phase === "back"){
+      if(lp.timer >= NET){
+        var latMs = (clock - lp.grabbed.emit)*1000;
+        recordLat(lp, latMs); lp.delivered++; totalReq.lp++;
+        lp.grabbed = null; lp.phase = "out"; lp.timer = 0;
+        lp.dots.push({ dir:-1, kind:"poll", prog:0, travel:NET });   // client immediately re-requests
+      }
+    }
+    // "held" with an empty queue simply waits; an incoming event grabs it via lpOnEvent
+  }
+
+  function recordLat(l, ms){
+    l.lat.push(ms); if(l.lat.length > LATWIN) l.lat.shift();
+    var s = 0; for(var i=0;i<l.lat.length;i++) s += l.lat[i];
+    l.latAvg = s/l.lat.length;
+  }
+
+  function updateDots(l, dt){
+    for(var i=l.dots.length-1;i>=0;i--){
+      var d = l.dots[i]; d.prog += dt/d.travel;
+      if(d.prog >= 1){
+        if(d.kind === "evt"){ recordLat(l, d.travel*1000); l.delivered++; }
+        l.dots.splice(i,1);
+      }
+    }
+  }
+
+  function clientSend(){
+    ws.dots.push({ dir:-1, kind:"up", prog:0, travel:NET });                 // same open channel
+    sse.dots.push({ dir:-1, kind:"post", prog:0, travel:NET, off:1 });       // needs a separate request
+    lp.dots.push({ dir:-1, kind:"post", prog:0, travel:NET, off:1 });
+    pushEvent('Client&#8594;server: <b>WebSocket</b> reused its channel · SSE &amp; long-poll opened a <b>separate request</b>');
+  }
+
+  function update(dtr){
+    if(paused) return;
+    var dt = dtr*SIM_SPEED;
+    clock += dt;
+    var guard = 0;
+    while(clock >= nextEmit && guard < 60){ emitEvent(); scheduleNext(); guard++; }
+    updateDots(ws, dt); updateDots(sse, dt); updateDots(lp, dt);
+    lpUpdate(dt);
+    metricAcc += dtr;
+    if(metricAcc >= 0.2){ metricAcc = 0; updateMetrics(); updateCoach(); }
+  }
+
+  // ---- rendering ----
+  function posOnWire(g, dir, prog){
+    var t = Math.max(0, Math.min(prog, 1));
+    return dir === 1 ? g.x0 + t*(g.x1 - g.x0) : g.x1 - t*(g.x1 - g.x0);
+  }
+  function dot(x, y, r, fill, glow){
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832);
+    if(glow && !reduceMotion){ ctx.shadowColor = glow; ctx.shadowBlur = 7; }
+    ctx.fillStyle = fill; ctx.fill(); ctx.shadowBlur = 0;
+  }
+  function node(x, y, w, h, label, sub, col){
+    rrect(x, y, w, h, 9);
+    ctx.fillStyle = "#131c26"; ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.10)"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.textAlign = "center";
+    ctx.fillStyle = col; ctx.font = "600 12px " + monoFont();
+    ctx.fillText(label, x + w/2, y + h/2 - 3);
+    ctx.fillStyle = "#7d8fa1"; ctx.font = "9px " + monoFont();
+    ctx.fillText(sub, x + w/2, y + h/2 + 11);
+  }
+
+  var KINDS = ["ws","sse","lp"], NAMES = ["WebSocket","SSE","Long-poll"];
+
+  function render(){
+    ctx.clearRect(0,0,W,H);
+    for(var i=0;i<3;i++) drawLane(i);
+  }
+
+  function drawLane(i){
+    var g = geo[i], k = KINDS[i], l = lane(k), col = laneColor[k], y = g.yc;
+
+    // transport name + latency, above the wire
+    ctx.textAlign = "left"; ctx.fillStyle = col; ctx.font = "600 11px " + monoFont();
+    ctx.fillText(NAMES[i], g.x0, y - 22);
+    var latMs = Math.round(l.latAvg);
+    var latCol = latMs > baseMs*3.5 ? "#f85149" : latMs > baseMs*1.6 ? "#e3b341" : "#3fb950";
+    ctx.textAlign = "right"; ctx.fillStyle = latCol; ctx.font = "600 11px " + monoFont();
+    ctx.fillText(fmtLat(l.latAvg), g.x1, y - 22);
+    ctx.textAlign = "left";
+
+    // ---- wire ----
+    var lit = true, dash = false;
+    if(k === "lp"){ lit = (lp.phase !== "out"); dash = !lit; }
+    ctx.beginPath(); ctx.moveTo(g.x0, y); ctx.lineTo(g.x1, y);
+    ctx.setLineDash(dash ? [5,5] : []);
+    ctx.strokeStyle = lit ? hexA(col,0.5) : hexA(col,0.14);
+    ctx.lineWidth = lit ? 2 : 1.4;
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // direction hint mid-wire
+    var mx = (g.x0 + g.x1)/2;
+    ctx.fillStyle = hexA(col,0.55); ctx.font = "11px " + monoFont(); ctx.textAlign = "center";
+    if(k === "ws") ctx.fillText("⇄", mx, y - 6);        // two-way
+    else ctx.fillText("→", mx, y - 6);                   // one-way
+    ctx.textAlign = "left";
+
+    // secondary "separate request" lane for post dots
+    var hasPost = false;
+    for(var p=0;p<l.dots.length;p++) if(l.dots[p].kind === "post"){ hasPost = true; break; }
+    if(hasPost){
+      ctx.beginPath(); ctx.moveTo(g.x0, y+13); ctx.lineTo(g.x1, y+13);
+      ctx.setLineDash([3,4]); ctx.strokeStyle = "rgba(248,81,73,.35)"; ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    // ---- long-poll server buffer (backlog) ----
+    if(k === "lp" && lp.backlog > 0){
+      var shown = Math.min(lp.backlog, 6);
+      for(var b=0;b<shown;b++){
+        var bx = g.x0 - 2 + b*7;
+        ctx.fillStyle = "#e3b341"; rrect(bx, y - 20 - 0, 5, 5, 1); ctx.fill();
+      }
+      ctx.fillStyle = "#e3b341"; ctx.font = "9px " + monoFont(); ctx.textAlign = "left";
+      ctx.fillText("buffer " + lp.backlog + (lp.dropped>0 ? " (overflow)" : ""), g.x0 - 2, y - 26);
+    }
+
+    // ---- dots ----
+    for(var d=0;d<l.dots.length;d++){
+      var pt = l.dots[d], dy = pt.off ? y + 13 : y;
+      var x = posOnWire(g, pt.dir, pt.prog);
+      if(pt.kind === "evt" || pt.kind === "resp") dot(x, dy, 3.4, col, col);
+      else if(pt.kind === "up") dot(x, dy, 3.2, "#34d3e0", "#34d3e0");
+      else if(pt.kind === "poll") dot(x, dy, 2.6, hexA(col,0.85), null);
+      else if(pt.kind === "post") dot(x, dy, 3.0, "#f85149", "#f85149");
+    }
+
+    // ---- nodes ----
+    node(g.sx, g.sy, g.sw, g.sh, "SRV", "emitter", "#cdd9e5");
+    var cs = k === "lp" ? lpClientSub() : "listening";
+    node(g.cx, g.cy, g.cw, g.ch, "CLIENT", cs, col);
+  }
+  function lpClientSub(){
+    if(lp.phase === "out") return "polling…";
+    if(lp.phase === "held") return "held open";
+    return "receiving";
+  }
+  function hexA(hex, a){
+    var n = parseInt(hex.slice(1),16);
+    return "rgba(" + ((n>>16)&255) + "," + ((n>>8)&255) + "," + (n&255) + "," + a + ")";
+  }
+  function fmtLat(ms){
+    if(ms >= 1000) return (ms/1000).toFixed(1) + "s";
+    return Math.round(ms) + "ms";
+  }
+
+  // ---- metrics DOM ----
+  var el = function(id){ return document.getElementById(id); };
+  function setLat(id, l){
+    var e = el(id), ms = Math.round(l.latAvg);
+    var cls = ms > baseMs*3.5 ? "crit" : ms > baseMs*1.6 ? "warn" : "ok";
+    var txt = l.latAvg >= 1000 ? (l.latAvg/1000).toFixed(1) : Math.round(l.latAvg);
+    var unit = l.latAvg >= 1000 ? "s" : "ms";
+    e.className = "lat " + cls;
+    e.innerHTML = txt + '<span class="cell-sub">' + unit + '</span>';
+  }
+  function updateMetrics(){
+    setLat("ws-lat", ws); setLat("sse-lat", sse); setLat("lp-lat", lp);
+    var hot = totalReq.lp > totalReq.ws + 3;
+    var back = lp.backlog > 0 ? ' · buffer <span class="hot">' + lp.backlog + '</span>' : '';
+    el("overhead").innerHTML = 'Requests opened so far — <b>WebSocket</b> ' + totalReq.ws +
+      ' · <b>SSE</b> ' + totalReq.sse + ' · <b>long-poll</b> <span class="' + (hot?'hot':'') + '">' +
+      totalReq.lp + '</span>' + back + '.';
+  }
+
+  // ---- coaching ----
+  function updateCoach(){
+    var c = el("coach"), base = baseMs, msg;
+    var ratio = lp.latAvg / base;
+    if(paused){
+      msg = "Paused. The server has stopped emitting — resume the stream to keep comparing.";
+    } else if(lp.dropped > 0 || ratio > 4){
+      msg = "Long-poll has broken down: events arrive faster than the client can re-request (its ceiling is ~" + THRESH +
+        " events/s), so the server buffer (" + lp.backlog + ") backs up and delivery is " + fmtLat(lp.latAvg) +
+        " behind. WebSocket and SSE still push every event instantly over their one open connection.";
+    } else if(ratio > 1.6){
+      msg = "Long-poll is nearing its ~" + THRESH + " events/s ceiling. Bursts now wait in the server buffer during each " +
+        "reconnect gap, so its latency (" + Math.round(lp.latAvg) + " ms) is drifting above WebSocket/SSE (~" + base + " ms).";
+    } else {
+      msg = "At " + rate + " events/s all three deliver in ~" + base + " ms — long-poll is not slower here. The cost is overhead: " +
+        "it has already opened " + totalReq.lp + " separate requests to move what WebSocket and SSE carry over one held connection.";
+    }
+    if(c.textContent !== msg) c.textContent = msg;
+  }
+
+  // ---- events ----
+  var events = el("events");
+  function pushEvent(html){
+    var li = document.createElement("li");
+    li.innerHTML = '<span class="ts">' + Math.round(clock) + 's</span>' + html;
+    events.insertBefore(li, events.firstChild);
+    while(events.children.length > 4) events.removeChild(events.lastChild);
+  }
+
+  // ---- input wiring ----
+  el("rate").addEventListener("input", function(e){
+    rate = +e.target.value;
+    el("rate-out").textContent = rate + " events/s";
+  });
+  el("rate").addEventListener("change", function(){
+    pushEvent("Event rate set to <b>" + rate + "/s</b>" + (rate > THRESH ? " — above long-poll's ~" + THRESH + "/s ceiling" : ""));
+  });
+  el("send").addEventListener("click", clientSend);
+  el("pause").addEventListener("change", function(e){
+    paused = e.target.checked;
+    e.target.parentElement.querySelector(".txt").textContent = paused ? "paused" : "live";
+    pushEvent(paused ? "Stream <b>paused</b>" : "Stream <b>resumed</b>");
+  });
+  el("reset").addEventListener("click", function(){
+    reset(); updateMetrics(); updateCoach();
+  });
+
+  // ---- boot ----
+  var ro = ("ResizeObserver" in window) ? new ResizeObserver(resize) : null;
+  if(ro) ro.observe(stage); else window.addEventListener("resize", resize);
+  reset(); resize(); updateMetrics(); updateCoach();
+
+  var last = 0;
+  function frame(ts){
+    if(!last) last = ts;
+    var dtr = (ts - last)/1000; last = ts; if(dtr > 0.05) dtr = 0.05;
+    update(dtr); render(); requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

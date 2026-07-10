@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Load Balancer Playground — System Design</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b1016;
+    --panel:#121a23;
+    --panel-2:#0e151d;
+    --border:#223140;
+    --border-soft:#1a2530;
+    --text:#cdd9e5;
+    --muted:#7d8fa1;
+    --faint:#54626f;
+    --accent:#34d3e0;
+    --accent-dim:rgba(52,211,224,.14);
+    --ok:#3fb950;
+    --warn:#e3b341;
+    --crit:#f85149;
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1100px 600px at 82% -8%, rgba(52,211,224,.06), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 56px}
+
+  /* header */
+  header{margin-bottom:22px}
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 10px;display:flex;align-items:center;gap:9px;
+  }
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  h1{
+    font-family:var(--mono);font-weight:600;font-size:clamp(26px,4.4vw,40px);
+    letter-spacing:-.01em;margin:0 0 10px;text-wrap:balance;
+  }
+  .lede{max-width:66ch;color:var(--muted);font-size:15.5px;margin:0}
+  .lede b{color:var(--text);font-weight:600}
+
+  /* layout */
+  .grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:24px}
+  @media(min-width:900px){.grid{grid-template-columns:1.55fr 1fr}}
+
+  .panel{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--border);border-radius:14px;
+  }
+  .stage{position:relative;min-height:400px;overflow:hidden}
+  @media(min-width:900px){.stage{min-height:472px}}
+  canvas#topo{display:block;width:100%;height:100%;position:absolute;inset:0}
+  .stage-min{min-height:400px}
+  @media(min-width:900px){.stage-min{min-height:472px}}
+
+  .legend{
+    position:absolute;left:14px;bottom:12px;display:flex;gap:14px;flex-wrap:wrap;
+    font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.04em;
+    background:rgba(11,16,22,.55);padding:6px 10px;border-radius:8px;border:1px solid var(--border-soft);
+    backdrop-filter:blur(3px);
+  }
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:8px;height:8px;border-radius:2px;display:inline-block}
+
+  .side{display:flex;flex-direction:column;gap:16px}
+
+  /* metrics */
+  .metrics{padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border-soft);border-radius:14px;overflow:hidden}
+  .metric{background:var(--panel);padding:13px 14px}
+  .metric .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:0 0 4px}
+  .metric .v{font-family:var(--mono);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .metric .v small{font-size:12px;color:var(--muted);font-weight:400;margin-left:3px}
+  .metric.wide{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .v.ok{color:var(--ok)} .v.warn{color:var(--warn)} .v.crit{color:var(--crit)} .v.accent{color:var(--accent)}
+  canvas#spark{width:118px;height:34px;display:block}
+
+  /* coaching */
+  .coach{padding:15px 16px;border:1px solid var(--border);border-radius:14px;background:var(--panel);border-left:3px solid var(--accent)}
+  .coach .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+  .coach p{margin:0;font-size:14px;color:var(--text)}
+
+  /* events */
+  .events{padding:13px 16px;border:1px solid var(--border-soft);border-radius:14px;background:var(--panel-2)}
+  .events .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+  .events ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;min-height:54px}
+  .events li{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;gap:8px;animation:slideIn .3s ease}
+  .events li .ts{color:var(--faint);flex-shrink:0}
+  .events li b{color:var(--text);font-weight:600}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+  /* controls */
+  .controls{grid-column:1/-1;padding:18px;display:flex;flex-wrap:wrap;gap:22px;align-items:flex-end}
+  .ctrl{display:flex;flex-direction:column;gap:8px}
+  .ctrl>label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+  .seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px}
+  .seg button{
+    font-family:var(--mono);font-size:12px;color:var(--muted);background:transparent;border:0;
+    padding:7px 11px;border-radius:6px;cursor:pointer;transition:background .12s,color .12s;white-space:nowrap;
+  }
+  .seg button:hover{color:var(--text)}
+  .seg button[aria-pressed="true"]{background:var(--accent-dim);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(52,211,224,.35)}
+
+  .slider{display:flex;align-items:center;gap:12px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:180px;height:4px;background:var(--border);border-radius:3px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px rgba(52,211,224,.5)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--accent);cursor:pointer}
+  .rps-val{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--accent);min-width:74px;font-variant-numeric:tabular-nums}
+
+  .stepper{display:inline-flex;align-items:center;gap:0;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+  .stepper button{font-family:var(--mono);font-size:16px;width:36px;height:36px;background:var(--panel-2);border:0;color:var(--text);cursor:pointer;transition:background .12s}
+  .stepper button:hover:not(:disabled){background:var(--accent-dim);color:var(--accent)}
+  .stepper button:disabled{color:var(--faint);cursor:not-allowed}
+  .stepper .count{font-family:var(--mono);font-size:15px;font-weight:600;min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
+
+  .switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+  .switch input{position:absolute;opacity:0;width:0;height:0}
+  .track{width:42px;height:24px;background:var(--border);border-radius:12px;position:relative;transition:background .16s;flex-shrink:0}
+  .track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--muted);transition:transform .16s,background .16s}
+  .switch input:checked+.track{background:var(--accent-dim);box-shadow:inset 0 0 0 1px var(--accent)}
+  .switch input:checked+.track::after{transform:translateX(18px);background:var(--accent)}
+  .switch .txt{font-family:var(--mono);font-size:12px;color:var(--text)}
+
+  .ghost{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:9px 14px;cursor:pointer;transition:color .12s,border-color .12s}
+  .ghost:hover{color:var(--crit);border-color:var(--crit)}
+
+  /* experiments */
+  .labcard{grid-column:1/-1;padding:20px 22px;border:1px solid var(--border);border-radius:14px;background:
+    linear-gradient(180deg,rgba(52,211,224,.03),transparent),var(--panel)}
+  .labcard h2{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  .labs{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:640px){.labs{grid-template-columns:1fr 1fr}}
+  .lab{display:flex;gap:12px;align-items:flex-start}
+  .lab .n{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(52,211,224,.3);width:24px;height:24px;border-radius:6px;display:grid;place-items:center;flex-shrink:0}
+  .lab p{margin:0;font-size:13.5px;color:var(--muted)}
+  .lab p b{color:var(--text);font-weight:600}
+
+  footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.03em}
+  footer b{color:var(--muted);font-weight:600}
+
+  button:focus-visible,input:focus-visible,.switch input:focus-visible+.track{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+  }
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(11,16,22,.7);position:sticky;top:0;z-index:30}
+  .topnav .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .topnav .navlinks{display:flex;gap:6px;flex-wrap:wrap}
+  .topnav .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;transition:color .12s,background .12s}
+  .topnav .navlinks a:hover{color:var(--accent);background:var(--accent-dim)}
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <a class="brand" href="../index.html">◇ SD Mastery</a>
+  <div class="navlinks">
+    <a href="../index.html">Home</a>
+    <a href="../roadmap-dashboard.html">Roadmap</a>
+    <a href="../modules/01-design-thinking.html">Module 1</a>
+    <a href="capacity-estimator.html">Capacity Estimator</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow"><span class="dot"></span>System Design · Module 2 — Scalability &amp; Load Balancing</p>
+    <h1>Load Balancer Playground</h1>
+    <p class="lede">Push traffic through a load balancer and watch it spread across a fleet of servers. Then <b>break things</b>: pick a routing algorithm, drive the request rate past capacity, <b>click a server to kill it</b>, and see how latency and dropped requests react in real time.</p>
+  </header>
+
+  <div class="grid">
+    <!-- topology -->
+    <div class="panel stage stage-min" aria-label="Live diagram: load balancer routing requests to a fleet of servers.">
+      <canvas id="topo"></canvas>
+      <div class="legend" aria-hidden="true">
+        <span><i style="background:#3fb950"></i>healthy</span>
+        <span><i style="background:#e3b341"></i>busy</span>
+        <span><i style="background:#f85149"></i>overloaded / down</span>
+        <span><i style="background:#34d3e0"></i>request</span>
+      </div>
+    </div>
+
+    <!-- side -->
+    <div class="side">
+      <div class="metrics" role="group" aria-label="Live metrics">
+        <div class="metric"><p class="k">Incoming</p><p class="v accent" id="m-rps">70<small>rps</small></p></div>
+        <div class="metric"><p class="k">Served</p><p class="v ok" id="m-served">0<small>/s</small></p></div>
+        <div class="metric"><p class="k">Dropped</p><p class="v" id="m-drop">0<small>/s</small></p></div>
+        <div class="metric"><p class="k">p99 latency</p><p class="v" id="m-p99">0<small>ms</small></p></div>
+        <div class="metric wide">
+          <div><p class="k">Healthy servers</p><p class="v" id="m-health">3<small>/3</small></p></div>
+          <canvas id="spark" aria-hidden="true"></canvas>
+        </div>
+      </div>
+
+      <div class="coach">
+        <p class="lbl">What's happening</p>
+        <p id="coach" aria-live="polite">Round Robin cycles through servers evenly — a fair default when every server is identical and healthy.</p>
+      </div>
+
+      <div class="events">
+        <p class="lbl">Event log</p>
+        <ul id="events" aria-live="polite"><li><span class="ts">0s</span>Simulator started · 3 servers online</li></ul>
+      </div>
+    </div>
+
+    <!-- controls -->
+    <div class="panel controls">
+      <div class="ctrl">
+        <label id="algo-lbl">Routing algorithm</label>
+        <div class="seg" role="group" aria-labelledby="algo-lbl" id="algo">
+          <button data-a="rr" aria-pressed="true">Round Robin</button>
+          <button data-a="lc" aria-pressed="false">Least Conn</button>
+          <button data-a="ip" aria-pressed="false">IP Hash</button>
+          <button data-a="rand" aria-pressed="false">Random</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label for="rps">Traffic</label>
+        <div class="slider">
+          <input type="range" id="rps" min="0" max="300" step="5" value="70">
+          <span class="rps-val" id="rps-out">70 rps</span>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>Servers</label>
+        <div class="stepper">
+          <button id="srv-minus" aria-label="Remove a server">–</button>
+          <span class="count" id="srv-count">3</span>
+          <button id="srv-plus" aria-label="Add a server">+</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>Auto-scaling</label>
+        <label class="switch">
+          <input type="checkbox" id="autoscale">
+          <span class="track"></span>
+          <span class="txt">off</span>
+        </label>
+      </div>
+
+      <div class="ctrl">
+        <label>&nbsp;</label>
+        <button class="ghost" id="reset">↺ Reset</button>
+      </div>
+    </div>
+
+    <!-- experiments -->
+    <div class="labcard">
+      <h2>◆ Run these four experiments</h2>
+      <div class="labs">
+        <div class="lab"><span class="n">1</span><p><b>Overload it.</b> Push traffic to ~200 with 2 servers — requests start dropping. Now switch algorithms: notice it barely helps. You're <b>capacity-bound, not balance-bound</b>. Flip on Auto-scaling and watch drops disappear.</p></div>
+        <div class="lab"><span class="n">2</span><p><b>Fail a server.</b> With steady traffic, <b>click a healthy server</b> to kill it. The balancer stops routing there (health check) and spreads its load across the rest — latency spikes, then recovers.</p></div>
+        <div class="lab"><span class="n">3</span><p><b>Feel the difference.</b> Compare <b>Round Robin</b> vs <b>Least Connections</b> under heavy load. Least-Conn steers around the busy servers; Round Robin keeps feeding them regardless.</p></div>
+        <div class="lab"><span class="n">4</span><p><b>The IP Hash trap.</b> Switch to <b>IP Hash</b> — one "hot" client pins to a single server and overloads it while others idle. Kill a server and watch keys remap. <b>This is exactly the problem consistent hashing fixes</b> — your next tool.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Learning tool <b>#1</b> of your System Design roadmap &nbsp;·&nbsp; archetype: <b>interactive simulator</b> &nbsp;·&nbsp; pairs with Module 2 notes + the Nginx sandbox lab</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---- tuning ----
+  var SOFT = 4, HARD = 9, BASE = 0.09, TRAVEL = 0.5;
+  var MAXS = 6, MINS = 1, CLIENTS = 6;
+
+  // ---- state ----
+  var algo = "rr", rps = 70, autoscale = false;
+  var servers = [], particles = [], rr = 0, nextId = 1;
+  var clock = 0, spawnAcc = 0, rateAcc = 0, asAcc = 0, coachAcc = 0, lastScale = -99;
+  var served = 0, dropped = 0, servedAcc = 0, dropAcc = 0, servedPerSec = 0, dropPerSec = 0;
+  var latSamples = [], p99 = 0, sparkData = [];
+
+  function makeServer(){ return { id: nextId++, healthy:true, conns:0, completions:[], flash:0, dropFlash:0, x:0,y:0,w:0,h:0 }; }
+  function reset(){
+    servers = []; for(var i=0;i<3;i++) servers.push(makeServer());
+    particles = []; rr=0; nextId = servers.length+1;
+    clock=0; spawnAcc=0; rateAcc=0; asAcc=0; lastScale=-99;
+    served=0; dropped=0; servedAcc=0; dropAcc=0; servedPerSec=0; dropPerSec=0;
+    latSamples=[]; p99=0; sparkData=[];
+    events.innerHTML=""; pushEvent("Simulator reset · 3 servers online");
+    layout();
+  }
+
+  // ---- canvas ----
+  var cv = document.getElementById("topo"), ctx = cv.getContext("2d");
+  var stage = cv.parentElement, W=0, H=0, dpr=1;
+  var lb = {x:0,y:0,w:0,h:0};
+
+  function resize(){
+    var r = stage.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio||1, 2);
+    cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    W = r.width; H = r.height; layout();
+  }
+  function layout(){
+    lb.w = 104; lb.h = 74; lb.x = 26; lb.y = H/2 - lb.h/2;
+    var n = servers.length, pad = 20, gap = 14;
+    var sw = Math.min(168, W*0.34), sh = Math.min(56, (H - 2*pad - (n-1)*gap)/n);
+    sh = Math.max(34, sh);
+    var totalH = n*sh + (n-1)*gap, startY = (H - totalH)/2, sx = W - pad - sw;
+    for(var i=0;i<n;i++){ var s=servers[i]; s.x=sx; s.w=sw; s.h=sh; s.y=startY + i*(sh+gap); }
+  }
+
+  function color(u, healthy){
+    if(!healthy) return "#f85149";
+    if(u < 0.7) return "#3fb950";
+    if(u < 1) return "#e3b341";
+    return "#f85149";
+  }
+  function rr_rect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+  function render(){
+    ctx.clearRect(0,0,W,H);
+    var lbOut = {x:lb.x+lb.w, y:lb.y+lb.h/2};
+
+    // connectors
+    for(var i=0;i<servers.length;i++){
+      var s=servers[i], inp={x:s.x, y:s.y+s.h/2};
+      ctx.beginPath(); ctx.moveTo(lbOut.x, lbOut.y);
+      ctx.bezierCurveTo((lbOut.x+inp.x)/2, lbOut.y, (lbOut.x+inp.x)/2, inp.y, inp.x, inp.y);
+      ctx.strokeStyle = s.healthy ? "rgba(52,211,224,.16)" : "rgba(248,81,73,.22)";
+      ctx.lineWidth = 1.5;
+      if(!s.healthy){ ctx.setLineDash([4,4]); } else { ctx.setLineDash([]); }
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    // particles
+    if(!reduceMotion){
+      for(var p=0;p<particles.length;p++){
+        var pt=particles[p], s2=pt.server;
+        var inp2={x:s2.x, y:s2.y+s2.h/2};
+        var t=Math.min(pt.prog,1);
+        var mx=(lbOut.x+inp2.x)/2;
+        var x=bez(lbOut.x,mx,mx,inp2.x,t), y=bez(lbOut.y,lbOut.y,inp2.y,inp2.y,t);
+        var rad = pt.drop ? 3.2 : 2.6, alpha = pt.drop ? Math.max(pt.life/0.35,0) : 1;
+        ctx.beginPath(); ctx.arc(x,y,rad,0,6.2832);
+        ctx.fillStyle = pt.drop ? "rgba(248,81,73,"+alpha+")" : "#7fe9f1";
+        ctx.shadowColor = pt.drop ? "#f85149" : "#34d3e0"; ctx.shadowBlur = 6;
+        ctx.fill(); ctx.shadowBlur = 0;
+      }
+    }
+
+    // load balancer
+    rr_rect(lb.x,lb.y,lb.w,lb.h,10);
+    ctx.fillStyle="#0e151d"; ctx.fill();
+    ctx.strokeStyle="#34d3e0"; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle="#34d3e0"; ctx.textAlign="center";
+    ctx.font="600 12px "+monoFont(); ctx.fillText("LOAD", lb.x+lb.w/2, lb.y+lb.h/2-6);
+    ctx.fillText("BALANCER", lb.x+lb.w/2, lb.y+lb.h/2+9);
+    ctx.fillStyle="#7d8fa1"; ctx.font="10px "+monoFont();
+    ctx.fillText(Math.round(rps)+" rps in", lb.x+lb.w/2, lb.y+lb.h-8);
+
+    // servers
+    ctx.textAlign="left";
+    for(var j=0;j<servers.length;j++){
+      var s3=servers[j], u=s3.conns/SOFT, c=color(u, s3.healthy);
+      // glow
+      if(s3.flash>0){ ctx.shadowColor="#3fb950"; ctx.shadowBlur=14*(s3.flash/0.35); }
+      else if(s3.dropFlash>0){ ctx.shadowColor="#f85149"; ctx.shadowBlur=16*(s3.dropFlash/0.4); }
+      rr_rect(s3.x,s3.y,s3.w,s3.h,9);
+      ctx.fillStyle="#131c26"; ctx.fill(); ctx.shadowBlur=0;
+      ctx.strokeStyle = s3.healthy ? "rgba(255,255,255,.08)" : "rgba(248,81,73,.5)";
+      ctx.lineWidth=1; ctx.stroke();
+      // util bar
+      var barX=s3.x+11, barY=s3.y+s3.h-11, barW=s3.w-22;
+      ctx.fillStyle="rgba(255,255,255,.06)"; rr_rect(barX,barY,barW,4,2); ctx.fill();
+      if(s3.healthy){ ctx.fillStyle=c; var fw=Math.max(0,Math.min(u,1.3))/1.3*barW; rr_rect(barX,barY,Math.max(fw,2),4,2); ctx.fill(); }
+      // label
+      ctx.fillStyle = s3.healthy ? "#cdd9e5" : "#f85149";
+      ctx.font="600 12px "+monoFont();
+      ctx.fillText("S"+s3.id, s3.x+11, s3.y+17);
+      ctx.textAlign="right";
+      if(s3.healthy){
+        ctx.fillStyle=c; ctx.fillText(Math.round(u*100)+"%", s3.x+s3.w-11, s3.y+17);
+        ctx.fillStyle="#7d8fa1"; ctx.font="10px "+monoFont();
+        ctx.fillText(s3.conns+" conn", s3.x+s3.w-11, s3.y+30);
+      } else {
+        ctx.fillStyle="#f85149"; ctx.font="600 10px "+monoFont();
+        ctx.fillText("DOWN", s3.x+s3.w-11, s3.y+17);
+      }
+      ctx.textAlign="left";
+    }
+  }
+  function bez(a,b,c,d,t){ var mt=1-t; return mt*mt*mt*a + 3*mt*mt*t*b + 3*mt*t*t*c + t*t*t*d; }
+  function monoFont(){ return "ui-monospace,Menlo,Consolas,monospace"; }
+
+  // ---- simulation ----
+  function healthyList(){ var a=[]; for(var i=0;i<servers.length;i++) if(servers[i].healthy) a.push(servers[i]); return a; }
+
+  function pick(HS){
+    if(algo==="rr"){ rr=(rr+1)%HS.length; return HS[rr]; }
+    if(algo==="lc"){ var m=HS[0]; for(var i=1;i<HS.length;i++) if(HS[i].conns<m.conns) m=HS[i]; return m; }
+    if(algo==="ip"){ var cId = Math.random()<0.45 ? 0 : 1+Math.floor(Math.random()*(CLIENTS-1)); return HS[cId % HS.length]; }
+    return HS[Math.floor(Math.random()*HS.length)];
+  }
+
+  function resolveArrival(s){
+    if(!s.healthy || s.conns>=HARD){ dropped++; dropAcc++; s.dropFlash=0.4; return false; }
+    s.conns++;
+    var u=s.conns/SOFT;
+    var proc = u<=1 ? BASE*(1+0.4*u) : BASE*(1.4+2.0*(u-1));
+    s.completions.push(clock+proc);
+    latSamples.push((proc+(reduceMotion?0:TRAVEL))*1000);
+    if(latSamples.length>300) latSamples.shift();
+    served++; servedAcc++; s.flash=0.35; return true;
+  }
+
+  function spawn(){
+    var HS=healthyList();
+    if(HS.length===0){ dropped++; dropAcc++; return; }
+    var target=pick(HS);
+    if(reduceMotion){ resolveArrival(target); return; }
+    particles.push({prog:0, server:target, drop:false, resolved:false, life:0});
+  }
+
+  function update(dt){
+    clock += dt;
+    // spawn
+    spawnAcc += rps*dt; var guard=0;
+    while(spawnAcc>=1 && guard<40){ spawnAcc--; spawn(); guard++; }
+    // particles
+    for(var i=particles.length-1;i>=0;i--){
+      var p=particles[i]; p.prog += dt/TRAVEL;
+      if(!p.resolved && p.prog>=1){ p.resolved=true; var ok=resolveArrival(p.server); p.drop=!ok; p.life=0.35; }
+      if(p.resolved){ if(p.drop){ p.life-=dt; if(p.life<=0) particles.splice(i,1); } else particles.splice(i,1); }
+    }
+    // completions + flashes
+    for(var j=0;j<servers.length;j++){
+      var s=servers[j];
+      while(s.completions.length && s.completions[0]<=clock){ s.completions.shift(); if(s.conns>0) s.conns--; }
+      if(s.flash>0) s.flash-=dt; if(s.dropFlash>0) s.dropFlash-=dt;
+    }
+    // rates + p99 (1s tick)
+    rateAcc += dt;
+    if(rateAcc>=1){
+      rateAcc-=1; servedPerSec=servedAcc; dropPerSec=dropAcc; servedAcc=0; dropAcc=0;
+      computeP99(); sparkData.push(p99); if(sparkData.length>48) sparkData.shift();
+      updateMetrics();
+    }
+    // autoscale (1.5s)
+    asAcc += dt;
+    if(asAcc>=1.5){
+      asAcc=0;
+      if(autoscale){
+        var HS=healthyList(), avg=0;
+        for(var k=0;k<HS.length;k++) avg+=HS[k].conns/SOFT; avg = HS.length?avg/HS.length:99;
+        if(avg>0.85 && servers.length<MAXS && clock-lastScale>2){ addServer(true); lastScale=clock; }
+        else if(avg<0.30 && servers.length>2 && clock-lastScale>3){ removeServer(true); lastScale=clock; }
+      }
+    }
+    // coaching (0.5s)
+    coachAcc += dt; if(coachAcc>=0.5){ coachAcc=0; updateCoach(); }
+  }
+
+  function computeP99(){
+    if(latSamples.length<3){ p99=0; return; }
+    var a=latSamples.slice().sort(function(x,y){return x-y;});
+    p99 = a[Math.min(a.length-1, Math.floor(a.length*0.99))];
+  }
+
+  // ---- metrics DOM ----
+  var el = function(id){ return document.getElementById(id); };
+  function updateMetrics(){
+    el("m-rps").innerHTML = Math.round(rps)+'<small>rps</small>';
+    el("m-served").innerHTML = servedPerSec+'<small>/s</small>';
+    var d=el("m-drop"); d.innerHTML = dropPerSec+'<small>/s</small>';
+    d.className = "v " + (dropPerSec>0 ? "crit" : "");
+    var pel=el("m-p99"); pel.innerHTML = Math.round(p99)+'<small>ms</small>';
+    pel.className = "v " + (p99>400?"crit":p99>180?"warn":"ok");
+    var hn=healthyList().length;
+    var h=el("m-health"); h.innerHTML = hn+'<small>/'+servers.length+'</small>';
+    h.className = "v " + (hn===0?"crit":hn<servers.length?"warn":"ok");
+    drawSpark();
+  }
+
+  var sc = el("spark"), sctx = sc.getContext("2d");
+  function drawSpark(){
+    var w=118,h=34,d=Math.min(window.devicePixelRatio||1,2);
+    sc.width=w*d; sc.height=h*d; sctx.setTransform(d,0,0,d,0,0); sctx.clearRect(0,0,w,h);
+    if(sparkData.length<2) return;
+    var max=Math.max(80, Math.max.apply(null,sparkData)), n=sparkData.length;
+    sctx.beginPath();
+    for(var i=0;i<n;i++){ var x=i/(n-1)*w, y=h-3-(sparkData[i]/max)*(h-6); if(i===0)sctx.moveTo(x,y); else sctx.lineTo(x,y); }
+    sctx.strokeStyle="#34d3e0"; sctx.lineWidth=1.5; sctx.stroke();
+    sctx.lineTo(w,h); sctx.lineTo(0,h); sctx.closePath();
+    sctx.fillStyle="rgba(52,211,224,.10)"; sctx.fill();
+    var lx=w, ly=h-3-(sparkData[n-1]/max)*(h-6);
+    sctx.beginPath(); sctx.arc(lx-1,ly,2,0,6.2832); sctx.fillStyle="#34d3e0"; sctx.fill();
+  }
+
+  // ---- coaching ----
+  function updateCoach(){
+    var c=el("coach"), hn=healthyList().length, msg;
+    var imbalance=0, HS=healthyList();
+    if(HS.length){ var mn=99,mx=0; for(var i=0;i<HS.length;i++){ mn=Math.min(mn,HS[i].conns); mx=Math.max(mx,HS[i].conns);} imbalance=mx-mn; }
+    if(hn===0) msg="Every server is down — 100% of traffic is being dropped. Click a server to bring it back online.";
+    else if(dropPerSec>2 && !autoscale) msg="Servers are saturated — requests are dropping. Switching algorithms won't help here (you're capacity-bound): turn on Auto-scaling, add a server, or lower the traffic.";
+    else if(dropPerSec>2 && autoscale) msg="Overloaded — Auto-scaling is spinning up servers to absorb the surge. Watch the fleet grow until drops stop.";
+    else if(algo==="ip" && imbalance>=SOFT) msg="IP Hash pins each client to one server (great for sticky sessions) — but the hot client is overloading its server while others sit idle. No rebalancing.";
+    else if(algo==="lc") msg="Least Connections routes each request to the least-busy server — load stays even, even when one server slows down.";
+    else if(algo==="ip") msg="IP Hash maps each client to a fixed server. Kill one and the mapping shifts (modulo the fleet size) — the churn that consistent hashing was invented to avoid.";
+    else if(algo==="rand") msg="Random spreads load statistically — it approaches Round Robin at high volume, with zero coordination between requests.";
+    else msg="Round Robin cycles through servers evenly — a fair default when every server is identical and healthy.";
+    if(c.textContent!==msg) c.textContent=msg;
+  }
+
+  // ---- events ----
+  var events = el("events");
+  function pushEvent(html){
+    var li=document.createElement("li");
+    li.innerHTML='<span class="ts">'+Math.round(clock)+'s</span>'+html;
+    events.insertBefore(li, events.firstChild);
+    while(events.children.length>4) events.removeChild(events.lastChild);
+  }
+
+  // ---- mutations ----
+  function addServer(auto){
+    if(servers.length>=MAXS) return;
+    var s=makeServer(); servers.push(s); layout();
+    el("srv-count").textContent=servers.length; syncStepper();
+    pushEvent(auto?'<b>Auto-scaled out</b> → S'+s.id+' online':'Added <b>S'+s.id+'</b>');
+  }
+  function removeServer(auto){
+    if(servers.length<=MINS) return;
+    var s=servers.pop(); layout();
+    el("srv-count").textContent=servers.length; syncStepper();
+    pushEvent(auto?'<b>Auto-scaled in</b> → S'+s.id+' retired':'Removed <b>S'+s.id+'</b>');
+  }
+  function syncStepper(){ el("srv-minus").disabled=servers.length<=MINS; el("srv-plus").disabled=servers.length>=MAXS; }
+
+  // ---- input wiring ----
+  var algoBtns = document.querySelectorAll("#algo button");
+  algoBtns.forEach(function(b){
+    b.addEventListener("click", function(){
+      algo=b.getAttribute("data-a");
+      algoBtns.forEach(function(x){ x.setAttribute("aria-pressed", x===b?"true":"false"); });
+      updateCoach();
+    });
+  });
+  el("rps").addEventListener("input", function(e){ rps=+e.target.value; el("rps-out").textContent=rps+" rps"; el("m-rps").innerHTML=rps+'<small>rps</small>'; });
+  el("srv-plus").addEventListener("click", function(){ addServer(false); });
+  el("srv-minus").addEventListener("click", function(){ removeServer(false); });
+  el("autoscale").addEventListener("change", function(e){ autoscale=e.target.checked; e.target.parentElement.querySelector(".txt").textContent=autoscale?"on":"off"; if(autoscale) pushEvent("Auto-scaling <b>enabled</b>"); });
+  el("reset").addEventListener("click", function(){
+    reset(); el("srv-count").textContent="3"; syncStepper(); updateMetrics(); updateCoach();
+  });
+
+  // click a server to kill/revive
+  cv.addEventListener("click", function(e){
+    var r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+    for(var i=0;i<servers.length;i++){
+      var s=servers[i];
+      if(mx>=s.x && mx<=s.x+s.w && my>=s.y && my<=s.y+s.h){
+        s.healthy=!s.healthy;
+        if(!s.healthy){ s.conns=0; s.completions=[]; pushEvent('<b>S'+s.id+' failed</b> health check — pulled from rotation'); }
+        else pushEvent('<b>S'+s.id+' recovered</b> — back in rotation');
+        updateMetrics(); updateCoach(); break;
+      }
+    }
+  });
+
+  // ---- boot ----
+  var ro = ("ResizeObserver" in window) ? new ResizeObserver(resize) : null;
+  if(ro) ro.observe(stage); else window.addEventListener("resize", resize);
+  reset(); resize(); syncStepper(); updateMetrics();
+
+  var last=0;
+  function frame(ts){
+    if(!last) last=ts; var dt=(ts-last)/1000; last=ts; if(dt>0.05) dt=0.05;
+    update(dt); render(); requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

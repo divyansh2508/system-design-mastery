@@ -1,0 +1,42 @@
+# Nginx reverse-proxy load balancer in front of three whoami backends.
+# Bring up : docker compose up -d
+# Tear down: docker compose down -v
+# No version key — Compose v2 ignores it and treats these as the modern schema.
+
+services:
+  # Backend 1 — traefik/whoami is a tiny HTTP server that echoes the
+  # container's hostname on every request, so you can SEE which backend served you.
+  whoami1:
+    image: traefik/whoami:v1.10.2
+    hostname: whoami1          # what whoami prints as "Hostname:" in its response
+    networks: [labnet]
+
+  # Backend 2 — identical; you will `docker compose stop whoami2` mid-lab.
+  whoami2:
+    image: traefik/whoami:v1.10.2
+    hostname: whoami2
+    networks: [labnet]
+
+  # Backend 3 — identical.
+  whoami3:
+    image: traefik/whoami:v1.10.2
+    hostname: whoami3
+    networks: [labnet]
+
+  # Load balancer — official nginx image, round-robins across the three
+  # backends. Config is mounted read-only; port 80 in the container is
+  # published to 8080 on your host.
+  lb:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on: [whoami1, whoami2, whoami3]
+    networks: [labnet]
+
+# Private bridge network so nginx can resolve whoami1/2/3 by name
+# via Docker's built-in DNS.
+networks:
+  labnet:
+    driver: bridge

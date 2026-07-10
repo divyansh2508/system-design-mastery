@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prometheus + Grafana — Sandbox Lab</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#d97b2e; --accent-soft:rgba(217,123,46,.10);
+    --hue:#d97b2e; --hue-soft:rgba(217,123,46,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#e8975a;--accent-soft:rgba(232,151,90,.14);--hue:#e8975a;--hue-soft:rgba(232,151,90,.14);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#d97b2e;--accent-soft:rgba(217,123,46,.10);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#e8975a;--accent-soft:rgba(232,151,90,.14);--hue:#e8975a;--hue-soft:rgba(232,151,90,.14);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .step{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 20px;margin:22px 0;box-shadow:var(--shadow)}
+  .step .st{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--hue);font-weight:700;margin:0 0 6px}
+  .step h3{margin:0 0 10px}
+  .obs{font-size:13.5px;color:var(--muted);border-left:3px solid var(--border);padding-left:12px;margin:14px 0 0}
+  .obs b{color:var(--text)}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+  .kbd{font-family:var(--mono);font-size:12px;background:var(--surface-2);border:1px solid var(--border);border-bottom-width:2px;border-radius:6px;padding:1px 7px;white-space:nowrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../../index.html">Home</a>
+      <a href="../../roadmap-dashboard.html">Roadmap</a>
+      <a href="../../modules/14-observability-monitoring.html">Module 14 notes</a>
+      <a href="../../tools/slo-calculator.html">📟 the simulator</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Sandbox Lab</span><span class="sep">·</span><span>Module 14 — Observability</span></p>
+      <h1>Prometheus + Grafana</h1>
+      <p class="sub">Stand up the real Prometheus + Grafana metrics stack, scrape a live machine with node-exporter, then turn raw counters into a query, a dashboard panel, and a firing alert — the exact loop behind every <strong>SLI, SLO, and error budget</strong>.</p>
+    </header>
+
+    <div class="callout tip">
+      <p class="lbl">Prerequisites</p>
+      <p><strong>Docker Desktop must be running.</strong> Then open a terminal and <code>cd</code> into this folder (<code>sandboxes/07-observability/</code>) — every command below is run from here, where the <code>docker-compose.yml</code> and <code>prometheus.yml</code> live. You'll also open two URLs in your browser: <code>localhost:9090</code> (Prometheus) and <code>localhost:3000</code> (Grafana).</p>
+    </div>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this lab</h2>
+      <ol>
+        <li><a href="#build">What you'll build</a></li>
+        <li><a href="#stack">The stack</a></li>
+        <li><a href="#up">Bring it up</a></li>
+        <li><a href="#ex">The exercises</a></li>
+        <li><a href="#down">Teardown</a></li>
+        <li><a href="#taught">What this taught you</a></li>
+      </ol>
+    </nav>
+
+    <section id="build">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>What you'll build</h2>
+      <p class="lead">Three official containers wired into the canonical metrics pipeline: <strong>node-exporter</strong> publishes machine metrics, <strong>Prometheus</strong> scrapes and stores them every 15&nbsp;seconds, and <strong>Grafana</strong> sits on top for dashboards and alerting. No app code — you are the operator, driving it from the terminal and two web UIs.</p>
+      <p>This is the shape of every production monitoring setup you'll ever meet. The pull model is the key idea: Prometheus reaches out and <em>scrapes</em> each target's <code>/metrics</code> endpoint on a schedule — targets don't push. Grafana never touches the targets; it only ever queries Prometheus.</p>
+      <pre><code>   <span class="cmt">┌───────────────┐   query    ┌────────────────────┐</span>
+   <span class="cmt">│   Grafana     │  (PromQL)  │     Prometheus     │</span>
+   <span class="cmt">│   :3000       │ ─────────▶ │     :9090          │</span>
+   <span class="cmt">│  dashboards + │            │  stores series,    │</span>
+   <span class="cmt">│  alert rules  │            │  scrapes every 15s │</span>
+   <span class="cmt">└───────────────┘            └─────────┬──────────┘</span>
+                                         │ pull GET /metrics
+                          <span class="cmt">┌──────────────┴──────────────┐</span>
+                          ▼                             ▼
+                <span class="cmt">┌────────────────────┐      ┌────────────────────┐</span>
+                <span class="cmt">│   node-exporter    │      │  prometheus itself │</span>
+                <span class="cmt">│   :9100/metrics    │      │  :9090/metrics     │</span>
+                <span class="cmt">│  CPU · mem · disk  │      │  (its own health)  │</span>
+                <span class="cmt">└────────────────────┘      └────────────────────┘</span></code></pre>
+      <p>By the end you'll have queried live metrics in Prometheus, connected Grafana to it, drawn a time-series panel of CPU load, and built an alert that actually fires when a target goes down — then tied all of it back to the language of reliability: SLIs, SLOs, and error budgets.</p>
+    </section>
+
+    <section id="stack">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>The stack</h2>
+      <p>Three services, all official images, zero custom code. Prometheus mounts the <code>prometheus.yml</code> next to it, which tells it what to scrape. Here's the complete <code>docker-compose.yml</code> sitting next to this page:</p>
+      <pre><code><span class="cmt"># Observability sandbox — System Design, Module 14</span>
+<span class="cmt"># The classic metrics stack, all official images, no custom code:</span>
+<span class="cmt">#   node-exporter  → exposes host/kernel metrics at :9100</span>
+<span class="cmt">#   prometheus     → scrapes those metrics every 15s and stores + queries them</span>
+<span class="cmt">#   grafana        → dashboards + alerting on top of Prometheus</span>
+<span class="cmt"># You talk to Prometheus at http://localhost:9090 and Grafana at http://localhost:3000.</span>
+
+services:
+  <span class="cmt"># Prometheus: pulls metrics from itself and node-exporter, stores the time series,</span>
+  <span class="cmt"># and answers PromQL queries. Config is mounted read-only from ./prometheus.yml.</span>
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: sandbox-prometheus
+    ports:
+      - "9090:9090"                                        <span class="cmt"># host:container — open http://localhost:9090</span>
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro <span class="cmt"># our scrape config</span>
+    restart: unless-stopped
+
+  <span class="cmt"># node-exporter: the canonical exporter for machine metrics (CPU, memory, disk, net).</span>
+  <span class="cmt"># Its cpu/meminfo collectors read the shared-kernel /proc, so metrics like</span>
+  <span class="cmt"># node_cpu_seconds_total work out-of-the-box with no host mounts — keeps this</span>
+  <span class="cmt"># cross-platform on Docker Desktop. (On a bare Linux host you can add</span>
+  <span class="cmt"># `--path.rootfs=/host` + a `/:/host:ro,rslave` mount for full host fidelity.)</span>
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: sandbox-node-exporter
+    ports:
+      - "9100:9100"                                        <span class="cmt"># host:container — raw metrics at http://localhost:9100/metrics</span>
+    restart: unless-stopped
+
+  <span class="cmt"># Grafana: connect it to Prometheus as a data source, then build panels + alerts.</span>
+  <span class="cmt"># Login is admin / admin (set explicitly so the box is predictable).</span>
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: sandbox-grafana
+    ports:
+      - "3000:3000"                                        <span class="cmt"># host:container — open http://localhost:3000</span>
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    restart: unless-stopped</code></pre>
+      <p>And the <code>prometheus.yml</code> it mounts — the whole point is the two scrape jobs and the 15&nbsp;second interval:</p>
+      <pre><code><span class="cmt"># Prometheus scrape configuration — System Design, Module 14 (Observability)</span>
+<span class="cmt"># Prometheus PULLS metrics from each target on an interval, over HTTP.</span>
+<span class="cmt"># Two jobs below: Prometheus scrapes itself, and it scrapes node-exporter.</span>
+
+global:
+  scrape_interval: 15s      <span class="cmt"># how often to pull /metrics from every target</span>
+  evaluation_interval: 15s  <span class="cmt"># how often to evaluate recording/alerting rules</span>
+
+scrape_configs:
+  <span class="cmt"># 1) Prometheus scraping its own /metrics (localhost = inside the prometheus container).</span>
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  <span class="cmt"># 2) Prometheus scraping node-exporter over the compose network.</span>
+  <span class="cmt">#    "node-exporter" is the service name → Docker DNS resolves it to the container.</span>
+  - job_name: "node"
+    static_configs:
+      - targets: ["node-exporter:9100"]</code></pre>
+      <div class="callout">
+        <p class="lbl">Why <code>node-exporter:9100</code> and not <code>localhost</code></p>
+        <p>Inside the compose network every service is reachable by its <strong>service name</strong> as a hostname. From the Prometheus container, <code>node-exporter:9100</code> resolves to the exporter; <code>localhost:9090</code> means Prometheus itself. This is the same reason Grafana will point at <code>http://prometheus:9090</code> later — not <code>localhost</code>.</p>
+      </div>
+    </section>
+
+    <section id="up">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Bring it up</h2>
+      <p>Start all three containers in the background, then confirm each one is answering:</p>
+      <pre><code><span class="cmt"># pull images + start everything (detached)</span>
+docker compose up -d
+
+<span class="cmt"># all three should be "running" / healthy</span>
+docker compose ps
+
+<span class="cmt"># is Prometheus healthy? → "Prometheus Server is Healthy."</span>
+curl -s localhost:9090/-/healthy
+
+<span class="cmt"># is node-exporter producing metrics? → a stream of node_* lines</span>
+curl -s localhost:9100/metrics | grep -m1 node_cpu_seconds_total
+
+<span class="cmt"># is Grafana up? → {"commit":"...","database":"ok","version":"11.1.0"}</span>
+curl -s localhost:3000/api/health</code></pre>
+      <p class="obs"><b>What to observe:</b> <code>docker compose ps</code> lists <code>sandbox-prometheus</code>, <code>sandbox-node-exporter</code>, and <code>sandbox-grafana</code> all up. The Prometheus health check returns a healthy line, node-exporter prints a <code>node_cpu_seconds_total</code> sample, and Grafana's health JSON says <code>"database":"ok"</code>. First run pulls the images, so give it a minute.</p>
+    </section>
+
+    <section id="ex">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>The exercises</h2>
+      <p>Five exercises, in order. The first two live in the Prometheus UI (<code>localhost:9090</code>); the last three build the Grafana half (<code>localhost:3000</code>) and end with an alert you make fire on purpose. Keep your terminal handy — the finale is driven from it.</p>
+
+      <div class="step">
+        <p class="st">Exercise 1</p>
+        <h3>Confirm the scrape — and meet <code>up</code>, your first SLI</h3>
+        <p>Open <strong>http://localhost:9090</strong> in your browser. Go to <span class="kbd">Status → Targets</span>. You should see both scrape jobs — <code>prometheus (1/1 up)</code> and <code>node (1/1 up)</code> — each with <strong>State = UP</strong>. Now switch to the <span class="kbd">Graph</span> tab, type the query below into the expression bar, and press <span class="kbd">Execute</span> (keep the <strong>Table</strong> view):</p>
+        <pre><code>up</code></pre>
+        <p class="obs"><b>What to observe:</b> two rows come back — <code>up{instance="localhost:9090",job="prometheus"} = 1</code> and <code>up{instance="node-exporter:9100",job="node"} = 1</code>. <code>up</code> is a metric Prometheus <em>synthesises</em> for every target on every scrape: <code>1</code> = the scrape succeeded, <code>0</code> = it failed. That single number is the simplest possible <strong>SLI</strong> (Service Level Indicator): is the thing reachable? Remember it — Exercise 5 turns it into an alert.</p>
+      </div>
+
+      <div class="step">
+        <p class="st">Exercise 2</p>
+        <h3>Query real machine metrics with PromQL</h3>
+        <p>node-exporter exposes hundreds of series. The most important pattern in all of PromQL is <code>rate()</code> over a <em>counter</em> — a number that only ever goes up (like total CPU seconds). <code>rate()</code> converts it into a per-second change. Still on the <span class="kbd">Graph</span> tab at <code>localhost:9090</code>, run this and switch to the <strong>Graph</strong> view:</p>
+        <pre><code>rate(node_cpu_seconds_total[1m])</code></pre>
+        <p>You'll get one line per CPU core per mode (<code>user</code>, <code>system</code>, <code>idle</code>, <code>iowait</code>…). That's noisy. Now collapse it into the one number an operator actually watches — <strong>percent of CPU that is busy</strong> — by measuring idle and subtracting from 100:</p>
+        <pre><code>100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)</code></pre>
+        <p class="obs"><b>What to observe:</b> the first query is a thicket of per-core lines; the second is a single, readable CPU-busy percentage that hovers low when idle and jumps when you do work on your machine. This second expression is a genuine <strong>saturation SLI</strong> — you just wrote the exact query a real dashboard panel would run. Copy it; you'll paste it into Grafana next.</p>
+      </div>
+
+      <div class="step">
+        <p class="st">Exercise 3</p>
+        <h3>Wire Grafana to Prometheus</h3>
+        <p>Open <strong>http://localhost:3000</strong> and log in with <strong>admin / admin</strong>. <em>(If Grafana prompts you to set a new password, click <span class="kbd">Skip</span> — this is a throwaway lab.)</em> Then add the data source:</p>
+        <ul>
+          <li>Left menu → <span class="kbd">Connections → Data sources</span> → <span class="kbd">Add data source</span>.</li>
+          <li>Choose <strong>Prometheus</strong>.</li>
+          <li>In <strong>Connection → Prometheus server URL</strong>, enter exactly:</li>
+        </ul>
+        <pre><code>http://prometheus:9090</code></pre>
+        <ul>
+          <li>Leave everything else default. Scroll down and click <span class="kbd">Save &amp; test</span>.</li>
+        </ul>
+        <p class="obs"><b>What to observe:</b> a green banner — <strong>"Successfully queried the Prometheus API."</strong> / "Data source is working." If instead you get a connection error, you almost certainly typed <code>localhost</code> — from <em>inside</em> the Grafana container <code>localhost</code> is Grafana, not Prometheus. On the compose network the address is the service name, <code>prometheus</code>.</p>
+      </div>
+
+      <div class="step">
+        <p class="st">Exercise 4</p>
+        <h3>Build a time-series panel</h3>
+        <p>Now visualise the SLI from Exercise 2. Create a dashboard and a panel:</p>
+        <ul>
+          <li>Left menu → <span class="kbd">Dashboards</span> → <span class="kbd">New</span> → <span class="kbd">New dashboard</span> → <span class="kbd">Add visualization</span>.</li>
+          <li>Pick your <strong>Prometheus</strong> data source. The visualization type (top-right) defaults to <strong>Time series</strong> — leave it.</li>
+          <li>In the query editor, toggle to <span class="kbd">Code</span> mode and paste the CPU-busy expression:</li>
+        </ul>
+        <pre><code>100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)</code></pre>
+        <ul>
+          <li>On the right panel options: set <strong>Title</strong> to <code>CPU busy %</code>, and under <strong>Standard options → Unit</strong> choose <strong>Percent (0–100)</strong>.</li>
+          <li>Click <span class="kbd">Run queries</span>, then <span class="kbd">Apply</span> (top-right), then the <span class="kbd">Save dashboard</span> disk icon — name it <code>Node health</code>.</li>
+        </ul>
+        <p class="obs"><b>What to observe:</b> a live line chart of CPU utilisation, labelled as a percentage, refreshing as Prometheus scrapes. You've now made an SLI <em>visible</em> — this is the whole job of a dashboard: turn a raw counter into a signal a human can glance at. Open a busy program on your machine and watch the line climb.</p>
+      </div>
+
+      <div class="step">
+        <p class="st">Exercise 5</p>
+        <h3>Create an alert — and burn an error budget on purpose</h3>
+        <p>A dashboard is passive; an <strong>alert</strong> is the thing that pages you. We'll alert on the availability SLI from Exercise 1 — <code>up</code> for the node target — because it maps perfectly onto an SLO. First, the reliability vocabulary this exercise makes concrete:</p>
+        <div class="tbl">
+          <table>
+            <thead><tr><th>Term</th><th>In this lab</th></tr></thead>
+            <tbody>
+              <tr><td>SLI</td><td><code>up{job="node"}</code> — is the target being scraped successfully? (1 or 0)</td></tr>
+              <tr><td>SLO</td><td>a target you pick, e.g. <strong>99.9% availability</strong> over 30 days</td></tr>
+              <tr><td>Error budget</td><td>100% − 99.9% = <strong>0.1%</strong> ≈ <strong>~43 min/month</strong> of allowed downtime</td></tr>
+              <tr><td>The alert</td><td>fires the moment <code>up</code> drops to 0 — i.e. you've started spending that budget</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Build the rule in Grafana. Left menu → <span class="kbd">Alerting → Alert rules</span> → <span class="kbd">New alert rule</span>:</p>
+        <ul>
+          <li><strong>Name:</strong> <code>node-exporter down (availability SLO)</code>.</li>
+          <li><strong>Query (section 1):</strong> data source <strong>Prometheus</strong>, in <span class="kbd">Code</span> mode set query <strong>A</strong> to:</li>
+        </ul>
+        <pre><code>up{job="node"}</code></pre>
+        <ul>
+          <li><strong>Condition (section 2):</strong> keep the two default expressions Grafana adds — <strong>B = Reduce</strong> (function <strong>Last</strong>, input A) and <strong>C = Threshold</strong> (input B). Set the threshold to <strong>IS BELOW 1</strong>, and make sure <strong>C</strong> is marked as the alert condition.</li>
+          <li><strong>Evaluation behavior (section):</strong> click <span class="kbd">New folder</span> → <code>sandbox</code>; <span class="kbd">New evaluation group</span> → name <code>node</code>, interval <code>10s</code>. Set <strong>Pending period</strong> to <strong>None</strong> so it fires immediately, not after a delay.</li>
+          <li>Click <span class="kbd">Save rule and exit</span>. On <span class="kbd">Alerting → Alert rules</span> the rule shows state <strong>Normal</strong> (green) — because the target is up.</li>
+        </ul>
+        <p>Now <strong>break it on purpose</strong> from your terminal. Stopping node-exporter leaves its target still listed in <code>prometheus.yml</code>, so Prometheus records <code>up=0</code> for it — exactly a real outage:</p>
+        <pre><code><span class="cmt"># kill the target — Prometheus keeps scraping and now records up=0</span>
+docker compose stop node-exporter
+
+<span class="cmt"># (optional) prove it from the Prometheus side — this returns up ... 0</span>
+sleep 20 &amp;&amp; curl -s 'localhost:9090/api/v1/query?query=up%7Bjob%3D%22node%22%7D'</code></pre>
+        <p>Watch <span class="kbd">Alerting → Alert rules</span> in Grafana. Within ~10–30&nbsp;seconds the rule flips <strong>Normal → Pending → Firing</strong> (red). Then bring the target back:</p>
+        <pre><code><span class="cmt"># restore the target — up returns to 1, the alert resolves</span>
+docker compose start node-exporter</code></pre>
+        <p class="obs"><b>What to observe:</b> the rule turns red and <strong>Firing</strong> the moment availability drops to 0, then returns to <strong>Normal</strong> once the target is back. That firing window is your <strong>error budget being spent in real time</strong> — every second the target is down eats into the ~43 min/month that a 99.9% SLO allows. A production on-call alert is exactly this: a condition on an SLI that trips before the SLO is breached, so a human can act while there's still budget left. You just built the whole feedback loop end to end.</p>
+      </div>
+    </section>
+
+    <section id="down">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Teardown</h2>
+      <p>When you're done, stop and remove all three containers (and any volumes) so nothing lingers or holds ports 9090/3000/9100:</p>
+      <pre><code>docker compose down -v</code></pre>
+      <p class="obs"><b>What to observe:</b> Compose stops and removes <code>sandbox-prometheus</code>, <code>sandbox-node-exporter</code>, and <code>sandbox-grafana</code>. The <code>-v</code> drops volumes too, so your Grafana data source, dashboard, and alert rule are wiped — the next <code>docker compose up -d</code> starts from a clean slate.</p>
+    </section>
+
+    <section id="taught">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>What this taught you</h2>
+      <p>In three containers and a handful of commands you built and drove a complete monitoring pipeline — and, more importantly, connected each moving part to the reliability concept it serves:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>You did</th><th>You saw</th><th>The concept</th></tr></thead>
+          <tbody>
+            <tr><td>Status → Targets, query <code>up</code></td><td class="num">up = 1</td><td>Scrape health = an availability SLI</td></tr>
+            <tr><td><code>rate(node_cpu_seconds_total[1m])</code></td><td>counter → per-second rate</td><td>PromQL: rates over counters</td></tr>
+            <tr><td>Add Prometheus data source</td><td>"Data source is working"</td><td>Grafana queries Prometheus</td></tr>
+            <tr><td>Build the CPU-busy panel</td><td>a live utilisation line</td><td>A dashboard makes an SLI visible</td></tr>
+            <tr><td>Alert on <code>up &lt; 1</code>, stop the target</td><td class="num">Normal → Firing</td><td>SLO breach → error-budget burn</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The through-line is the reliability loop: <strong>instrument</strong> (node-exporter) → <strong>collect</strong> (Prometheus) → <strong>visualise</strong> (Grafana panel) → <strong>alert</strong> (rule on an SLI) → <strong>act</strong> before the error budget runs out. Every observability stack you'll ever run is a variation on what you just built.</p>
+      <div class="callout tool">
+        <p class="lbl">Pair it with the simulator</p>
+        <p>You watched one alert fire when availability hit zero. Now put numbers on it: open the <a href="../../tools/slo-calculator.html">📟 SLO Calculator</a> and see how an SLO target (99.9% vs 99.99%) sets your monthly error budget in minutes, and how a burn rate decides how fast you'd spend it. The sandbox showed you the alert is real; the simulator lets you tune the SLO and error budget behind it. Read the theory in the <a href="../../modules/14-observability-monitoring.html">Module 14 notes</a>.</p>
+      </div>
+    </section>
+
+    <div class="nextnav">
+      <a href="../../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../../tools/slo-calculator.html">Open the SLO Calculator →</a>
+    </div>
+
+    <footer>Sandbox Lab · System Design Mastery · Module 14 — Observability · Runs entirely on your machine via Docker.</footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docker Sandbox Labs — System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --ok:#2f9e44; --warn:#c77d17; --warn-soft:rgba(199,125,23,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#8a99ab;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--ok:#54c96a;--warn:#e3b341;--warn-soft:rgba(227,179,65,.12);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--ok:#2f9e44;--warn:#c77d17;--warn-soft:rgba(199,125,23,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#8a99ab;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--ok:#54c96a;--warn:#e3b341;--warn-soft:rgba(227,179,65,.12);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border)}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent)}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+  .wrap{max-width:980px;margin:0 auto;padding:0 22px 70px}
+  header{padding:52px 0 8px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin:0 0 16px}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(32px,6vw,52px);line-height:1.04;letter-spacing:-.015em;margin:0 0 18px;text-wrap:balance}
+  .thesis{max-width:62ch;font-size:17px;color:var(--muted);margin:0}
+  .thesis b{color:var(--text);font-weight:600}
+
+  .prereq{margin-top:28px;border:1px solid var(--border);border-left:3px solid var(--warn);background:var(--warn-soft);border-radius:12px;padding:16px 20px}
+  .prereq .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--warn);font-weight:600;margin:0 0 6px}
+  .prereq p{margin:0;font-size:14px;color:var(--text)}
+  .prereq code{font-family:var(--mono);font-size:12.5px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:1px 7px}
+
+  section{margin-top:40px}
+  .shead{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:22px}
+  .shead h2{font-family:var(--serif);font-size:24px;font-weight:600;margin:0}
+  .shead .c{font-family:var(--mono);font-size:12px;color:var(--faint);margin-left:auto}
+  .cards{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:620px){.cards{grid-template-columns:1fr 1fr}}
+  .card{display:flex;flex-direction:column;gap:7px;background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:17px 19px;box-shadow:var(--shadow);transition:transform .14s,border-color .14s}
+  a.card:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .card .top{display:flex;align-items:center;gap:11px}
+  .card .ic{font-size:22px;line-height:1}
+  .card h3{font-size:15.5px;font-weight:600;margin:0;flex:1}
+  .card p{font-size:13px;color:var(--muted);margin:0;line-height:1.5}
+  .card p code{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
+  .tag{font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:20px;white-space:nowrap;color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+
+  footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--border);font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  footer b{color:var(--muted)}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <span class="brand">◇ SD Mastery</span>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="index.html">Sandbox Labs</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow">Archetype #2 · Hands-on infrastructure</p>
+      <h1>Docker Sandbox Labs</h1>
+      <p class="thesis">The simulators build your intuition; these build your <b>hands</b>. Each lab spins up <b>real infrastructure</b> — actual Nginx, Postgres, Redis, Kafka, Prometheus, Keycloak — in Docker, then walks you through breaking and observing it. This is what turns interview-real into <b>job-real</b>.</p>
+
+      <div class="prereq">
+        <p class="lbl">⚠ Prerequisites</p>
+        <p>You need <b>Docker Desktop</b> installed and running. Each lab is a folder under <code>System Design/sandboxes/</code> — open its guide, then <code>cd</code> into that folder and follow the commands. Tear down with <code>docker compose down -v</code> when done.</p>
+      </div>
+    </header>
+
+    <section>
+      <div class="shead"><h2>The labs</h2><span class="c">8 labs · pair with the simulators</span></div>
+      <div class="cards">
+        <a class="card" href="01-nginx-load-balancer/lab.html">
+          <div class="top"><span class="ic">🚦</span><h3>Nginx Load Balancer</h3><span class="tag">M2</span></div>
+          <p>3 backends behind Nginx — <code>curl</code> and watch round-robin, kill one, see failover. Pairs with the Load Balancer sim.</p>
+        </a>
+        <a class="card" href="02-postgres-replication/lab.html">
+          <div class="top"><span class="ic">🐘</span><h3>Postgres Indexing &amp; Replication</h3><span class="tag">M3–4</span></div>
+          <p>Primary + read-replica. <code>EXPLAIN</code> before/after an index, replicate writes, measure lag.</p>
+        </a>
+        <a class="card" href="03-redis-cache/lab.html">
+          <div class="top"><span class="ic">🗃️</span><h3>Redis Caching &amp; Eviction</h3><span class="tag">M5–6</span></div>
+          <p>TTL expiry and <code>allkeys-lru</code> eviction, live via <code>redis-cli</code>. Pairs with the Cache Playground.</p>
+        </a>
+        <a class="card" href="04-kafka/lab.html">
+          <div class="top"><span class="ic">📨</span><h3>Kafka Partitions &amp; Groups</h3><span class="tag">M7</span></div>
+          <p>Create partitions, produce/consume, add a consumer, watch a rebalance and read the lag.</p>
+        </a>
+        <a class="card" href="05-api-protocols/lab.html">
+          <div class="top"><span class="ic">🔌</span><h3>REST · GraphQL · gRPC</h3><span class="tag">M9</span></div>
+          <p>One service, three protocols — hit each and compare the payloads for real.</p>
+        </a>
+        <a class="card" href="06-websocket-chat/lab.html">
+          <div class="top"><span class="ic">📡</span><h3>WebSocket Chat + Redis</h3><span class="tag">M10</span></div>
+          <p>Two chat instances behind Nginx, messages fanned out via Redis pub/sub. Two tabs, live.</p>
+        </a>
+        <a class="card" href="07-observability/lab.html">
+          <div class="top"><span class="ic">📉</span><h3>Prometheus + Grafana</h3><span class="tag">M14</span></div>
+          <p>Scrape metrics, build a Grafana panel, set an alert. Pairs with the SLO calculator.</p>
+        </a>
+        <a class="card" href="08-oauth-keycloak/lab.html">
+          <div class="top"><span class="ic">🔐</span><h3>OAuth 2.0 with Keycloak</h3><span class="tag">M15</span></div>
+          <p>Real auth server: create a realm + client, get a token via <code>curl</code>, decode the JWT.</p>
+        </a>
+      </div>
+    </section>
+
+    <footer>
+      Docker sandbox labs · System Design Mastery &nbsp;·&nbsp; official images, run locally &nbsp;·&nbsp; each pairs with a simulator + its module notes<br>
+      Prerequisite: <b>Docker Desktop</b>. These stacks run on <b>your</b> machine — nothing here reaches the internet.
+    </footer>
+  </div>
+</body>
+</html>

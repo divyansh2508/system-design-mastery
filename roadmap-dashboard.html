@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System Design Mastery — 12-Week Roadmap</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 4px 16px rgba(20,30,50,.05);
+    --p1:#4263eb; --p2:#0ca678; --p3:#7048e8; --p4:#d97b2e; --p5:#e64980; --p6:#2f9e44; --pb:#1098ad;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0e131a; --surface:#161d27; --surface-2:#111823;
+      --text:#d8e0ea; --muted:#8a99ab; --faint:#5e6c7d;
+      --border:#242e3b; --border-soft:#1c2530;
+      --accent:#7b93f5; --accent-soft:rgba(123,147,245,.13);
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28);
+      --p1:#6a8bff; --p2:#28c39a; --p3:#9d7bff; --p4:#f0a35a; --p5:#ff70a6; --p6:#54c96a; --pb:#3bc9db;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 4px 16px rgba(20,30,50,.05);
+    --p1:#4263eb; --p2:#0ca678; --p3:#7048e8; --p4:#d97b2e; --p5:#e64980; --p6:#2f9e44; --pb:#1098ad;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e131a; --surface:#161d27; --surface-2:#111823;
+    --text:#d8e0ea; --muted:#8a99ab; --faint:#5e6c7d;
+    --border:#242e3b; --border-soft:#1c2530;
+    --accent:#7b93f5; --accent-soft:rgba(123,147,245,.13);
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28);
+    --p1:#6a8bff; --p2:#28c39a; --p3:#9d7bff; --p4:#f0a35a; --p5:#ff70a6; --p6:#54c96a; --pb:#3bc9db;
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+
+  /* sticky progress */
+  .progressbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+  .progressbar .inner{max-width:1080px;margin:0 auto;padding:11px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .progressbar .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  .progressbar .count{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums}
+  .bar{flex:1;min-width:140px;height:7px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+  .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--p1),var(--p3));border-radius:4px;transition:width .4s ease}
+  .reset{font-family:var(--mono);font-size:11px;color:var(--faint);background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;cursor:pointer;transition:color .15s,border-color .15s}
+  .reset:hover{color:var(--p5);border-color:var(--p5)}
+
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px 72px}
+
+  /* hero */
+  header{padding:52px 0 30px;border-bottom:1px solid var(--border);margin-bottom:34px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin:0 0 16px}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(32px,6vw,54px);line-height:1.04;letter-spacing:-.015em;margin:0 0 18px;text-wrap:balance}
+  h1 em{font-style:italic;color:var(--accent)}
+  .thesis{max-width:60ch;font-size:17px;color:var(--muted);margin:0}
+  .thesis b{color:var(--text);font-weight:600}
+
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-top:32px}
+  @media(min-width:680px){.stats{grid-template-columns:repeat(6,1fr)}}
+  .stat{background:var(--surface);padding:16px 14px;text-align:center}
+  .stat .n{font-family:var(--serif);font-size:26px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+  .stat .l{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:6px}
+
+  /* loop legend */
+  .loop{margin-top:26px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+  .loop h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
+  .steps{display:grid;grid-template-columns:1fr;gap:12px}
+  @media(min-width:720px){.steps{grid-template-columns:repeat(4,1fr)}}
+  .step{display:flex;gap:11px;align-items:flex-start}
+  .step .s{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-soft);width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex-shrink:0}
+  .step b{display:block;font-size:13.5px;font-weight:600}
+  .step span{font-size:12.5px;color:var(--muted)}
+
+  /* phases */
+  .phase{margin-top:46px}
+  .phase-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding-bottom:14px;margin-bottom:20px;border-bottom:2px solid var(--hue)}
+  .phase-num{font-family:var(--mono);font-size:12px;font-weight:600;color:#fff;background:var(--hue);padding:3px 9px;border-radius:6px;letter-spacing:.04em}
+  .phase-head h2{font-family:var(--serif);font-size:clamp(21px,3.4vw,28px);font-weight:600;margin:0;letter-spacing:-.01em}
+  .phase-weeks{font-family:var(--mono);font-size:12px;color:var(--hue);font-weight:600;letter-spacing:.04em}
+  .phase-goal{width:100%;font-size:14px;color:var(--muted);margin:2px 0 0;font-style:italic}
+
+  .cards{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:640px){.cards{grid-template-columns:1fr 1fr}}
+  .card{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--hue);border-radius:12px;padding:15px 17px;box-shadow:var(--shadow);transition:transform .14s,box-shadow .14s;display:flex;flex-direction:column;gap:9px}
+  .card.done{opacity:.62}
+  .card.done .mtitle{text-decoration:line-through;text-decoration-color:var(--faint)}
+  .card-top{display:flex;align-items:center;gap:10px}
+  .mnum{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--hue);background:color-mix(in srgb,var(--hue) 13%,transparent);border:1px solid color-mix(in srgb,var(--hue) 34%,transparent);padding:2px 7px;border-radius:6px;flex-shrink:0}
+  .mtitle{font-size:15.5px;font-weight:600;margin:0;flex:1;letter-spacing:-.01em}
+  .mtitle a{color:inherit;text-decoration:none;transition:color .12s}
+  .mtitle a:hover{color:var(--hue);text-decoration:underline}
+  .tool-pill{font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:20px;padding:3px 9px;white-space:nowrap}
+  .tool-pill.built{color:var(--p6);background:color-mix(in srgb,var(--p6) 15%,transparent)}
+  .topics{font-size:12.8px;color:var(--muted);margin:0;line-height:1.5}
+  .card-foot{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-top:2px}
+  .pill{font-family:var(--mono);font-size:10.5px;padding:3px 8px;border-radius:6px;white-space:nowrap}
+  .pill.drill{color:var(--text);background:var(--surface-2);font-weight:600}
+  .pill.sandbox{color:var(--muted);border:1px dashed var(--border)}
+  .res{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-left:auto}
+
+  /* checkbox */
+  .check{position:relative;flex-shrink:0;width:20px;height:20px;cursor:pointer}
+  .check input{position:absolute;opacity:0;width:20px;height:20px;margin:0;cursor:pointer}
+  .check .box{position:absolute;inset:0;border:1.5px solid var(--border);border-radius:6px;background:var(--surface-2);transition:background .15s,border-color .15s}
+  .check .box::after{content:"";position:absolute;left:6px;top:2.5px;width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg) scale(0);transition:transform .15s}
+  .check input:checked+.box{background:var(--hue);border-color:var(--hue)}
+  .check input:checked+.box::after{transform:rotate(45deg) scale(1)}
+  .check input:focus-visible+.box{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* track B */
+  .trackb .card{border-left-style:dashed}
+  .bnote{font-size:13px;color:var(--muted);margin:0 0 18px;font-style:italic}
+
+  /* cadence */
+  .cadence{margin-top:48px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px 24px}
+  .cadence h2{font-family:var(--serif);font-size:20px;margin:0 0 6px}
+  .cadence p{font-size:14px;color:var(--muted);margin:0 0 16px;max-width:64ch}
+  .budget{display:grid;grid-template-columns:1fr;gap:10px}
+  @media(min-width:640px){.budget{grid-template-columns:repeat(4,1fr)}}
+  .bud{border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+  .bud .h{font-family:var(--mono);font-size:19px;font-weight:600;color:var(--accent)}
+  .bud .t{font-size:12.5px;color:var(--muted);margin-top:3px}
+
+  footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--border);font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.02em;line-height:1.7}
+  footer b{color:var(--muted)}
+
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg)}
+  .topnav .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .topnav .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .topnav .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .topnav .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <a class="brand" href="index.html">◇ SD Mastery</a>
+  <div class="navlinks">
+    <a href="index.html">Home</a>
+    <a href="roadmap-dashboard.html">Roadmap</a>
+    <a href="modules/01-design-thinking.html">Module 1</a>
+    <a href="tools/capacity-estimator.html">Capacity Estimator</a>
+  </div>
+</nav>
+
+<div class="progressbar">
+  <div class="inner">
+    <span class="lbl">Your progress</span>
+    <span class="count" id="count">0 / 22</span>
+    <div class="bar"><i id="fill"></i></div>
+    <span class="count" id="pct" style="min-width:44px;text-align:right">0%</span>
+    <button class="reset" id="reset">Reset</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Master System Design · The complete path</p>
+    <h1>System Design <em>Mastery</em><br>in 12 weeks — the smart way</h1>
+    <p class="thesis">Real architecture capability <b>and</b> interview-cracking, built from <b>self-authored notes, free video, and interactive tools</b> instead of paid courses. The GeeksforGeeks syllabus is the spine; Hello Interview is the interview method; DDIA is the depth. You don't just read it — you <b>simulate it, break it, and build it.</b></p>
+
+    <div class="stats" role="group" aria-label="Roadmap at a glance">
+      <div class="stat"><div class="n">12</div><div class="l">Weeks</div></div>
+      <div class="stat"><div class="n">24</div><div class="l">Modules</div></div>
+      <div class="stat"><div class="n">6</div><div class="l">Phases</div></div>
+      <div class="stat"><div class="n">13</div><div class="l">Simulators</div></div>
+      <div class="stat"><div class="n">20+</div><div class="l">Case studies</div></div>
+      <div class="stat"><div class="n">~13</div><div class="l">Hrs / week</div></div>
+    </div>
+
+    <div class="loop">
+      <h2>◆ How every module works — the 4-part loop</h2>
+      <div class="steps">
+        <div class="step"><span class="s">1</span><div><b>Learn</b><span>My notes + a verified free video + DDIA where it earns it.</span></div></div>
+        <div class="step"><span class="s">2</span><div><b>See it</b><span>An interactive simulator or a real Docker sandbox lab.</span></div></div>
+        <div class="step"><span class="s">3</span><div><b>Drill</b><span>The case study, whiteboarded + attacked via the mock-interview rig.</span></div></div>
+        <div class="step"><span class="s">4</span><div><b>Lock it</b><span>15 min spaced repetition + one explain-it-back pass.</span></div></div>
+      </div>
+    </div>
+  </header>
+
+  <main id="phases"></main>
+
+  <div class="cadence">
+    <h2>The weekly rhythm</h2>
+    <p>~13 hours a week, split so the hands-on work — where your rusty backend muscle rebuilds — gets equal weight with theory. This is why you don't just watch videos.</p>
+    <div class="budget">
+      <div class="bud"><div class="h">~4h</div><div class="t">Concepts — notes, video, DDIA</div></div>
+      <div class="bud"><div class="h">~4h</div><div class="t">Tools &amp; sandbox labs (build it)</div></div>
+      <div class="bud"><div class="h">~4h</div><div class="t">Case-study drills + mock rig</div></div>
+      <div class="bud"><div class="h">~1h</div><div class="t">Review &amp; spaced repetition</div></div>
+    </div>
+  </div>
+
+  <footer>
+    Master roadmap · System Design track &nbsp;·&nbsp; spine: <b>GeeksforGeeks 24 modules</b> · method: <b>Hello Interview</b> · depth: <b>DDIA</b><br>
+    Exact video links are verified when we build each module — never guessed here. &nbsp;·&nbsp; Progress saves in this browser.
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var PHASES=[
+    {num:"Phase 1",name:"Foundations",weeks:"Week 1",hue:"var(--p1)",goal:"The mental framework for every decision: requirements → estimation → trade-offs → scaling.",modules:[
+      {id:"m1",num:"M1",title:"Design Thinking & Requirements",topics:"Functional vs non-functional · PEDALS/RESHADED · capacity estimation (DAU/QPS/storage) · API contracts · CAP trade-offs",tool:{icon:"🧮",name:"Capacity Estimator"},drill:"Bitly URL Shortener",res:"HI · Primer · Xu 1–2"},
+      {id:"m2",num:"M2",title:"Scalability & Load Balancing",topics:"Vertical vs horizontal · stateless · LB algorithms · sticky sessions · auto-scaling · multi-region",tool:{icon:"🚦",name:"Load Balancer",built:true},sandbox:"Nginx LB",drill:"Dropbox / file-sync",res:"GS · HN · Primer"}
+    ]},
+    {num:"Phase 2",name:"Data at Scale & Caching",weeks:"Weeks 2–3",hue:"var(--p2)",goal:"The heart of system design — where most interviews are won or lost.",modules:[
+      {id:"m3",num:"M3",title:"Database Fundamentals",topics:"RDBMS vs NoSQL · ACID vs BASE · CAP & PACELC · indexing (B-tree/hash) · query optimization",sandbox:"Postgres + EXPLAIN",drill:"Local Delivery Service",res:"AB · HN · DDIA 3"},
+      {id:"m4",num:"M4",title:"Database Scaling",topics:"Sharding · consistent hashing · primary-replica · read replicas · multi-leader · connection pooling",tool:{icon:"💍",name:"Consistent Hashing"},sandbox:"Postgres replica-lag",drill:"News Aggregator",res:"GS · DDIA 5 & 6"},
+      {id:"m5",num:"M5",title:"Caching Fundamentals",topics:"Cache-aside / write-through / behind · LRU/LFU eviction · stampede · invalidation · when NOT to cache",tool:{icon:"🗃️",name:"Cache Playground"},sandbox:"Redis",drill:"Ticketmaster",res:"HN · AB · BBG"},
+      {id:"m6",num:"M6",title:"Distributed Caching & CDN",topics:"Redis Cluster · Memcached vs Redis · CDN headers (ETag/Vary) · edge caching · L1/L2/L3 · cache warming",tool:{icon:"🗃️",name:"Cache + CDN tier"},sandbox:"Redis Cluster",drill:"Facebook News Feed",res:"HN · BBG · Primer"}
+    ]},
+    {num:"Phase 3",name:"Communication — Messaging, Events & APIs",weeks:"Weeks 4–5",hue:"var(--p3)",goal:"The backbone that connects distributed services, sync and async.",modules:[
+      {id:"m7",num:"M7",title:"Messaging Systems",topics:"Sync vs async · RabbitMQ/AMQP · Kafka (partitions/offsets/consumer groups) · delivery guarantees · DLQ · idempotency",tool:{icon:"📨",name:"Message Queue"},sandbox:"Kafka + RabbitMQ",drill:"Tinder",res:"HN · AB · DDIA 11"},
+      {id:"m8",num:"M8",title:"Event-Driven & CQRS",topics:"Event sourcing · CQRS · Saga · choreography vs orchestration · outbox · CDC (Debezium)",tool:{icon:"🔀",name:"Saga Flow"},drill:"LeetCode",res:"AB · BBG · DDIA 11"},
+      {id:"m9",num:"M9",title:"APIs: REST, GraphQL, gRPC",topics:"REST + Richardson model · versioning · GraphQL resolvers/subscriptions · gRPC/Protobuf streaming · API gateway",tool:{icon:"🔌",name:"Protocol Compare"},sandbox:"3-endpoint build",drill:"WhatsApp",res:"HN · BBG · Primer"},
+      {id:"m10",num:"M10",title:"Real-Time & Async APIs",topics:"WebSockets · SSE · long polling · webhooks (retry/signatures) · BFF · fan-out at scale",tool:{icon:"📡",name:"Real-time Transport"},sandbox:"WebSocket chat",drill:"Yelp",res:"HN · GS · BBG"}
+    ]},
+    {num:"Phase 4",name:"Production-Grade — Resilience, Observability & Security",weeks:"Weeks 6–8",hue:"var(--p4)",goal:"Systems that survive failure, stay observable, and remain secure at every layer.",modules:[
+      {id:"m11",num:"M11",title:"Microservices Fundamentals",topics:"Monolith vs microservices · bounded contexts / DDD · sync vs async comms · service discovery · data ownership",drill:"Strava",res:"CK · BBG · Xu 2"},
+      {id:"m12",num:"M12",title:"Advanced Microservices",topics:"Circuit breaker · retry + backoff + jitter · strangler fig · sidecar · service mesh · canary + feature flags",tool:{icon:"🚥",name:"Rate Limiter"},drill:"Distributed Rate Limiter",res:"AB · HN · BBG"},
+      {id:"m13",num:"M13",title:"Fault Tolerance & Resilience",topics:"HA (redundancy/failover/SLA) · bulkhead · timeouts · graceful degradation · DR · chaos eng · RTO/RPO",tool:{icon:"🔗",name:"Cascade Sim"},drill:"Online Auction Platform",res:"AB · HN · DDIA 8"},
+      {id:"m14",num:"M14",title:"Observability & Monitoring",topics:"Metrics/logs/traces · structured logging + correlation IDs · OpenTelemetry · Prometheus+Grafana · SLI/SLO/SLA · error budgets",tool:{icon:"📉",name:"SLO Calc"},sandbox:"Prometheus+Grafana",drill:"Facebook Live Comments",res:"HN · BBG · Grafana"},
+      {id:"m15",num:"M15",title:"Security Architecture",topics:"Defense in depth · zero trust · OAuth 2.0/OIDC + PKCE · JWT at gateway · secrets mgmt · mTLS · OWASP API Top 10",tool:{icon:"🔐",name:"OAuth Flow"},sandbox:"JWT/OAuth gateway",drill:"Facebook Post Search",res:"HN · BBG · OWASP"},
+      {id:"m16",num:"M16",title:"Compliance & Protection",topics:"WAF · rate limiting / abuse · RBAC vs ABAC · OWASP Top 10 → architecture · GDPR/SOC2/HIPAA · supply chain (SBOM)",drill:"Price Tracking Service",res:"BBG · OWASP · well-architected"}
+    ]},
+    {num:"Phase 5",name:"Cloud, DevOps & FAANG Case Studies",weeks:"Weeks 9–10",hue:"var(--p5)",goal:"Deploy to production and design the exact systems asked in senior interviews.",modules:[
+      {id:"m17",num:"M17",title:"Cloud Architecture (AWS)",topics:"EC2/ECS/Lambda/S3/RDS/ElastiCache · VPC/SG/NACL/NAT · ALB vs NLB · SQS · Terraform · cost optimization",sandbox:"Terraform + LocalStack",drill:"Instagram",res:"AWS · BBG · HN"},
+      {id:"m18",num:"M18",title:"Containers & Kubernetes",topics:"Docker (layers/multi-stage) · K8s (pods/deployments/services) · ConfigMaps/Secrets/HPA/Helm · Fargate vs EC2 · GitOps",sandbox:"kind / minikube",drill:"YouTube Top-K",res:"HN · K8s docs · BBG"},
+      {id:"m19",num:"M19",title:"CI/CD & Platform Engineering",topics:"GitHub Actions → Docker → K8s · rolling / blue-green / canary · feature flags · IDPs (Backstage/Port) · DORA",sandbox:"GitHub Actions pipeline",drill:"Uber",res:"GH Actions · BBG · DORA"},
+      {id:"m20",num:"M20",title:"Serverless, Edge & AI Systems",topics:"Lambda + cold starts · S3 presigned/lifecycle · RDS Multi-AZ · edge (Workers/Lambda@Edge) · model serving · RAG",tool:{icon:"🧠",name:"RAG Pipeline"},drill:"Robinhood",res:"BBG · Lambda · → Track B"}
+    ]},
+    {num:"Phase 6",name:"Capstones — Build & Productionize",weeks:"Weeks 11–12",hue:"var(--p6)",goal:"Design → build → deploy two complete systems. Your portfolio + your deepest interview reps.",note:"The 4 capstone modules (M21–24) run as 2 end-to-end builds — which is why progress counts 22 cards, not 24.",modules:[
+      {id:"c1",num:"M21–22",title:"Capstone: URL Shortener",topics:"Build — API + redirection + Snowflake IDs + Postgres + Redis + Docker + deploy.  Productionize — LB + auto-scale + CDN + monitoring + CI/CD + rate limiting.",sandbox:"Full end-to-end build",drill:"Ships: live app + architecture doc — portfolio #1",res:"everything so far"},
+      {id:"c2",num:"M23–24",title:"Capstone: Real-Time Chat",topics:"Build — WebSockets + delivery + presence + Kafka fan-out + Redis Pub/Sub + deploy.  Scale — multi-region + presence scaling + S3 + notifications + chaos test.",sandbox:"Full end-to-end build",drill:"Ships: live app + architecture doc — portfolio #2",res:"everything so far"}
+    ]}
+  ];
+
+  var TRACKB={num:"Track B",name:"GenAI-Driven Development",weeks:"Weeks 13+",hue:"var(--pb)",note:"GFG \"Part 2: AI Toolkit.\" Sits on top of system design — where modern backend engineering is heading. Not counted in core progress.",modules:[
+    {id:"b1",num:"B1",title:"AI Toolkit & Dev Setup",topics:"Map of LLMs / copilots / CLI agents · evaluation (accuracy, context, cost, latency) · when AI helps vs hurts"},
+    {id:"b2",num:"B2",title:"Prompt Engineering & Vibe Coding",topics:"Prompt anatomy · zero → few-shot · chain-of-thought · fixing hallucinations"},
+    {id:"b3",num:"B3",title:"Spec-Driven Development",topics:"Specs before code · reducing ambiguity · deterministic generation"},
+    {id:"b4",num:"B4",title:"RAG & Context-Aware AI",topics:"Embeddings · vector DBs · semantic search · connecting AI to codebases · RAG failure modes"},
+    {id:"b5",num:"B5",title:"AI Agents, MCPs & Skills",topics:"Tool-using agents · MCP (Model Context Protocol) · planner/executor/reviewer · multi-agent · guardrails"},
+    {id:"b6",num:"B6",title:"Capstone: Text-to-SQL",topics:"FRD/PRD → synthetic data → prompt engineering → Postgres via MCP → MERN app → CI/CD — portfolio #3"}
+  ]};
+
+  var FILES={m1:"01-design-thinking.html",m2:"02-scalability-load-balancing.html",m3:"03-database-fundamentals.html",m4:"04-database-scaling.html",m5:"05-caching-fundamentals.html",m6:"06-distributed-caching-cdn.html",m7:"07-messaging-systems.html",m8:"08-event-driven-cqrs.html",m9:"09-api-architectures.html",m10:"10-realtime-async-apis.html",m11:"11-microservices-fundamentals.html",m12:"12-advanced-microservices.html",m13:"13-fault-tolerance-resilience.html",m14:"14-observability-monitoring.html",m15:"15-security-architecture.html",m16:"16-compliance-protection.html",m17:"17-cloud-architecture-aws.html",m18:"18-containers-kubernetes.html",m19:"19-cicd-platform-engineering.html",m20:"20-serverless-edge-ai.html",c1:"21-capstone-url-shortener.html",c2:"22-capstone-realtime-chat.html",b1:"b1-ai-toolkit-setup.html",b2:"b2-prompt-engineering.html",b3:"b3-spec-driven-dev.html",b4:"b4-rag-systems.html",b5:"b5-ai-agents-mcp.html",b6:"b6-text-to-sql.html"};
+  function cardHTML(m,hue,track){
+    var tool=m.tool?'<span class="tool-pill'+(m.tool.built?' built':'')+'">'+m.tool.icon+' '+m.tool.name+(m.tool.built?' ✓':'')+'</span>':'';
+    var sandbox=m.sandbox?'<span class="pill sandbox">🐳 '+m.sandbox+'</span>':'';
+    var drill=m.drill?'<span class="pill drill">◆ '+m.drill+'</span>':'';
+    var res=m.res?'<span class="res">'+m.res+'</span>':'';
+    var foot=(drill||sandbox||res)?'<div class="card-foot">'+drill+sandbox+res+'</div>':'';
+    return '<article class="card" data-card="'+m.id+'" style="--hue:'+hue+'">'+
+      '<div class="card-top">'+
+        '<label class="check" title="Mark complete"><input type="checkbox" data-id="'+m.id+'" data-track="'+track+'"><span class="box"></span></label>'+
+        '<span class="mnum">'+m.num+'</span>'+
+        '<h3 class="mtitle">'+(FILES[m.id]?'<a href="modules/'+FILES[m.id]+'">'+m.title+'</a>':m.title)+'</h3>'+tool+
+      '</div>'+
+      '<p class="topics">'+m.topics+'</p>'+foot+
+    '</article>';
+  }
+  function phaseHTML(p,track){
+    var cards=p.modules.map(function(m){return cardHTML(m,p.hue,track);}).join("");
+    var note=p.note?'<p class="bnote">'+p.note+'</p>':'';
+    return '<section class="phase'+(track==="b"?" trackb":"")+'" style="--hue:'+p.hue+'">'+
+      '<div class="phase-head">'+
+        '<span class="phase-num">'+p.num+'</span>'+
+        '<h2>'+p.name+'</h2>'+
+        '<span class="phase-weeks">'+p.weeks+'</span>'+
+        '<p class="phase-goal">'+p.goal+'</p>'+
+      '</div>'+note+
+      '<div class="cards">'+cards+'</div>'+
+    '</section>';
+  }
+
+  var html=PHASES.map(function(p){return phaseHTML(p,"core");}).join("");
+  html+=phaseHTML({num:TRACKB.num,name:TRACKB.name,weeks:TRACKB.weeks,hue:TRACKB.hue,goal:"The GenAI bridge — AI-driven development on top of everything above.",note:TRACKB.note,modules:TRACKB.modules},"b");
+  document.getElementById("phases").innerHTML=html;
+
+  // progress + persistence
+  var KEY="sd-roadmap-v1";
+  var boxes=Array.prototype.slice.call(document.querySelectorAll('input[type=checkbox]'));
+  var coreTotal=boxes.filter(function(b){return b.dataset.track==="core";}).length;
+  var fill=document.getElementById("fill"),count=document.getElementById("count"),pct=document.getElementById("pct");
+
+  function load(){
+    var saved={};
+    try{saved=JSON.parse(localStorage.getItem(KEY)||"{}");}catch(e){}
+    boxes.forEach(function(b){ if(saved[b.dataset.id]){ b.checked=true; markCard(b);} });
+  }
+  function save(){
+    var s={}; boxes.forEach(function(b){ if(b.checked) s[b.dataset.id]=1; });
+    try{localStorage.setItem(KEY,JSON.stringify(s));}catch(e){}
+  }
+  function markCard(b){
+    var c=document.querySelector('[data-card="'+b.dataset.id+'"]');
+    if(c) c.classList.toggle("done",b.checked);
+  }
+  function refresh(){
+    var done=boxes.filter(function(b){return b.dataset.track==="core"&&b.checked;}).length;
+    var p=coreTotal?Math.round(done/coreTotal*100):0;
+    count.textContent=done+" / "+coreTotal;
+    pct.textContent=p+"%";
+    fill.style.width=p+"%";
+  }
+  boxes.forEach(function(b){ b.addEventListener("change",function(){ markCard(b); save(); refresh(); }); });
+  document.getElementById("reset").addEventListener("click",function(){
+    if(!confirm("Reset all progress? This clears every checkmark.")) return;
+    boxes.forEach(function(b){ b.checked=false; markCard(b); }); save(); refresh();
+  });
+  load(); refresh();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "api-protocols-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "One user resource exposed over REST, GraphQL, and gRPC for side-by-side comparison.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "client": "node client.js"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.12.2",
+    "@grpc/proto-loader": "^0.7.13",
+    "express": "^4.19.2",
+    "graphql": "^16.9.0"
+  }
+}

@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Consistent Hashing Ring — System Design</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b1016; --panel:#121a23; --panel-2:#0e151d;
+    --border:#223140; --border-soft:#1a2530;
+    --text:#cdd9e5; --muted:#7d8fa1; --faint:#54626f;
+    --accent:#34d3e0; --accent-dim:rgba(52,211,224,.14);
+    --ok:#3fb950; --warn:#e3b341; --crit:#f85149;
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1100px 600px at 82% -8%,rgba(52,211,224,.06),transparent 60%),var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(11,16,22,.7);position:sticky;top:0;z-index:30}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:6px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-dim)}
+
+  .wrap{max-width:1140px;margin:0 auto;padding:26px 20px 60px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin:0 0 10px;display:flex;align-items:center;gap:9px}
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  h1{font-family:var(--mono);font-weight:600;font-size:clamp(23px,4vw,34px);letter-spacing:-.01em;margin:0 0 10px}
+  .lede{max-width:66ch;color:var(--muted);font-size:15px;margin:0}
+  .lede b{color:var(--text);font-weight:600}
+
+  .grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:22px}
+  @media(min-width:880px){.grid{grid-template-columns:1.15fr .85fr}}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);border-radius:14px}
+  .stage{position:relative;min-height:360px;display:flex;align-items:center;justify-content:center;padding:10px}
+  @media(min-width:880px){.stage{min-height:440px}}
+  canvas#ring{display:block;width:100%;height:auto;max-width:440px}
+
+  .side{display:flex;flex-direction:column;gap:14px}
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border-soft);border-radius:12px;overflow:hidden}
+  .cmp{background:var(--panel);padding:14px 15px}
+  .cmp .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:0 0 5px}
+  .cmp .v{font-family:var(--mono);font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1}
+  .cmp .v small{font-size:12px;color:var(--muted);font-weight:400}
+  .cmp .s{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:4px}
+  .cmp.good .v{color:var(--ok)} .cmp.bad .v{color:var(--crit)}
+
+  .legend{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+  .legend h2{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;display:flex;justify-content:space-between}
+  .legend h2 span{color:var(--faint)}
+  .lrow{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+  .lrow .sw{width:11px;height:11px;border-radius:3px;flex-shrink:0}
+  .lrow .nm{font-family:var(--mono);font-size:12.5px;font-weight:600;min-width:34px}
+  .lrow .barwrap{flex:1;height:7px;background:var(--panel-2);border-radius:4px;overflow:hidden}
+  .lrow .bar{height:100%;border-radius:4px}
+  .lrow .ct{font-family:var(--mono);font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:58px;text-align:right}
+  .balance{margin-top:8px;padding-top:11px;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+  .balance b{color:var(--text)}
+
+  .coach{padding:14px 16px;border:1px solid var(--border);border-radius:12px;background:var(--panel);border-left:3px solid var(--accent)}
+  .coach .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+  .coach p{margin:0;font-size:13.5px}
+
+  .controls{padding:18px;display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end}
+  .ctrl{display:flex;flex-direction:column;gap:8px}
+  .ctrl>label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .btns{display:flex;gap:8px}
+  .btn{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(52,211,224,.35);border-radius:9px;padding:9px 14px;cursor:pointer;transition:background .12s,opacity .12s}
+  .btn:hover{background:rgba(52,211,224,.24)}
+  .btn.rm{color:var(--crit);background:rgba(248,81,73,.12);border-color:rgba(248,81,73,.4)}
+  .btn.rm:hover{background:rgba(248,81,73,.22)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.ghost{color:var(--muted);background:var(--panel-2);border-color:var(--border)}
+  .slider{display:flex;align-items:center;gap:12px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:150px;height:4px;background:var(--border);border-radius:3px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px rgba(52,211,224,.5)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--accent);cursor:pointer}
+  .rv{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--accent);min-width:38px;font-variant-numeric:tabular-nums}
+
+  .labs{margin-top:20px;padding:20px 22px}
+  .labs h2{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 14px}
+  .labgrid{display:grid;grid-template-columns:1fr;gap:13px}
+  @media(min-width:640px){.labgrid{grid-template-columns:1fr 1fr}}
+  .lab{display:flex;gap:11px;align-items:flex-start}
+  .lab .n{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(52,211,224,.3);width:23px;height:23px;border-radius:6px;display:grid;place-items:center;flex-shrink:0}
+  .lab p{margin:0;font-size:13px;color:var(--muted)}
+  .lab p b{color:var(--text);font-weight:600}
+
+  footer{margin-top:24px;padding-top:18px;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.03em}
+  footer b{color:var(--muted)}
+  a{color:var(--accent)}
+  button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../modules/04-database-scaling.html">Module 4 notes</a>
+      <a href="load-balancer-simulator.html">🚦 Load Balancer</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <p class="eyebrow"><span class="dot"></span>System Design · Module 4 — Database Scaling</p>
+    <h1>Consistent Hashing Ring</h1>
+    <p class="lede">How do you spread keys across servers so that <b>adding or removing a server barely disturbs anything?</b> Watch the ring: each key belongs to the first node clockwise. Add a node, remove a node, and compare how many keys move here vs. under naive <span style="font-family:var(--mono)">hash % N</span> — the difference is the whole reason this technique exists.</p>
+
+    <div class="grid">
+      <div class="panel stage">
+        <canvas id="ring" width="440" height="440" aria-label="Hash ring: nodes and keys placed on a circle, each key owned by the next node clockwise."></canvas>
+      </div>
+
+      <div class="side">
+        <div class="compare">
+          <div class="cmp good"><p class="k">Moved · consistent</p><p class="v" id="c-moved">—</p><p class="s" id="c-moved-s">add or remove a node</p></div>
+          <div class="cmp bad"><p class="k">Moved · naive hash % N</p><p class="v" id="n-moved">—</p><p class="s" id="n-moved-s">the same change</p></div>
+        </div>
+
+        <div class="legend">
+          <h2><span>Load per node</span><span id="keycount">— keys</span></h2>
+          <div id="legend-rows"></div>
+          <div class="balance" id="balance"></div>
+        </div>
+
+        <div class="coach">
+          <p class="lbl">What's happening</p>
+          <p id="coach" aria-live="polite">Each key sits on the ring and is owned by the first node clockwise from it. The colored arcs show each node's territory.</p>
+        </div>
+      </div>
+
+      <div class="panel controls">
+        <div class="ctrl">
+          <label>Nodes</label>
+          <div class="btns">
+            <button class="btn" id="add">+ Add node</button>
+            <button class="btn rm" id="remove">− Remove node</button>
+          </div>
+        </div>
+        <div class="ctrl">
+          <label for="vnodes">Virtual nodes / server</label>
+          <div class="slider"><input type="range" id="vnodes" min="1" max="50" step="1" value="12"><span class="rv" id="vnodes-v">12</span></div>
+        </div>
+        <div class="ctrl">
+          <label for="keys">Keys on the ring</label>
+          <div class="slider"><input type="range" id="keys" min="20" max="400" step="20" value="160"><span class="rv" id="keys-v">160</span></div>
+        </div>
+        <div class="ctrl">
+          <label>&nbsp;</label>
+          <button class="btn ghost" id="reset">↺ Reset</button>
+        </div>
+      </div>
+
+      <div class="panel labs">
+        <h2>◆ Run these experiments</h2>
+        <div class="labgrid">
+          <div class="lab"><span class="n">1</span><p><b>Add a node.</b> Watch "moved · consistent" stay small (~1/N of keys) while "naive hash % N" jumps to almost everything. That churn is a cache-wipe in production.</p></div>
+          <div class="lab"><span class="n">2</span><p><b>Remove a node.</b> Its keys go to the next node clockwise — every other key stays put. Naive %N reshuffles nearly all of them again.</p></div>
+          <div class="lab"><span class="n">3</span><p><b>Drop virtual nodes to 1.</b> Load goes lumpy — one node owns a huge arc. Crank it to 40 and watch the load even out. That's what vnodes are for.</p></div>
+          <div class="lab"><span class="n">4</span><p><b>Connect it back.</b> This is the fix for the Load Balancer's "IP Hash trap" — sticky routing without the remap-everything problem when a server dies.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <footer>Learning tool <b>#3</b> · archetype: <b>interactive simulator</b> · pairs with <a href="../modules/04-database-scaling.html">Module 4 notes</a> (sharding &amp; replication)</footer>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+  var COLORS=["#34d3e0","#3fb950","#e3b341","#f85149","#9d8bff","#ff8ac2","#5ac8fa","#f0883e"];
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---- hashing: FNV-1a -> [0,1) ----
+  function hashInt(str){
+    var h=2166136261>>>0;
+    for(var i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619)>>>0; }
+    return h>>>0;
+  }
+  function hash01(str){ return hashInt(str)/4294967296; }
+
+  // ---- state ----
+  var V=12, K=160, nextNum=1;
+  var nodes=[];          // {id, name, color}
+  var keys=[];           // {name, pos, owner, naive}
+  var vnodes=[];         // {pos, node} sorted by pos
+  var last=null;         // {op, cMoved, nMoved}
+
+  function makeNode(){ var n={id:nextNum, name:"N"+nextNum, color:COLORS[(nextNum-1)%COLORS.length]}; nextNum++; return n; }
+  function seedKeys(){ keys=[]; for(var i=0;i<K;i++){ var nm="key-"+i; keys.push({name:nm, pos:hash01("key:"+nm), owner:null, naive:null}); } }
+
+  function buildVnodes(){
+    vnodes=[];
+    for(var i=0;i<nodes.length;i++){
+      var nd=nodes[i];
+      for(var v=0;v<V;v++){ vnodes.push({pos:hash01(nd.name+"#"+v), node:nd}); }
+    }
+    vnodes.sort(function(a,b){return a.pos-b.pos;});
+  }
+  function ownerOf(pos){
+    // first vnode clockwise with pos >= given pos, wrap to first
+    if(vnodes.length===0) return null;
+    var lo=0, hi=vnodes.length-1, ans=-1;
+    while(lo<=hi){ var mid=(lo+hi)>>1; if(vnodes[mid].pos>=pos){ ans=mid; hi=mid-1; } else { lo=mid+1; } }
+    if(ans===-1) ans=0; // wrapped past the largest -> first node clockwise
+    return vnodes[ans].node;
+  }
+  function assign(){
+    buildVnodes();
+    for(var i=0;i<keys.length;i++){
+      var k=keys[i];
+      var o=ownerOf(k.pos); k.owner=o?o.id:null;
+      // naive "hash % N": integer hash mod node-count — this is what churns catastrophically on resize
+      k.naive=nodes.length?nodes[hashInt("naive:"+k.name)%nodes.length].id:null;
+    }
+  }
+
+  function snapshot(){ var s={c:{},n:{}}; for(var i=0;i<keys.length;i++){ s.c[keys[i].name]=keys[i].owner; s.n[keys[i].name]=keys[i].naive; } return s; }
+  function diff(prev){
+    var c=0,n=0;
+    for(var i=0;i<keys.length;i++){ var k=keys[i]; if(prev.c[k.name]!==k.owner)c++; if(prev.n[k.name]!==k.naive)n++; }
+    return {c:c,n:n};
+  }
+
+  function addNode(){
+    if(nodes.length>=8) return;
+    var prev=snapshot();
+    var nd=makeNode(); nodes.push(nd); assign();
+    var d=diff(prev); last={op:"add", node:nd.name, cMoved:d.c, nMoved:d.n};
+    render(); syncBtns();
+  }
+  function removeNode(){
+    if(nodes.length<=1) return;
+    var prev=snapshot();
+    var nd=nodes.pop(); assign();
+    var d=diff(prev); last={op:"remove", node:nd.name, cMoved:d.c, nMoved:d.n};
+    render(); syncBtns();
+  }
+  function reset(){
+    nodes=[]; nextNum=1; V=12; K=160; last=null;
+    for(var i=0;i<4;i++) nodes.push(makeNode());
+    document.getElementById("vnodes").value=12; document.getElementById("vnodes-v").textContent="12";
+    document.getElementById("keys").value=160; document.getElementById("keys-v").textContent="160";
+    seedKeys(); assign(); render(); syncBtns();
+  }
+  function syncBtns(){
+    document.getElementById("add").disabled=nodes.length>=8;
+    document.getElementById("remove").disabled=nodes.length<=1;
+  }
+
+  // ---- render ----
+  var cv=document.getElementById("ring"), ctx=cv.getContext("2d");
+  function fitCanvas(){
+    var dpr=Math.min(window.devicePixelRatio||1,2);
+    var cssW=cv.clientWidth||440; var size=Math.max(240,Math.min(cssW,440));
+    cv.width=size*dpr; cv.height=size*dpr; cv.style.height=size+"px";
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    return size;
+  }
+  function ang(pos){ return pos*2*Math.PI - Math.PI/2; } // 0 at top, clockwise
+
+  function render(){
+    var S=fitCanvas();
+    var cx=S/2, cy=S/2, R=S*0.36;
+    ctx.clearRect(0,0,S,S);
+
+    // owned arcs (each vnode owns the arc from previous vnode up to itself)
+    if(vnodes.length){
+      for(var i=0;i<vnodes.length;i++){
+        var cur=vnodes[i]; var prev=vnodes[(i-1+vnodes.length)%vnodes.length];
+        var a0=ang(prev.pos), a1=ang(cur.pos);
+        if(a1<=a0) a1+=2*Math.PI; // wrap
+        ctx.beginPath(); ctx.arc(cx,cy,R,a0,a1);
+        ctx.strokeStyle=cur.node.color+""; ctx.globalAlpha=.9; ctx.lineWidth=6; ctx.stroke(); ctx.globalAlpha=1;
+      }
+    } else {
+      ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI); ctx.strokeStyle="#223140"; ctx.lineWidth=6; ctx.stroke();
+    }
+
+    // base ring outline
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI); ctx.strokeStyle="rgba(255,255,255,.06)"; ctx.lineWidth=1; ctx.stroke();
+
+    // keys as dots just inside the ring, colored by consistent owner
+    for(var j=0;j<keys.length;j++){
+      var k=keys[j], a=ang(k.pos), r=R-16;
+      var col="#54626f", nd=nodeById(k.owner); if(nd) col=nd.color;
+      ctx.beginPath(); ctx.arc(cx+Math.cos(a)*r, cy+Math.sin(a)*r, 2.4, 0, 2*Math.PI);
+      ctx.fillStyle=col; ctx.globalAlpha=.85; ctx.fill(); ctx.globalAlpha=1;
+    }
+
+    // vnode markers on the ring
+    for(var v=0;v<vnodes.length;v++){
+      var vn=vnodes[v], va=ang(vn.pos);
+      ctx.beginPath(); ctx.arc(cx+Math.cos(va)*R, cy+Math.sin(va)*R, 4, 0, 2*Math.PI);
+      ctx.fillStyle=vn.node.color; ctx.fill();
+      ctx.beginPath(); ctx.arc(cx+Math.cos(va)*R, cy+Math.sin(va)*R, 4, 0, 2*Math.PI);
+      ctx.strokeStyle="#0b1016"; ctx.lineWidth=1.5; ctx.stroke();
+    }
+
+    // center label
+    ctx.fillStyle="#7d8fa1"; ctx.font="600 12px "+monoFont(); ctx.textAlign="center";
+    ctx.fillText(nodes.length+" nodes", cx, cy-6);
+    ctx.fillStyle="#54626f"; ctx.font="10px "+monoFont();
+    ctx.fillText(V+" vnodes each", cx, cy+10);
+
+    renderPanels();
+  }
+  function monoFont(){ return "ui-monospace,Menlo,Consolas,monospace"; }
+  function nodeById(id){ for(var i=0;i<nodes.length;i++) if(nodes[i].id===id) return nodes[i]; return null; }
+
+  function renderPanels(){
+    // compare card
+    var cm=document.getElementById("c-moved"), nm=document.getElementById("n-moved");
+    var cms=document.getElementById("c-moved-s"), nms=document.getElementById("n-moved-s");
+    if(last){
+      var pc=Math.round(last.cMoved/keys.length*100), pn=Math.round(last.nMoved/keys.length*100);
+      cm.innerHTML=last.cMoved+' <small>keys</small>'; cms.textContent=pc+"% · "+last.op+" "+last.node;
+      nm.innerHTML=last.nMoved+' <small>keys</small>'; nms.textContent=pn+"% · same change";
+    } else {
+      cm.textContent="—"; nm.textContent="—"; cms.textContent="add or remove a node"; nms.textContent="the same change";
+    }
+
+    // load per node
+    var loads={}; nodes.forEach(function(n){loads[n.id]=0;});
+    keys.forEach(function(k){ if(k.owner!=null && loads[k.owner]!=null) loads[k.owner]++; });
+    var max=1; nodes.forEach(function(n){ if(loads[n.id]>max) max=loads[n.id]; });
+    var rows="";
+    nodes.forEach(function(n){
+      var ct=loads[n.id], pct=keys.length?Math.round(ct/keys.length*100):0;
+      rows+='<div class="lrow"><span class="sw" style="background:'+n.color+'"></span>'+
+            '<span class="nm" style="color:'+n.color+'">'+n.name+'</span>'+
+            '<span class="barwrap"><span class="bar" style="width:'+(ct/max*100)+'%;background:'+n.color+'"></span></span>'+
+            '<span class="ct">'+ct+' · '+pct+'%</span></div>';
+    });
+    document.getElementById("legend-rows").innerHTML=rows;
+    document.getElementById("keycount").textContent=keys.length+" keys";
+
+    // balance stat
+    var vals=nodes.map(function(n){return loads[n.id];});
+    var mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals);
+    var ideal=Math.round(keys.length/nodes.length);
+    var spread=ideal?Math.round((mx-mn)/ideal*100):0;
+    document.getElementById("balance").innerHTML="Ideal even split: <b>"+ideal+"</b>/node &nbsp;·&nbsp; actual spread (max−min): <b>"+(mx-mn)+"</b> keys ("+spread+"% of ideal)";
+
+    coach();
+  }
+
+  function coach(){
+    var el=document.getElementById("coach"), msg;
+    var vals=nodes.map(function(n){var c=0;keys.forEach(function(k){if(k.owner===n.id)c++;});return c;});
+    var mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals), ideal=keys.length/nodes.length;
+    var lumpy = ideal>0 && (mx-mn) > ideal*0.9;
+    if(last && last.op==="add") msg="Adding "+last.node+" moved only "+Math.round(last.cMoved/keys.length*100)+"% of keys — it just took over one arc of the ring. Naive hash % N moved "+Math.round(last.nMoved/keys.length*100)+"% because every key's (hash mod N) changed. That gap is why real systems use the ring.";
+    else if(last && last.op==="remove") msg="Removing "+last.node+" handed its keys to the next node clockwise — "+Math.round(last.cMoved/keys.length*100)+"% moved. Under naive hash % N, "+Math.round(last.nMoved/keys.length*100)+"% would move. Minimal disruption is the whole point.";
+    else if(V<=3 && lumpy) msg="With only "+V+" virtual node(s) per server, territory is lumpy — one node owns a big arc and gets overloaded. Raise virtual nodes and watch the load even out.";
+    else if(V>=25) msg="With "+V+" virtual nodes per server, each server is sprinkled all around the ring, so load is smooth and even — at the cost of more ring metadata to track.";
+    else msg="Each key is owned by the first node clockwise from it. The colored arcs are each node's territory. Now add or remove a node and compare the two 'moved' counters.";
+    if(el.textContent!==msg) el.textContent=msg;
+  }
+
+  // ---- inputs ----
+  document.getElementById("add").addEventListener("click",addNode);
+  document.getElementById("remove").addEventListener("click",removeNode);
+  document.getElementById("reset").addEventListener("click",reset);
+  document.getElementById("vnodes").addEventListener("input",function(e){
+    V=+e.target.value; document.getElementById("vnodes-v").textContent=V; last=null; assign(); render();
+  });
+  document.getElementById("keys").addEventListener("input",function(e){
+    K=+e.target.value; document.getElementById("keys-v").textContent=K; last=null; seedKeys(); assign(); render();
+  });
+  window.addEventListener("resize",render);
+
+  // ---- boot ----
+  for(var i=0;i<4;i++) nodes.push(makeNode());
+  seedKeys(); assign(); syncBtns(); render();
+})();
+</script>
+</body>
+</html>

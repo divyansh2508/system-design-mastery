@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Database Scaling | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#0ca678; --hue-soft:rgba(12,166,120,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#28c39a;--hue-soft:rgba(40,195,154,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#0ca678;--hue-soft:rgba(12,166,120,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#28c39a;--hue-soft:rgba(40,195,154,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+      <a href="../tools/consistent-hashing.html">💍 Consistent Hashing</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 2 · Data at Scale</span><span class="sep">·</span><span>Module 4</span><span class="sep">·</span><span>Weeks 2-3 · ~13 hrs</span></p>
+      <h1>Database Scaling</h1>
+      <p class="sub">One database is the quiet default of every system — until reads flood it, writes back up, or the disk fills. This module is the toolkit for what happens next: <strong>partition, replicate, route, and pool</strong> your way from one box to a fleet, naming the trade-off at every step.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#wall">When one database isn't enough</a></li>
+        <li><a href="#sharding">Sharding &amp; horizontal partitioning</a></li>
+        <li><a href="#hashing">Consistent hashing for shard routing</a></li>
+        <li><a href="#primary">Read/write separation: primary–replica</a></li>
+        <li><a href="#replicas">Read replicas for read-heavy loads</a></li>
+        <li><a href="#multileader">Multi-leader &amp; conflict resolution</a></li>
+        <li><a href="#pooling">Connection pooling</a></li>
+        <li><a href="#news">Worked example: News Aggregator</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="wall">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>When one database isn't enough</h2>
+      <p class="lead">A single primary database scales <em>much</em> further than beginners fear — a well-indexed Postgres box on decent hardware serves thousands of queries a second. The instinct to shard on day one is almost always wrong. But three distinct walls eventually stop a single node, and the whole craft of database scaling is <strong>naming which wall you've hit</strong> so you reach for the right tool.</p>
+      <p>The tempting first move is <strong>vertical scaling</strong> — a bigger box: more CPU, more RAM, faster NVMe. It's the cheapest fix because your code doesn't change. But it has a hard ceiling (the biggest instance money can rent), the price curve turns brutal near the top, and one box is still a <strong>single point of failure</strong>. Past that ceiling you must scale <em>horizontally</em> — spread the work across many machines — and that's where the three walls diverge:</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>The wall you hit</th><th>Symptom</th><th>The right tool</th></tr></thead>
+          <tbody>
+            <tr><td>Read throughput</td><td>SELECTs pile up; CPU pinned on read queries; p99 latency climbs</td><td>Read replicas + a cache</td></tr>
+            <tr><td>Write throughput / storage</td><td>One primary can't absorb the write rate; the dataset outgrows one disk</td><td>Sharding (horizontal partitioning)</td></tr>
+            <tr><td>Availability</td><td>The node dies and everything stops; maintenance means downtime</td><td>Replication + automated failover</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>These do not substitute for one another, and mixing them up is the most common scaling mistake. Read replicas multiply read capacity but do <em>nothing</em> for write throughput — every write still lands on the one primary. Sharding splits writes and storage but, on its own, buys you no extra copies for failover. Get the diagnosis right and the prescription is obvious.</p>
+
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>Match the technique to the <strong>bottleneck</strong>. "Add replicas" is the answer to <em>reads</em>; "shard" is the answer to <em>writes and storage</em>; "replicate + fail over" is the answer to <em>availability</em>. Diagnose before you prescribe.</p>
+      </div>
+    </section>
+
+    <section id="sharding">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>Sharding &amp; horizontal partitioning</h2>
+      <p><strong>Partitioning</strong> means splitting one logical dataset into pieces. There are two axes. <strong>Vertical partitioning</strong> splits by <em>columns</em> — move a rarely-read <code>blob</code> column or a whole table to its own store so the hot table stays lean. <strong>Horizontal partitioning</strong> splits by <em>rows</em> — put rows 1–1M here, 1M–2M there. When those row-groups live on <em>separate database servers</em>, we call it <strong>sharding</strong>. (Splitting rows within one server — e.g. Postgres declarative partitions — is horizontal partitioning but not sharding; the "separate servers" part is what unlocks new capacity.)</p>
+
+      <h3>The shard key is everything</h3>
+      <p>A shard lives or dies by its <strong>shard key</strong> (a.k.a. partition key) — the column you route on. Choose it well and load spreads evenly and your common queries stay on one shard. Choose it badly and you get hotspots, scatter-gather reads, and a painful migration to fix it. There are three classic routing strategies:</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Strategy</th><th>How it routes</th><th>Upside</th><th>Downside</th></tr></thead>
+          <tbody>
+            <tr><td>Range-based</td><td>Key ranges → shards (id 0–1M → A, 1M–2M → B)</td><td>Range scans stay on one shard; simple</td><td>Skew &amp; hotspots — e.g. time-ordered keys make the newest shard hot</td></tr>
+            <tr><td>Hash-based</td><td><code>hash(key) mod N</code> → shard</td><td>Even, uniform distribution by default</td><td>Range queries fan out; changing <code>N</code> reshuffles almost everything</td></tr>
+            <tr><td>Directory / lookup</td><td>A lookup service maps key → shard explicitly</td><td>Flexible; rebalance by editing the map</td><td>Lookup table is an extra hop and a potential SPOF</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Routing itself is simple — resolve the key to a shard, then talk to that shard:</p>
+      <pre><code><span class="cmt"># hash-based routing, N = 4 shards</span>
+shard = hash(user_id) % 4
+db    = shards[shard]          <span class="cmt"># → db2</span>
+db.query("SELECT * FROM orders WHERE user_id = ?", user_id)
+
+<span class="cmt"># the pain: a query WITHOUT the shard key must hit every shard</span>
+"SELECT * FROM orders WHERE status = 'refunded'"
+   ──▶ scatter to A,B,C,D ──▶ gather &amp; merge   <span class="cmt"># slow, fan-out</span></code></pre>
+
+      <p>Sharding is powerful but it is <em>not free</em>. It introduces genuinely hard problems: <strong>cross-shard queries</strong> (any query missing the shard key becomes a scatter-gather; joins across shards are miserable), <strong>hotspots</strong> (a "celebrity" key whose shard gets all the traffic), <strong>rebalancing</strong> (adding a shard means moving data live), and <strong>distributed transactions</strong> (an atomic write spanning shards needs two-phase commit or a saga). Each is a whole topic; the takeaway is that they all follow from one decision — the shard key.</p>
+
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>Shard <em>as late as you can defend</em>. In a design round, exhaust the cheaper moves first — a bigger box, read replicas, a cache — and only shard when your estimate shows write throughput or storage genuinely exceeds one node. Then lead with the shard key and its trade-offs; that's the senior signal.</p>
+      </div>
+    </section>
+
+    <section id="hashing">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Consistent hashing for shard routing</h2>
+      <p>Plain <code>hash(key) mod N</code> has a fatal flaw the moment you grow: change <code>N</code> from 4 to 5 and the modulus shifts for <em>almost every key</em>. Nearly all your data has to move at once, and if this hash sits in front of a cache, every key misses simultaneously — a cache stampede that can topple the database behind it. Adding capacity should not require reshuffling the world.</p>
+
+      <p><strong>Consistent hashing</strong> fixes this. Map the hash output onto a ring (the space <code>0 … 2³²−1</code> wrapped into a circle). Place each <em>node</em> on the ring by hashing its id, and place each <em>key</em> on the ring by hashing the key. A key belongs to the <strong>first node clockwise</strong> from its position. Now add or remove a node and only the keys in <em>one arc</em> — roughly <code>1/N</code> of them — need to move. The rest never notice.</p>
+
+      <pre><code>            hash ring (0 … 2^32-1, wraps around)
+
+                 ● NodeA
+             k7      \
+          .           \        k1
+        k6             \      /   ● NodeB
+         |     add NodeD here  \  /
+         |          ↓           k2
+        k5     ● NodeD          |
+           \      only k4,k5   k3
+            \     remap here   /
+             ● NodeC ────── k4
+
+   key → walk clockwise → first node owns it
+   add/remove a node → only its arc (~1/N keys) moves</code></pre>
+
+      <p>One refinement makes it production-grade: <strong>virtual nodes</strong>. Instead of placing each physical server once, place it at many points on the ring (say 100–200 "vnodes" per server). This smooths out distribution (no server gets an unlucky giant arc), lets you weight bigger machines with more vnodes, and — critically — when a node dies, its load is spread across <em>all</em> the remaining nodes rather than dumped on a single neighbor. This is exactly how <strong>Dynamo, Cassandra, ScyllaDB, and Riak</strong> place data, how memcached client libraries pick a server, and how many load balancers and CDNs route requests.</p>
+
+      <div class="callout tool">
+        <p class="lbl">Play with it → your tool</p>
+        <p>Open the <a href="../tools/consistent-hashing.html">💍 Consistent Hashing Playground</a>, drop keys onto the ring, then <strong>add and remove nodes</strong> and watch how few keys actually move — compare it to naïve mod-<code>N</code> where nearly everything jumps. Toggle virtual nodes on and off to <em>see</em> distribution even out. This is the single best way to make the ring stick.</p>
+      </div>
+    </section>
+
+    <section id="primary">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>Read/write separation: primary–replica</h2>
+      <p>Sharding attacks writes and storage; the other great lever is <strong>replication</strong> — keeping full copies of the data on multiple nodes. The workhorse pattern is <strong>primary–replica</strong> (older names: leader–follower, master–slave). One node, the <strong>primary</strong>, accepts <em>all writes</em>. It streams every change to one or more <strong>replicas</strong>, which apply those changes in order and serve <em>reads</em>. Your application routes writes to the primary and reads to replicas.</p>
+
+      <h3>How the changes travel</h3>
+      <p>The primary ships its changes as a log. Three flavors: <strong>statement-based</strong> (replay the SQL — fragile with <code>NOW()</code> or random values), <strong>write-ahead-log / physical</strong> (ship the exact byte-level changes — what Postgres streaming replication does), and <strong>logical / row-based</strong> (ship the resulting row changes — flexible, cross-version). Followers apply the stream in the same order the primary committed it, so they converge on the same state.</p>
+
+      <h3>Synchronous vs asynchronous — the durability dial</h3>
+      <p>The single most important replication choice is <em>when the primary tells the client "done."</em></p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Mode</th><th>Primary acks after…</th><th>Trade-off</th></tr></thead>
+          <tbody>
+            <tr><td>Asynchronous</td><td>…writing locally (doesn't wait for replicas)</td><td>Fast, always available for writes — but a crash can lose the last few writes not yet shipped</td></tr>
+            <tr><td>Synchronous</td><td>…a replica confirms it has the write</td><td>No data loss on failover — but slower, and a stalled replica blocks writes</td></tr>
+            <tr><td>Semi-synchronous</td><td>…<em>at least one</em> replica confirms</td><td>The common middle ground: bounded loss, tolerable latency</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>When the primary dies, <strong>failover</strong> promotes a replica to primary. This is where the mode bites: with async replication the promoted replica may be missing the primary's last writes (they're gone). Failover also risks <strong>split-brain</strong> — two nodes both believing they're primary — which is why real systems use a consensus layer or an external orchestrator to elect exactly one, and pick the <em>most caught-up</em> replica to promote.</p>
+    </section>
+
+    <section id="replicas">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Read replicas for read-heavy loads</h2>
+      <p>Most consumer systems are wildly <strong>read-heavy</strong> — think 100 reads per write. That asymmetry is a gift: point reads at replicas and you multiply read capacity almost linearly. Add <em>N</em> read replicas and you get roughly <em>N</em>× the read throughput, for the price of running more copies. It is the cheapest large win in database scaling, which is why it's usually the <em>first</em> move once a cache isn't enough.</p>
+
+      <p>But asynchronous replicas lag. The primary commits, and a heartbeat or a few seconds later the replica catches up. That window — <strong>replication lag</strong> — creates two classic anomalies you must design around:</p>
+      <ul>
+        <li><strong>Read-your-own-writes:</strong> a user posts a comment (write → primary), immediately refreshes (read → a lagging replica), and their own comment is missing. Infuriating. Fixes: route <em>that user's</em> reads to the primary for a short window after they write; use sticky/"read-from-leader" sessions; or serve their own recent writes from a cache.</li>
+        <li><strong>Monotonic reads:</strong> a user reads a fresh replica, then a stale one, and sees data <em>move backwards in time</em>. Fix: pin a user to the same replica (e.g. hash their id to a replica) so they never travel back.</li>
+      </ul>
+
+      <p>The good news: for most content — feeds, product pages, search results, analytics — a second of staleness is completely fine, so replicas are a natural fit. Reserve strong, read-from-primary reads for the handful of flows (a user's own just-written data, a balance check) that actually need it.</p>
+
+      <div class="callout">
+        <p class="lbl">Say this in the interview</p>
+        <p><strong>Read replicas scale reads, not writes.</strong> Every write still funnels to the single primary, so if <em>write</em> throughput or storage is your wall, replicas won't save you — that's the moment you shard. Naming this boundary out loud is a strong senior signal.</p>
+      </div>
+    </section>
+
+    <section id="multileader">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>Multi-leader &amp; conflict resolution</h2>
+      <p>Single-leader replication has one inconvenient limit: <em>all</em> writes go to one node, which may be an ocean away from half your users, and if it's unreachable, writes stop. <strong>Multi-leader</strong> (multi-master) replication puts a writable leader in <em>each</em> region (or datacenter). Users write to their nearest leader for low latency, each leader replicates to the others, and writes survive a region outage. It's the standard shape for global, write-latency-sensitive, or offline-capable apps.</p>
+
+      <p>The price is steep and specific: two leaders can accept <strong>conflicting writes to the same record at the same time</strong> — record X set to "red" in the US and "blue" in the EU before they've synced. Single-leader replication makes conflicts <em>impossible by construction</em>; multi-leader trades that away for availability and locality, so now you must resolve conflicts. The main tools:</p>
+      <ul>
+        <li><strong>Last-write-wins (LWW):</strong> attach a timestamp, keep the newest. Dead simple, but it silently <em>discards</em> the loser's write and depends on clocks you can't fully trust.</li>
+        <li><strong>Version vectors / vector clocks:</strong> track causality so you can <em>detect</em> that two writes were concurrent (rather than one following the other) and hand both to the app or user to merge.</li>
+        <li><strong>CRDTs</strong> (conflict-free replicated data types): data structures — counters, sets, collaborative-text — engineered to <em>merge deterministically</em> with no coordination. The backbone of collaborative editors and shopping carts.</li>
+        <li><strong>Avoid the conflict:</strong> route every write for a given record to the <em>same</em> home leader (partition by user's home region). No concurrent writes, no conflict.</li>
+      </ul>
+
+      <p>A close cousin is <strong>leaderless</strong> replication (Dynamo, Cassandra): clients write to several nodes and read from several, using <strong>quorums</strong> (<code>R + W &gt; N</code>) to guarantee overlap, with <em>read repair</em> and <em>hinted handoff</em> to heal divergence. Here's the landscape:</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Topology</th><th>Who takes writes</th><th>Conflicts?</th><th>Fits</th></tr></thead>
+          <tbody>
+            <tr><td>Single-leader</td><td>One primary</td><td>None by design</td><td>Most apps; strong-ish consistency</td></tr>
+            <tr><td>Multi-leader</td><td>One leader per region</td><td>Yes — must resolve</td><td>Multi-region, offline, low write latency</td></tr>
+            <tr><td>Leaderless</td><td>Any node (quorum)</td><td>Yes — read repair / quorums</td><td>High availability, tunable consistency</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="pooling">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Connection pooling</h2>
+      <p>Here's a bottleneck that has nothing to do with data volume and everything to do with <em>connections</em>. Opening a database connection is expensive: a TCP handshake, a TLS handshake, authentication, and — on Postgres especially — the server <strong>forks a whole backend process</strong> per connection, each eating memory. A few hundred connections can exhaust a database that would happily serve the same queries over a dozen. Open a fresh connection per web request and you pay that cost on the hot path <em>and</em> risk toppling the DB under a traffic spike.</p>
+
+      <p>A <strong>connection pool</strong> solves it: keep a small set of already-established connections open and <em>reuse</em> them. A request borrows a connection, runs its query, and returns it to the pool. Two places to pool:</p>
+      <ul>
+        <li><strong>In-process pools</strong> — a library inside your app (HikariCP for the JVM, or your ORM's built-in pool). Great, but each app instance keeps its own pool, so 50 instances × 20 connections = 1,000 connections hitting the DB.</li>
+        <li><strong>External poolers</strong> — a dedicated proxy in front of the database (<strong>PgBouncer</strong>, ProxySQL, RDS Proxy) that multiplexes thousands of client connections onto a small pool of real backend connections. Transaction-mode pooling (hand back the connection after each transaction) gives the highest reuse.</li>
+      </ul>
+
+      <p>Sizing is counter-intuitive: <strong>more connections is not more throughput</strong>. Past a small multiple of the database's CPU cores, extra connections just contend and add latency — a pool of ~20–50 often beats a pool of 500. And the pattern is essential for <strong>serverless</strong> functions, where thousands of short-lived instances would otherwise open a "connection storm" — an external pooler is mandatory there.</p>
+
+      <div class="callout tip">
+        <p class="lbl">Where it compounds</p>
+        <p>Once you've sharded and added replicas, pooling multiplies: you hold a pool <em>per shard, per role</em> (primary vs replica). Pooling and routing are the same conversation — a request resolves its shard key, picks primary-or-replica, then borrows from that specific pool.</p>
+      </div>
+    </section>
+
+    <section id="news">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Worked example: News Aggregator</h2>
+      <p>Let's run every technique in this module end-to-end on one prompt — <em>"Design a news aggregator"</em> (think Google News / Apple News): it ingests articles from thousands of sources and serves each user a ranked feed. Follow the same 5-step framework from Module 1.</p>
+
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>Scope <span class="ft">~5 min</span></b><p><strong>Functional:</strong> ingest articles from many sources; serve a ranked home feed per user; open a full article; follow topics/sources; like/save. <strong>NFR:</strong> extremely read-heavy (feed reads ≫ writes), high availability, low-latency feed (&lt;200 ms), fresh-ish (new articles within seconds — eventual is fine), huge and growing storage, durable. <strong>Out of scope:</strong> the ranking ML itself, auth.</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>Estimate <span class="ft">~5 min</span></b><p>Numbers that change decisions: reads dominate, the corpus grows without bound, interactions are a moderate write stream. (Worked below.)</p></div></div>
+        <div class="fstep"><span class="fn">3</span><div><b>Interface <span class="ft">~5 min</span></b><p>A cursor-paginated feed read, an article read, and a couple of write endpoints.</p></div></div>
+        <div class="fstep"><span class="fn">4</span><div><b>Happy path <span class="ft">~10 min</span></b><p>Ingestion workers → article store; feed service → cache → article store; simple pull-model feed.</p></div></div>
+        <div class="fstep"><span class="fn">5</span><div><b>Deep-dive &amp; scale <span class="ft">~15 min</span></b><p>Replicas for the read-heavy feed, shard the growing corpus (routed by consistent hashing), pool every connection, and reason about multi-region.</p></div></div>
+      </div>
+
+      <h3>② Estimate</h3>
+      <pre><code>50M DAU × 10 feed-opens/day = 500M reads/day
+   500M ÷ 100k ≈ 5,000 reads/s avg  · peak ×3 ≈ ~15k reads/s   <span class="cmt">→ very read-heavy</span>
+
+ingestion: ~1M new articles/day ÷ 100k ≈ ~12 writes/s          <span class="cmt">→ tiny write rate…</span>
+storage:   1M/day × 365 × 5yr = 1.8B articles
+           × ~5 KB/article ≈ 9 TB  (× replication ≈ ~27 TB)    <span class="cmt">→ …but storage forces a shard</span>
+
+interactions (likes/saves): 50M DAU × 5/day = 250M/day
+           250M ÷ 100k ≈ ~2,500 writes/s · peak ×3 ≈ ~7.5k/s    <span class="cmt">→ real write load</span></code></pre>
+      <p><strong>Verdict:</strong> feed reads scream for <em>replicas + cache</em>; the ever-growing article corpus forces <em>sharding</em>; a few thousand interaction writes/s is a real stream that also wants sharding. Every tool in this module earns its place.</p>
+
+      <h3>③ Interface</h3>
+      <pre><code>GET  /v1/feed?cursor=&lt;opaque&gt;&amp;limit=20   <span class="cmt"># ranked article summaries, paginated</span>
+GET  /v1/articles/{articleId}            <span class="cmt"># full article (hot read)</span>
+POST /v1/articles/{articleId}/like       <span class="cmt"># interaction write</span>
+POST /v1/follows   { "target": "topic:tech" | "source:reuters" }</code></pre>
+
+      <h3>④ Happy-path design</h3>
+      <pre><code>Data model:
+  articles( article_id PK, source_id, topic, published_at, title, body_ref )
+  follows ( user_id, target )
+  interactions( user_id, article_id, type, ts )
+
+Read path:  client → LB → feed svc → cache(feed page) ─hit─▶ return
+                                          └─miss─▶ article replicas → rank → warm cache
+Write path: crawlers/RSS → ingest workers → articles (primary)
+            client like  → LB → interaction svc → interactions (primary)</code></pre>
+      <p>Start with a <strong>pull model</strong>: on a feed request, query recent articles from the user's followed sources/topics, rank, and return. Cheap writes, heavier reads — which we're about to make cheap.</p>
+
+      <h3>⑤ Deep-dive &amp; scale — apply the module</h3>
+      <p><strong>Reads → primary–replica + cache.</strong> All writes (ingest, likes, follows) hit primaries; all feed and article reads hit <em>read replicas</em>. A Redis layer caches hot articles and rendered feed pages, so the ~15k reads/s barely touch the databases. This alone handles the dominant load.</p>
+
+      <p><strong>Storage → shard the articles corpus.</strong> 1.8B rows won't fit one node, so shard. The shard-key choice <em>is</em> the deep-dive:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Shard key</th><th>Upside</th><th>Downside</th></tr></thead>
+          <tbody>
+            <tr><td><code>published_at</code> (range)</td><td>Recent-news queries are a range scan</td><td><strong>Hotspot</strong> — every read wants today, so the newest shard melts</td></tr>
+            <tr><td><code>source_id</code></td><td>A source's articles colocate → per-source feeds are single-shard</td><td>Celebrity source (huge outlet) becomes a hot shard</td></tr>
+            <tr><td><code>hash(article_id)</code></td><td>Even distribution; no hotspot</td><td>"Recent from these sources" fans out (scatter-gather)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>A defensible pick: <code>hash(article_id)</code> for even load, and route it with <strong>consistent hashing</strong> so that as the corpus grows and we add shards, only ~1/N of articles relocate instead of a full reshuffle. To keep feeds fast despite the fan-out, we lean on the cache and on a per-user precomputed feed for heavy followers (a hybrid pull/push — the same trade-off you'd make for a social timeline).</p>
+
+      <p><strong>Interactions → shard + read-your-writes.</strong> Shard <code>interactions</code> by <code>user_id</code> so a user's likes colocate. Because replicas lag, a user who just liked an article and refreshes might hit a stale replica and not see their like — so serve <em>their own</em> recent interactions from the primary (or cache) for a short window.</p>
+
+      <p><strong>Global users → multi-region.</strong> Users are worldwide and want a sub-200 ms feed. The article corpus is read-mostly, so replicate it to every region and read locally — easy. Interactions are writes, so either keep a single write region (simplest) or go <strong>multi-leader</strong> per region; if you do, like-<em>counts</em> are the conflict surface, so model them as <strong>CRDT counters</strong> that merge without coordination, or route each user's writes to their home region to sidestep conflicts entirely.</p>
+
+      <p><strong>Everywhere → connection pooling.</strong> The feed service is high-fan-out and highly concurrent; without pooling it would open a storm of connections and exhaust the Postgres backends. Put <strong>PgBouncer</strong> in front of each shard and each replica, size pools to a small multiple of cores, and the fleet stays healthy under peak.</p>
+
+      <div class="callout">
+        <p class="lbl">See the through-line</p>
+        <p>Notice how the estimate <em>drove</em> every move: read-heavy → replicas+cache; growing corpus → shard (consistent-hashed); lagging replicas → read-your-writes handling; global writes → multi-leader + CRDT counters; concurrency → pooling. You never guessed — each tool answered a specific number.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Your reps this week</h2>
+      <p>Reading is not learning — reps are. Do these, in order:</p>
+      <ol>
+        <li><strong>Whiteboard News Aggregator yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design it end-to-end with the 5-step framework, out loud, timed to ~35 minutes — <em>before</em> re-reading Section 08. Force yourself to name a shard key and defend it.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your design under pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer running a system design interview. Give me the prompt: "Design a news aggregator like Google News." Then act as the interviewer — let me drive, ask clarifying and probing questions, and push hard on the data layer specifically: which shard key and why, what breaks when I add a shard, how I handle replication lag and read-your-writes, when replicas stop helping, and how I'd resolve conflicts if I go multi-region. Do NOT give me the answer or lead me. After ~35 minutes (or when I say "done"), grade me 1–5 on each of: requirements gathering, capacity estimation, API design, high-level design, deep-dives &amp; trade-offs, and communication — with specific feedback and what a strong candidate would have added.</div>
+      <ol start="3">
+        <li><strong>Break the ring.</strong> In the <a href="../tools/consistent-hashing.html">💍 Consistent Hashing Playground</a>, add and remove nodes and count how many keys move vs. naïve mod-<code>N</code>. Toggle virtual nodes and watch distribution flatten.</li>
+        <li><strong>Explain it back.</strong> Teach a rubber duck (or me) <em>why replicas scale reads but not writes</em>, and <em>what replication lag does to read-your-writes</em> — without notes. Gaps you can't explain are gaps you don't have yet.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>Range vs hash sharding — one trade-off each? · Why does consistent hashing beat hash-mod-N when you add a shard? · Do replicas scale reads or writes, and why? · What is replication lag and one fix for read-your-writes? · Why put a connection pooler in front of Postgres?</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the consistent-hashing and sharding ones <em>before</em> your reps; the replication one pairs with Sections 04–05.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=zaRkONvyGr8" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>What is CONSISTENT HASHING and Where is it used?</b><div class="ch">Gaurav Sen <span class="dur">· ~10 min · consistent hashing</span></div><p>The clearest first look at the hash ring and why it beats mod-N. Watch this before opening the tool.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=d1fXBLqnFvc" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Database Sharding Crash Course (with Postgres examples)</b><div class="ch">Hussein Nasser <span class="dur">· ~35 min · sharding</span></div><p>Shard keys and horizontal partitioning made concrete — real Postgres shards spun up in Docker.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=wXvljefXyEo" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Database Sharding and Partitioning</b><div class="ch">Arpit Bhayani <span class="dur">· ~20 min · partitioning</span></div><p>First-principles take on partition vs shard and the range / hash / directory strategies. Rigorous and precise.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=aE2UPg3Ckck" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>All Types of Database Replication Discussed</b><div class="ch">Hussein Nasser <span class="dur">· ~18 min · replication</span></div><p>Primary–replica, read replicas, and synchronous vs asynchronous — the read/write-split foundation with trade-offs.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=vccwdhfqIrI" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Consistent Hashing: Easy Explanation for System Design Interviews</b><div class="ch">Hello Interview <span class="dur">· ~15 min · interview framing</span></div><p>How to actually present consistent hashing for shard routing under interview time pressure.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA <strong>Chapter 5 (Replication)</strong> and <strong>Chapter 6 (Partitioning)</strong> are the canonical deep dives for everything above — leaders/followers, replication lag, and partitioning/rebalancing in Martin Kleppmann's own words. For a free skim, the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> sections on <em>replication</em> and <em>sharding/denormalization</em>.</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/05-caching-fundamentals.html">Next module →</a>
+    </div>
+
+    <footer>Module 4 of 24 · System Design Mastery · Phase 2 · Data at Scale. Next up: Module 5 — Caching Fundamentals (keep the hot path off the database you just learned to scale).</footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System Design Mastery — Home</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --ok:#2f9e44;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#8a99ab;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28);--ok:#54c96a}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);--ok:#2f9e44}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#8a99ab;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28);--ok:#54c96a}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border)}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:980px;margin:0 auto;padding:0 22px 70px}
+
+  header{padding:56px 0 8px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin:0 0 16px}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(34px,6.5vw,58px);line-height:1.03;letter-spacing:-.015em;margin:0 0 18px;text-wrap:balance}
+  h1 em{font-style:italic;color:var(--accent)}
+  .thesis{max-width:60ch;font-size:17px;color:var(--muted);margin:0}
+  .thesis b{color:var(--text);font-weight:600}
+
+  /* resume band */
+  .resume{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:32px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:14px;padding:18px 22px;box-shadow:var(--shadow)}
+  .resume .txt{flex:1;min-width:200px}
+  .resume .txt b{font-family:var(--serif);font-size:18px;display:block;margin-bottom:2px}
+  .resume .txt span{font-size:13.5px;color:var(--muted)}
+  .btn{font-family:var(--mono);font-size:13px;font-weight:600;color:#fff;background:var(--accent);padding:11px 18px;border-radius:10px;white-space:nowrap;transition:transform .12s,opacity .12s}
+  .btn:hover{transform:translateY(-1px);opacity:.94}
+  .btn.sec{color:var(--accent);background:var(--accent-soft)}
+
+  section{margin-top:52px}
+  .shead{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:22px}
+  .shead h2{font-family:var(--serif);font-size:26px;font-weight:600;margin:0}
+  .shead .c{font-family:var(--mono);font-size:12px;color:var(--faint);margin-left:auto}
+
+  .cards{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:620px){.cards{grid-template-columns:1fr 1fr}}
+  .card{display:flex;flex-direction:column;gap:7px;background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:17px 19px;box-shadow:var(--shadow);transition:transform .14s,border-color .14s}
+  a.card:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .card .top{display:flex;align-items:center;gap:11px}
+  .card .ic{font-size:22px;line-height:1}
+  .card h3{font-size:16px;font-weight:600;margin:0;flex:1}
+  .card p{font-size:13px;color:var(--muted);margin:0;line-height:1.5}
+  .tag{font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:20px;white-space:nowrap}
+  .tag.live{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+  .tag.soon{color:var(--faint);border:1px dashed var(--border)}
+  .card.locked{opacity:.6;box-shadow:none}
+  .card.locked:hover{transform:none;border-color:var(--border)}
+
+  .planned{margin-top:16px;font-family:var(--mono);font-size:12px;color:var(--faint);line-height:1.9}
+  .planned b{color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-size:10px;display:block;margin-bottom:6px}
+  .chip{display:inline-block;border:1px dashed var(--border);border-radius:7px;padding:3px 9px;margin:0 5px 6px 0;color:var(--muted)}
+
+  .how{margin-top:52px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px 26px}
+  .how h2{font-family:var(--serif);font-size:21px;margin:0 0 14px}
+  .how ol{margin:0;padding-left:20px}
+  .how li{font-size:14px;color:var(--muted);margin-bottom:9px;line-height:1.6}
+  .how li b{color:var(--text)}
+  .how code{font-family:var(--mono);font-size:12.5px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:2px 7px;color:var(--accent)}
+
+  footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--border);font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  footer b{color:var(--muted)}
+  a:focus-visible,.btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <span class="brand">◇ SD Mastery</span>
+    <div class="navlinks">
+      <a href="index.html">Home</a>
+      <a href="roadmap-dashboard.html">Roadmap</a>
+      <a href="tools/load-balancer-simulator.html">Tools</a>
+      <a href="sandboxes/index.html">Sandbox Labs</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow">Your learning home base</p>
+      <h1>System Design <em>Mastery</em></h1>
+      <p class="thesis">Everything for your 12-week System Design journey lives here — the <b>roadmap</b>, the <b>hand-crafted module notes</b>, and the <b>interactive tools</b> you learn by breaking. One page, everything linked. Learn the smart way: simulate it, build it, drill it.</p>
+
+      <div class="resume">
+        <div class="txt">
+          <b>New here? Start with the roadmap.</b>
+          <span>See the whole 12-week plan and track what you've finished — then dive into Module 1.</span>
+        </div>
+        <a class="btn" href="roadmap-dashboard.html">Open the Roadmap →</a>
+        <a class="btn sec" href="modules/01-design-thinking.html">Start Module 1</a>
+      </div>
+    </header>
+
+    <section>
+      <div class="shead"><h2>Modules</h2><span class="c">all 28 live · launch them from the roadmap</span></div>
+      <div class="cards">
+        <a class="card" href="modules/01-design-thinking.html">
+          <div class="top"><span class="ic">🧭</span><h3>Start here — Module 1: Design Thinking</h3><span class="tag live">Live</span></div>
+          <p>The 5-step framework, capacity estimation, API contracts, and the trade-off lens. Ends with the Bitly drill. Begin week one here.</p>
+        </a>
+        <a class="card" href="roadmap-dashboard.html">
+          <div class="top"><span class="ic">🗺️</span><h3>The Roadmap — all 28 modules</h3><span class="tag live">Launcher</span></div>
+          <p>Every module across 6 phases plus Track B (GenAI), each one linked, with progress you can check off. Your day-to-day home for working the plan.</p>
+        </a>
+      </div>
+      <p class="planned"><b>The path:</b> Foundations → Data &amp; Caching → Communication → Resilience &amp; Security → Cloud &amp; DevOps → two Capstones, then Track B (GenAI). 28 module pages · 150+ hand-verified videos. <a href="roadmap-dashboard.html" style="color:var(--accent)">Open the roadmap →</a></p>
+    </section>
+
+    <section>
+      <div class="shead"><h2>Tools</h2><span class="c">13 interactive simulators · all live</span></div>
+      <div class="cards">
+        <a class="card" href="tools/capacity-estimator.html">
+          <div class="top"><span class="ic">🧮</span><h3>Capacity Estimator</h3><span class="tag live">M1</span></div>
+          <p>DAU + reads/writes + payloads → QPS, storage, bandwidth, cache, servers — with the math shown.</p>
+        </a>
+        <a class="card" href="tools/load-balancer-simulator.html">
+          <div class="top"><span class="ic">🚦</span><h3>Load Balancer Playground</h3><span class="tag live">M2</span></div>
+          <p>Pick an algorithm, push past capacity, kill servers, watch latency and drops react live.</p>
+        </a>
+        <a class="card" href="tools/consistent-hashing.html">
+          <div class="top"><span class="ic">💍</span><h3>Consistent Hashing Ring</h3><span class="tag live">M4</span></div>
+          <p>Add/remove nodes on the ring; compare keys moved vs. naive hash % N (~31% vs ~79%).</p>
+        </a>
+        <a class="card" href="tools/cache-playground.html">
+          <div class="top"><span class="ic">🗃️</span><h3>Cache Playground</h3><span class="tag live">M5</span></div>
+          <p>LRU vs LFU vs FIFO eviction, hit ratio, and hot-key skew — watch the cache fill and evict.</p>
+        </a>
+        <a class="card" href="tools/message-queue.html">
+          <div class="top"><span class="ic">📨</span><h3>Message Queue</h3><span class="tag live">M7</span></div>
+          <p>Kafka-style partitions + consumer groups; offsets advance, rebalance, and a slow consumer lags.</p>
+        </a>
+        <a class="card" href="tools/saga-flow.html">
+          <div class="top"><span class="ic">🔀</span><h3>Saga Flow Visualizer</h3><span class="tag live">M8</span></div>
+          <p>Run a distributed transaction across 4 services; fail a step, watch it compensate in reverse.</p>
+        </a>
+        <a class="card" href="tools/protocol-compare.html">
+          <div class="top"><span class="ic">🔌</span><h3>REST vs GraphQL vs gRPC</h3><span class="tag live">M9</span></div>
+          <p>Same request, three protocols — compare round-trips, payload size, and over/under-fetching.</p>
+        </a>
+        <a class="card" href="tools/realtime-transport.html">
+          <div class="top"><span class="ic">📡</span><h3>Real-Time Transport</h3><span class="tag live">M10</span></div>
+          <p>WebSocket vs SSE vs long-polling — latency, connection cost, and who can push when.</p>
+        </a>
+        <a class="card" href="tools/rate-limiter.html">
+          <div class="top"><span class="ic">🚥</span><h3>Rate Limiter Algorithms</h3><span class="tag live">M12</span></div>
+          <p>Token bucket vs leaky bucket vs fixed/sliding window — fire bursts, watch throttling.</p>
+        </a>
+        <a class="card" href="tools/cascade-failure.html">
+          <div class="top"><span class="ic">🔗</span><h3>Cascade &amp; Circuit Breaker</h3><span class="tag live">M13</span></div>
+          <p>Inject a fault into a dependency graph; watch it cascade, then contain it with a breaker.</p>
+        </a>
+        <a class="card" href="tools/slo-calculator.html">
+          <div class="top"><span class="ic">📉</span><h3>SLO &amp; Error Budget</h3><span class="tag live">M14</span></div>
+          <p>Nines → allowed downtime; track error-budget burn and whether you're shipping too fast.</p>
+        </a>
+        <a class="card" href="tools/oauth-flow.html">
+          <div class="top"><span class="ic">🔐</span><h3>OAuth 2.0 Flow</h3><span class="tag live">M15</span></div>
+          <p>Step through the auth-code + PKCE dance with live SHA-256 values and an attacker mode.</p>
+        </a>
+        <a class="card" href="tools/rag-pipeline.html">
+          <div class="top"><span class="ic">🧠</span><h3>RAG Pipeline</h3><span class="tag live">M20</span></div>
+          <p>Query → embed → retrieve top-k → LLM. Toggle retrieval off to see the model hallucinate.</p>
+        </a>
+      </div>
+    </section>
+
+    <section>
+      <div class="shead"><h2>Sandbox Labs</h2><span class="c">8 labs · real Docker infrastructure</span></div>
+      <div class="cards">
+        <a class="card" href="sandboxes/index.html">
+          <div class="top"><span class="ic">🐳</span><h3>Hands-on Docker Labs</h3><span class="tag live">8 labs</span></div>
+          <p>Spin up real Nginx, Postgres, Redis, Kafka, Prometheus, and Keycloak — then break and observe them. Needs Docker Desktop. This is what makes it job-real, not just interview-real.</p>
+        </a>
+      </div>
+    </section>
+
+    <div class="how">
+      <h2>How to use this</h2>
+      <ol>
+        <li><b>Host it locally.</b> Easiest: double-click <code>index.html</code> to open it in your browser — every link works. For a smoother experience (and saved progress across pages), run a tiny server: <code>cd "System Design" &amp;&amp; python3 -m http.server</code>, then open <code>localhost:8000</code>.</li>
+        <li><b>Work the roadmap top to bottom.</b> Each module runs the same loop: read the notes → play the tool → drill the case study → review. Check modules off on the roadmap as you go.</li>
+        <li><b>Everything's yours.</b> These are plain HTML files in <code>Documents/Job Search/System Design/</code> — keep them, edit them, back them up. New tools and modules drop straight into this folder and appear here.</li>
+        <li><b>Stuck? Ask.</b> Any concept that won't click, any tool you want changed — just ask and we'll fix it or build a new one.</li>
+      </ol>
+    </div>
+
+    <footer>
+      System Design Mastery · a self-hosted learning site &nbsp;·&nbsp; spine: <b>GeeksforGeeks</b> · method: <b>Hello Interview</b> · depth: <b>DDIA</b><br>
+      Built module by module. Nothing here is pushed to the cloud — it's your local copy.
+    </footer>
+  </div>
+</body>
+</html>

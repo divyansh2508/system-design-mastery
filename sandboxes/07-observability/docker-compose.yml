@@ -1,0 +1,44 @@
+# Observability sandbox — System Design, Module 14
+# The classic metrics stack, all official images, no custom code:
+#   node-exporter  → exposes host/kernel metrics at :9100
+#   prometheus     → scrapes those metrics every 15s and stores + queries them
+#   grafana        → dashboards + alerting on top of Prometheus
+# You talk to Prometheus at http://localhost:9090 and Grafana at http://localhost:3000.
+
+services:
+  # Prometheus: pulls metrics from itself and node-exporter, stores the time series,
+  # and answers PromQL queries. Config is mounted read-only from ./prometheus.yml.
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: sandbox-prometheus
+    ports:
+      - "9090:9090"                                        # host:container — open http://localhost:9090
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro # our scrape config
+    restart: unless-stopped
+
+  # node-exporter: the canonical exporter for machine metrics (CPU, memory, disk, net).
+  # Its cpu/meminfo collectors read the shared-kernel /proc, so metrics like
+  # node_cpu_seconds_total work out-of-the-box with no host mounts — keeps this
+  # cross-platform on Docker Desktop. (On a bare Linux host you can add
+  # `--path.rootfs=/host` + a `/:/host:ro,rslave` mount for full host fidelity.)
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: sandbox-node-exporter
+    ports:
+      - "9100:9100"                                        # host:container — raw metrics at http://localhost:9100/metrics
+    restart: unless-stopped
+
+  # Grafana: connect it to Prometheus as a data source, then build panels + alerts.
+  # Login is admin / admin (set explicitly so the box is predictable).
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: sandbox-grafana
+    ports:
+      - "3000:3000"                                        # host:container — open http://localhost:3000
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    restart: unless-stopped

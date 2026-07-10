@@ -1,0 +1,51 @@
+# Sandbox 04 — Kafka Partitions & Consumer Groups
+# Single-broker Apache Kafka in KRaft mode (NO ZooKeeper).
+# Everything runs in ONE container; you drive the bundled CLI scripts
+# under /opt/kafka/bin via `docker compose exec broker`.
+# No obsolete top-level `version:` key — modern Compose infers the schema.
+
+services:
+  # The one and only node: it plays BOTH roles (broker + controller),
+  # so the KRaft metadata quorum is self-hosted — no external ZooKeeper.
+  broker:
+    image: apache/kafka:3.7.0          # official Apache image, pinned tag
+    container_name: kafka-sandbox
+    hostname: broker
+    ports:
+      - "9092:9092"                    # client/bootstrap port, published to the host
+    environment:
+      # --- node identity + roles (KRaft) ---
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+
+      # --- listeners ---
+      # Bind on all interfaces (0.0.0.0) so both in-container `exec` clients
+      # AND host clients on localhost:9092 can connect. Advertise localhost
+      # so a single-broker cluster hands back an address everyone can reach.
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      # --- single-node replication factors (must be 1 with one broker) ---
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      # --- lab ergonomics ---
+      # Rebalance the instant a 2nd consumer joins (default is 3s) so the
+      # partition-reassignment exercise is snappy to observe.
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Auto-created topics default to 1 partition; we create ours explicitly
+      # with --partitions 3, but this keeps stray topics single-partition.
+      KAFKA_NUM_PARTITIONS: 1
+
+    # Broker is "up" once the admin API answers a topic list.
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 20s

@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security Architecture | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#d97b2e; --hue-soft:rgba(217,123,46,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+      <a href="../tools/oauth-flow.html">🔐 OAuth Flow</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 4 · Production-Grade</span><span class="sep">·</span><span>Module 15</span><span class="sep">·</span><span>Weeks 6-8 · ~13 hrs</span></p>
+      <h1>Security Architecture</h1>
+      <p class="sub">Security is not a service you bolt on at the end — it's a property of every boundary a request crosses, so in this module you learn to design <strong>identity, trust, and secrets</strong> into the architecture itself.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#depth">Defense in depth</a></li>
+        <li><a href="#zerotrust">Zero trust architecture</a></li>
+        <li><a href="#oauth">OAuth 2.0 &amp; OIDC</a></li>
+        <li><a href="#jwt">JWT validation at the gateway</a></li>
+        <li><a href="#secrets">Secrets management</a></li>
+        <li><a href="#mtls">mTLS for service-to-service</a></li>
+        <li><a href="#owasp">OWASP API Top 10</a></li>
+        <li><a href="#fbsearch">Worked example: Facebook Post Search</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="depth">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>Defense in depth</h2>
+      <p class="lead">Defense in depth is the principle that <strong>no single control should be load-bearing</strong>. You assume every layer will eventually fail, so you stack independent controls such that a breach of one still leaves the attacker outside the next.</p>
+      <p>The old model was a hard perimeter and a soft interior: a firewall at the edge, and everything inside the network implicitly trusted. That model dies the moment one host is compromised — a phished laptop, a leaked credential, an exploited dependency — because the attacker is now <em>inside</em> the trusted zone and can move freely. Defense in depth replaces the single wall with a series of them, each one a place where an intruder can be stopped or at least detected.</p>
+      <p>Think of it as concentric rings around your data, each an independent chance to say "no":</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Layer</th><th>Control</th><th>What it stops</th></tr></thead>
+          <tbody>
+            <tr><td>Edge</td><td>WAF, DDoS scrubbing, rate limits</td><td>Volumetric attacks, injection at the door</td></tr>
+            <tr><td>Network</td><td>Segmentation, private subnets, security groups</td><td>Lateral movement between services</td></tr>
+            <tr><td>Identity</td><td>AuthN + AuthZ on every request</td><td>Unauthenticated or over-privileged access</td></tr>
+            <tr><td>Application</td><td>Input validation, output encoding, least privilege</td><td>Injection, logic abuse, privilege escalation</td></tr>
+            <tr><td>Data</td><td>Encryption at rest &amp; in transit, tokenization</td><td>Exfiltration of a stolen disk or backup</td></tr>
+            <tr><td>Detect</td><td>Audit logs, anomaly alerts, honeytokens</td><td>Nothing — but it tells you the others failed</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Two related principles keep the rings honest. <strong>Least privilege</strong>: every human, service, and token gets the minimum access it needs and nothing more, so a compromise is contained. <strong>Fail secure</strong>: when a check can't complete — the auth service is down, the token can't be verified — you deny, not allow. A door that swings open when the lock breaks is not a lock.</p>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>Assume breach. Design as if the attacker is already past your outermost wall — because one day they will be. The question a senior engineer answers is not "how do I keep them out?" but <strong>"when they get one layer, what stops them at the next?"</strong></p>
+      </div>
+    </section>
+
+    <section id="zerotrust">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>Zero trust architecture</h2>
+      <p>Zero trust is defense in depth taken to its logical end: <strong>there is no trusted network</strong>. Being inside the corporate VPN, the VPC, or the service mesh grants you exactly zero implicit access. Every request — user-to-service and service-to-service alike — must prove who it is and be authorized for the specific thing it's asking for, every single time.</p>
+      <p>The slogan is <strong>"never trust, always verify."</strong> It rests on three moves:</p>
+      <ul>
+        <li><strong>Verify explicitly.</strong> Authenticate and authorize on identity, device posture, and context (location, time, risk score) for each request — not once at login and then forever.</li>
+        <li><strong>Least-privilege access.</strong> Grant just-in-time, just-enough permissions, scoped narrowly and expiring quickly, so a stolen token is a small, short-lived blast radius.</li>
+        <li><strong>Assume breach.</strong> Segment everything, encrypt everywhere, log everything, and design so a foothold in one service cannot become a foothold in the next.</li>
+      </ul>
+      <p>Architecturally, zero trust splits the world into a <strong>policy decision point (PDP)</strong> — the brain that answers "is this request allowed?" — and <strong>policy enforcement points (PEPs)</strong> — the gates (API gateway, service-mesh sidecar, load balancer) that ask the brain and enforce the answer. NIST SP 800-207 is the reference model worth knowing by name.</p>
+
+      <pre><code><span class="cmt"># Perimeter model: trust is a location</span>
+request ──▶ [firewall] ──▶ (trusted LAN: everything talks to everything)
+
+<span class="cmt"># Zero trust: trust is an identity, re-checked every hop</span>
+request ──▶ [PEP: verify identity + device + policy] ──▶ service A
+service A ──▶ [PEP: verify service A's identity + policy] ──▶ service B
+                       every arrow is authenticated, authorized, encrypted, logged</code></pre>
+
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>When an interviewer asks "how do the services trust each other?", the wrong answer is "they're in the same VPC." The senior answer is <em>"they don't trust the network — each service presents an identity (mTLS cert or signed token) and the callee authorizes it explicitly."</em> That one sentence signals you've internalized zero trust.</p>
+      </div>
+    </section>
+
+    <section id="oauth">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>OAuth 2.0 &amp; OIDC</h2>
+      <p>OAuth 2.0 is an <strong>authorization</strong> framework: it lets a user grant an application limited access to their resources on another service <em>without handing over their password</em>. When "Log in with Google" gives a photo-printing app read access to your Google Photos, that's OAuth. The app never sees your Google password; it receives a scoped, revocable <strong>access token</strong> instead.</p>
+      <p>Keep the four roles straight — they show up in every diagram:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Role</th><th>Who it is</th><th>Example</th></tr></thead>
+          <tbody>
+            <tr><td>Resource Owner</td><td>The user who owns the data</td><td>You</td></tr>
+            <tr><td>Client</td><td>The app wanting access</td><td>The photo-printing app</td></tr>
+            <tr><td>Authorization Server</td><td>Issues tokens after consent</td><td>Google's OAuth server</td></tr>
+            <tr><td>Resource Server</td><td>Holds the data, checks the token</td><td>Google Photos API</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The Authorization Code flow (with PKCE)</h3>
+      <p>Of OAuth's several grant types, the <strong>Authorization Code flow</strong> is the one to know — it's what web and mobile apps should use. The key trick: the browser never touches the access token. The client first gets a short-lived <strong>authorization code</strong> via the browser redirect, then exchanges that code for tokens over a direct back-channel call. Codes are single-use and expire in seconds, so intercepting one is nearly useless.</p>
+      <p><strong>PKCE</strong> (Proof Key for Code Exchange, "pixie") closes the last gap for public clients — mobile apps and SPAs that can't safely keep a client secret. The client invents a random <code>code_verifier</code>, sends its hash (<code>code_challenge</code>) up front, and must present the original verifier to redeem the code. An attacker who steals the code off the redirect can't use it without the verifier they never saw. OAuth 2.1 makes PKCE mandatory for all authorization-code flows.</p>
+
+      <pre><code><span class="cmt"># Authorization Code + PKCE — the flow to draw on the whiteboard</span>
+1. client makes  verifier = random();  challenge = SHA256(verifier)
+2. browser ─▶ /authorize?client_id&amp;redirect_uri&amp;scope&amp;code_challenge
+3. user logs in + consents at the Authorization Server
+4. AS ─▶ browser redirect back with ?code=abc123        <span class="cmt">(single-use, ~30s TTL)</span>
+5. client ─▶ POST /token  { code, code_verifier }        <span class="cmt">(back channel)</span>
+6. AS verifies SHA256(verifier)==challenge, returns:
+      access_token  (scoped, short-lived)  +  refresh_token  (+ id_token if OIDC)
+7. client ─▶ Resource Server  Authorization: Bearer &lt;access_token&gt;</code></pre>
+
+      <h3>OIDC: authentication on top of OAuth</h3>
+      <p>OAuth answers "what is this app allowed to do?" — it says nothing reliable about <em>who the user is</em>. <strong>OpenID Connect (OIDC)</strong> is a thin identity layer on top of OAuth 2.0 that adds exactly that: an <strong>ID token</strong> (a JWT) describing the authenticated user, plus a standard <code>/userinfo</code> endpoint. Rule of thumb: <em>OAuth = authorization (access to resources); OIDC = authentication (proof of identity).</em> "Sign in with Google" is OIDC; "let this app read my Google Photos" is OAuth. Most real logins use both at once.</p>
+
+      <div class="callout tool">
+        <p class="lbl">Play with it → your tool</p>
+        <p>Open the <a href="../tools/oauth-flow.html">🔐 OAuth Flow Visualizer</a> and step through the Authorization Code + PKCE handshake one message at a time — watch the code get issued, the verifier get checked, and the token come back. Toggle PKCE off to see exactly which attack it defends against. This is the fastest way to make the seven steps above stick.</p>
+      </div>
+    </section>
+
+    <section id="jwt">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>JWT validation at the gateway</h2>
+      <p>A <strong>JSON Web Token</strong> is a signed, self-contained credential: three Base64url parts — <code>header.payload.signature</code> — joined by dots. The payload carries <em>claims</em> (who the user is, what they can do, when the token expires); the signature lets anyone with the right key verify the token was issued by your auth server and hasn't been tampered with. Because it's self-contained, a resource server can validate it <strong>without a database lookup</strong> — that statelessness is exactly why JWTs scale.</p>
+
+      <pre><code><span class="cmt"># A JWT is three dot-separated parts</span>
+eyJhbGciOiJSUzI1NiJ9  .  eyJzdWIiOiJ1XzQyIiwiZXhwIjoxNzM...  .  Rf8s...sig
+     header (alg)              payload (claims)                 signature
+
+<span class="cmt"># Decoded payload — the claims you actually check</span>
+{ "iss":"https://auth.fb.com", "sub":"u_42", "aud":"post-search-api",
+  "scope":"search:read", "exp":1751932800, "iat":1751929200 }</code></pre>
+
+      <p>The architectural decision that matters: <strong>validate the JWT once, at the API gateway</strong>, before the request ever reaches a backend service. The gateway is the single policy enforcement point at the edge; centralizing validation there means every internal service can trust that the request is already authenticated, and you never duplicate crypto logic across 40 microservices.</p>
+
+      <h3>What "validate" actually means</h3>
+      <p>Verifying a signature is necessary but not sufficient. A correct gateway checks all of these — skip one and you have a vulnerability:</p>
+      <ul>
+        <li><strong>Signature</strong> — verify against the auth server's public key (fetched from its JWKS endpoint and cached). Use asymmetric <code>RS256</code>/<code>ES256</code>, so services only hold the public key.</li>
+        <li><strong>Algorithm</strong> — pin the expected algorithm. Reject <code>alg: none</code> and never let the token's own header talk you into a weaker algorithm — that's a classic bypass.</li>
+        <li><strong>Expiry</strong> — enforce <code>exp</code> (and <code>nbf</code>). Short-lived access tokens (5–15 min) limit the damage of a leak.</li>
+        <li><strong>Issuer &amp; audience</strong> — <code>iss</code> must be your auth server; <code>aud</code> must name <em>this</em> API. This stops a token minted for service X being replayed against service Y.</li>
+      </ul>
+      <div class="callout">
+        <p class="lbl">The revocation gotcha</p>
+        <p>JWTs are stateless, so you can't "delete" one — it's valid until <code>exp</code>. That's the trade-off for skipping the DB lookup. Mitigate with <strong>short lifetimes plus refresh tokens</strong> (revoke at refresh time), and keep a small deny-list of <code>jti</code> IDs for emergency "log out everywhere." If an interviewer asks "how do you log a user out instantly?", <em>this</em> is the tension they're probing.</p>
+      </div>
+    </section>
+
+    <section id="secrets">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Secrets management</h2>
+      <p>Every system has secrets: database passwords, API keys, signing keys, TLS private keys. The failure mode is depressingly common — secrets hard-coded in source, committed to Git, baked into container images, or pasted into environment variables that leak through logs and crash dumps. A secret in your repo history is a secret you've already lost.</p>
+      <p>A dedicated <strong>secrets manager</strong> (HashiCorp <strong>Vault</strong>, <strong>AWS Secrets Manager</strong>, GCP Secret Manager) fixes this by making secrets something services <em>fetch at runtime</em>, authenticated by their own identity, never something they store. What you get:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Capability</th><th>Why it matters</th></tr></thead>
+          <tbody>
+            <tr><td>Central, encrypted store</td><td>One audited place; encrypted at rest, access-controlled</td></tr>
+            <tr><td>Dynamic secrets</td><td>Vault mints a fresh, short-lived DB credential per service on demand — no shared static password to leak</td></tr>
+            <tr><td>Automatic rotation</td><td>Rotate keys on a schedule without a redeploy; leaked creds expire fast</td></tr>
+            <tr><td>Fine-grained policy</td><td>Service A can read <code>db/orders</code> and nothing else — least privilege for secrets</td></tr>
+            <tr><td>Full audit trail</td><td>Every read is logged: who fetched what, when</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The elegant part is <strong>dynamic secrets</strong>: instead of a long-lived password shared by every replica, Vault generates a unique database credential when a service boots and revokes it when the lease ends. There is no static secret to steal, and a compromised credential dies on its own within minutes.</p>
+      <pre><code><span class="cmt"># App never holds a static DB password — it asks Vault at runtime</span>
+service ──(authenticates with its own identity)──▶ Vault
+Vault ──▶ mints  db-user-7f3a / pw-9c1e   lease=15m   <span class="cmt">(unique, expiring)</span>
+service ──▶ connects to Postgres with that ephemeral credential
+   ...15m later, Vault revokes it; a fresh one is leased on renewal</code></pre>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>If you draw a database, expect "where does the app get the password?" The weak answer is "environment variable." The strong answer: <em>"the app authenticates to Vault with its workload identity and fetches a short-lived dynamic credential — nothing static is stored in the image or config."</em></p>
+      </div>
+    </section>
+
+    <section id="mtls">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>mTLS for service-to-service</h2>
+      <p>Ordinary TLS (HTTPS) authenticates <em>one</em> side: the client verifies the server's certificate, so you know you're talking to the real bank. <strong>Mutual TLS (mTLS)</strong> makes it two-way — the server <em>also</em> demands and verifies the client's certificate. Now both ends cryptographically prove their identity before a single byte of application data flows.</p>
+      <p>That two-way proof is precisely the primitive zero trust needs for service-to-service calls. Instead of "trust anything inside the VPC," every service holds a certificate that <em>is</em> its identity; a callee that receives a request checks the caller's cert against a trusted CA and authorizes based on the identity in it. The network being private is irrelevant.</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th></th><th>TLS (one-way)</th><th>mTLS (mutual)</th></tr></thead>
+          <tbody>
+            <tr><td>Server proves identity</td><td>Yes</td><td>Yes</td></tr>
+            <tr><td>Client proves identity</td><td>No</td><td>Yes</td></tr>
+            <tr><td>Typical use</td><td>Browser → website</td><td>Service → service</td></tr>
+            <tr><td>Trust basis</td><td>Public CA</td><td>Internal CA / SPIFFE identity</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>In practice you rarely code mTLS by hand. A <strong>service mesh</strong> (Istio, Linkerd) runs a sidecar proxy beside each service and transparently upgrades every hop to mTLS — issuing, rotating, and verifying certificates automatically, encrypting traffic, and giving you identity-based policy ("only <code>checkout</code> may call <code>payments</code>") for free. That's how zero trust becomes operationally realistic across hundreds of services.</p>
+      <pre><code><span class="cmt"># mTLS handshake — both sides present and verify a certificate</span>
+checkout-svc ──ClientHello──▶ payments-svc
+             ◀──ServerCert + "send me your cert"──
+checkout-svc ──ClientCert (identity: spiffe://cluster/checkout)──▶
+payments-svc verifies cert against internal CA
+   ▶ policy: is "checkout" allowed to call "payments"?  ✓  ─▶ encrypted channel open</code></pre>
+    </section>
+
+    <section id="owasp">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>OWASP API Top 10</h2>
+      <p>The <strong>OWASP API Security Top 10</strong> is the industry's consensus list of how APIs actually get breached. Unlike the classic web Top 10, it's dominated by <em>authorization</em> failures — because at scale, the hard part isn't stopping SQL injection, it's making sure the token that's valid for <em>you</em> can't read <em>my</em> data. Know these; interviewers love asking you to threat-model against them.</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>#</th><th>Risk</th><th>The failure &amp; the fix</th></tr></thead>
+          <tbody>
+            <tr><td class="num">API1</td><td>Broken Object Level Auth (BOLA)</td><td><code>GET /posts/123</code> returns a post you don't own. Check ownership on <em>every</em> object, every request.</td></tr>
+            <tr><td class="num">API2</td><td>Broken Authentication</td><td>Weak tokens, no expiry, guessable resets. Strong JWT validation, short TTLs, MFA.</td></tr>
+            <tr><td class="num">API3</td><td>Broken Object Property Level Auth</td><td>Client sets <code>"role":"admin"</code> in the body; API returns fields it shouldn't. Allow-list inputs and outputs.</td></tr>
+            <tr><td class="num">API4</td><td>Unrestricted Resource Consumption</td><td>No rate/size limits → DoS and cost blowups. Throttle, paginate, cap payloads.</td></tr>
+            <tr><td class="num">API5</td><td>Broken Function Level Auth</td><td>A regular user hits an admin endpoint. Enforce role checks per route, deny by default.</td></tr>
+            <tr><td class="num">API6</td><td>Unrestricted Access to Business Flows</td><td>Bots drain inventory or scrape. Detect automation; add friction to sensitive flows.</td></tr>
+            <tr><td class="num">API7</td><td>Server-Side Request Forgery</td><td>API fetches a user-supplied URL and hits internal metadata. Validate + allow-list egress.</td></tr>
+            <tr><td class="num">API8</td><td>Security Misconfiguration</td><td>Default creds, verbose errors, open CORS. Harden, and fail secure.</td></tr>
+            <tr><td class="num">API9</td><td>Improper Inventory Management</td><td>Forgotten <code>/v1</code> and staging hosts stay exposed. Catalog and retire endpoints.</td></tr>
+            <tr><td class="num">API10</td><td>Unsafe Consumption of APIs</td><td>Blindly trusting a third-party response. Validate data from upstreams too.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>BOLA (API1) is the one to burn into memory</strong> — it's the single most common and most damaging API flaw. The mistake is authenticating (verifying <em>who</em> you are) and then forgetting to authorize (verifying you may touch <em>this specific object</em>). A valid token is a key to the building, not to every room in it.</p>
+    </section>
+
+    <section id="fbsearch">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Worked example: Facebook Post Search</h2>
+      <p>Let's run the 5-step framework on <em>"Design search over Facebook posts"</em> — but through a <strong>security lens</strong>. The interesting part here isn't the inverted index; it's that search runs over <em>private data</em>, so the whole design lives or dies on getting authorization right. This is where every concept above earns its keep.</p>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Functional:</strong> a logged-in user searches posts by keyword and gets back only posts they're permitted to see — their own, friends', and public ones, respecting each post's audience (public / friends / custom). Also: first-party mobile + web clients, and third-party apps that search on a user's behalf.</li>
+        <li><strong>Non-functional (security-first):</strong> <strong>correct authorization is non-negotiable</strong> (never leak a private post — a BOLA here is a headline), low-latency (p99 &lt; 300 ms), high availability, full auditability of who searched what, and zero implicit trust between internal services.</li>
+        <li><strong>Out of scope (say it):</strong> ranking quality, the indexing pipeline internals — we focus on the security architecture.</li>
+      </ul>
+
+      <h3>② Estimate</h3>
+      <pre><code>2B DAU × ~5 searches/day = 10B searches/day
+   ÷ 100k s  ≈ 100k searches/s avg  →  peak ×3 ≈ 300k QPS      <span class="cmt">read-dominant, huge</span>
+JWT validation must be cache-friendly at the edge: JWKS public key
+   cached in-gateway → verification is pure local crypto (no network hop)
+audience-filtering the results is the expensive part, not signature checks</code></pre>
+      <p>Verdict: at 300k QPS you <em>cannot</em> afford a DB round-trip to authenticate each request — hence stateless JWTs verified at the gateway. And authorization must be pushed into the query, not applied after, or you'll fetch millions of posts only to throw most away.</p>
+
+      <h3>③ Interface</h3>
+      <p>Authenticated, token-bearing, and scoped — no anonymous search of private data:</p>
+      <pre><code>GET /api/v1/search?q=vacation&amp;cursor=&lt;opaque&gt;&amp;limit=20
+  headers: Authorization: Bearer &lt;access_token&gt;      <span class="cmt"># OIDC/JWT, scope=search:read</span>
+  returns: 200 { results:[ {postId, author, snippet, ...} ], nextCursor }
+           401 if token invalid/expired · 403 if scope missing</code></pre>
+      <p>Third-party apps reach this endpoint via <strong>OAuth 2.0</strong>: the user consents once (Authorization Code + PKCE), the app gets an access token scoped to <code>search:read</code> and nothing else — never the user's password, never write access.</p>
+
+      <h3>④ High-level design</h3>
+      <pre><code>            (mobile/web/3rd-party app,  Bearer JWT)
+                          │
+                    [ CDN / WAF ]                        <span class="cmt"># edge: DDoS, rate limit — defense in depth</span>
+                          │
+                 [ API Gateway ]                         <span class="cmt"># PEP: validate JWT (sig/exp/iss/aud), scope, throttle</span>
+                          │  (mTLS)
+                 [ Search Service ]                      <span class="cmt"># builds authz-filtered query</span>
+                    │(mTLS)      │(mTLS)
+        [ Authz / Social Graph ] [ Search Index (ES) ]   <span class="cmt"># "who can I see?"     inverted index</span>
+                                       │
+                                 secrets (index/db creds) ◀── Vault (dynamic, short-lived)</code></pre>
+      <p>Trace one request: the gateway (a policy enforcement point) validates the JWT locally against the cached JWKS key, checks <code>aud = post-search-api</code> and <code>scope = search:read</code>, and rate-limits the caller (OWASP API4). It forwards over <strong>mTLS</strong> to the search service, passing the verified <code>sub</code> (user id). Every internal hop is mTLS — zero trust, no service trusts the network. Index and DB credentials come from <strong>Vault</strong> as short-lived dynamic secrets, never from config.</p>
+
+      <h3>⑤ Deep-dive: authorization is the whole problem (BOLA)</h3>
+      <p>Here's the trap. The naïve design searches the index for "vacation," gets 10,000 hits, and returns them. That leaks every private post matching the term — a textbook <strong>BOLA (OWASP API1)</strong>. Authentication told us <em>who</em> is searching; it said nothing about which of those 10,000 posts they're allowed to see. We must authorize <em>every result</em>. Two ways to do it, and the trade-off is the discussion:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Approach</th><th>How</th><th>Trade-off</th></tr></thead>
+          <tbody>
+            <tr><td>Filter after search</td><td>Get top-N hits, then call the authz service to drop ones the user can't see</td><td>Simple &amp; always correct, but leaks results (you may filter away most of a page) and adds a hop per query</td></tr>
+            <tr><td>Filter inside the query</td><td>Inject the viewer's visibility set (author ∈ friends ∨ audience = public ∨ author = self) as an index filter</td><td>Fast &amp; no over-fetch, but the index must carry each post's audience + the query must be built from the trusted <code>sub</code>, never client input</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The senior move: <strong>push authorization into the query</strong> using the audience metadata stored alongside each indexed post, and derive the filter from the server-verified <code>sub</code> — never from a client-supplied user id (that would re-open BOLA). Keep a post-filter as a defense-in-depth backstop so a bug in the index filter still can't leak. Every result is authorized twice; that redundancy is the point.</p>
+      <p><strong>Scaling &amp; hardening the rest:</strong> shard the index by region and replicate for the 300k QPS read load; cache the social-graph "who can I see" set per user (short TTL) to avoid a graph call per search; enforce cursor-based pagination and per-token rate limits (API4); log every search with the <code>sub</code>, query, and result count for audit and anomaly detection (assume breach — detect it). Rotate JWT signing keys via JWKS so a leaked key expires fast. Each control is one ring; none is load-bearing alone.</p>
+
+      <div class="callout">
+        <p class="lbl">The one-sentence answer</p>
+        <p>"Search over private data is an <strong>authorization</strong> problem wearing a search costume: authenticate statelessly at the gateway with JWTs, then authorize <em>every hit</em> against the viewer's visibility set — pushed into the query and backstopped after it — with mTLS between services and secrets in Vault." Say that and you've shown the interviewer the whole module.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Your reps this week</h2>
+      <p>Reading security is not the same as reasoning about it under pressure. Do these, in order:</p>
+      <ol>
+        <li><strong>Whiteboard Facebook Post Search yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design it end-to-end through the security lens — gateway JWT validation, mTLS hops, Vault, and above all the BOLA authorization deep-dive — timed to ~35 minutes, <em>before</em> re-reading Section 08.</li>
+        <li><strong>Trace the OAuth flow by hand.</strong> Step through Authorization Code + PKCE in the <a href="../tools/oauth-flow.html">🔐 OAuth Flow Visualizer</a>, then close it and redraw all seven steps from memory. Explain out loud what PKCE defends against.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your design against pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff security engineer running a system design interview. Give me the prompt: "Design search over Facebook posts, with a focus on the security architecture." Then act as the interviewer — let me drive, ask clarifying and probing questions, and push hard on the security-critical parts: how do you authenticate at scale, where and how do you validate the JWT, how do third-party apps get access (OAuth/OIDC), how do services trust each other, where do secrets live, and above all — how do you guarantee a user can NEVER see a post they're not authorized to see (walk me into the BOLA trap and see if I catch it). Do NOT give me the answer or lead me. After ~35 minutes (or when I say "done"), grade me 1–5 on each of: requirements &amp; threat modeling, authentication design, authorization (object-level) design, service-to-service trust &amp; secrets, scaling under the NFRs, and communication — with specific feedback and what a strong candidate would have added.</div>
+        <ol start="4">
+        <li><strong>Threat-model against the OWASP API Top 10.</strong> Take your Post Search design and, for each of API1–API10, name where it could break and the control that stops it. If you can't place a risk, that's a gap you just found.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>What does PKCE protect and how? · OAuth vs OIDC in one line? · The four things a gateway must check on a JWT? · TLS vs mTLS — who proves identity? · What is BOLA and why is "valid token" not enough?</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the OAuth and JWT primers <em>before</em> your reps; the mTLS and zero-trust ones deepen the service-to-service picture for the case study.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=ZV5yTm4pT8g" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>OAuth 2 Explained In Simple Terms</b><div class="ch">ByteByteGo <span class="dur">· ~4 min · OAuth 2.0</span></div><p>The cleanest short intro to the four roles and the token exchange. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=996OiexHze0" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>OAuth 2.0 and OpenID Connect (in plain English)</b><div class="ch">OktaDev <span class="dur">· ~1 hr · OAuth + OIDC</span></div><p>The definitive talk on why OAuth exists and how OIDC adds identity. The one to watch if a single video sticks.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=P2CPd9ynFLg" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Why is JWT popular?</b><div class="ch">ByteByteGo <span class="dur">· ~4 min · JWT</span></div><p>Nails the stateless-scaling trade-off and the revocation gotcha in four minutes.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=T0k-3Ze4NLo" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>JWT — JSON Web Token Crash Course (NodeJS &amp; Postgres)</b><div class="ch">Hussein Nasser <span class="dur">· ~57 min · JWT deep dive</span></div><p>Session vs JWT, refresh tokens, and asymmetric signing — the details a gateway must get right.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=yn6CPQ9RioA" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Zero Trust Explained in 4 mins</b><div class="ch">IBM Technology <span class="dur">· ~4 min · zero trust</span></div><p>"Never trust, always verify" and the PDP/PEP model, distilled. Watch before the case study.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=KwpV-ICpkc4" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Mutual TLS | The Backend Engineering Show</b><div class="ch">Hussein Nasser <span class="dur">· ~50 min · mTLS</span></div><p>One-way vs mutual TLS, why services need it, and the operational costs. The service-to-service piece.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> the <a href="https://owasp.org/API-Security/editions/2023/en/0x11-t10/" target="_blank" rel="noopener">OWASP API Security Top 10</a> project page — the authoritative source for Section 07, and short enough to read in one sitting. For the broader architecture vocabulary, the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> security notes (free).</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/16-compliance-protection.html">Next module →</a>
+    </div>
+
+    <footer>Module 15 of 24 · System Design Mastery · Phase 4 · Production-Grade · Next up: Module 16 — Compliance &amp; Data Protection.</footer>
+  </div>
+</body>
+</html>

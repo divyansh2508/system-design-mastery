@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebSocket Chat with Redis Fan-out — Sandbox Lab</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#7048e8; --hue-soft:rgba(112,72,232,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#9a7bff;--hue-soft:rgba(154,123,255,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#7048e8;--hue-soft:rgba(112,72,232,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#9a7bff;--hue-soft:rgba(154,123,255,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .step{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 20px;margin:22px 0;box-shadow:var(--shadow)}
+  .step h3{margin-top:0;display:flex;align-items:baseline;gap:10px}
+  .step h3 .tag{font-family:var(--mono);font-size:11px;font-weight:700;color:#fff;background:var(--hue);padding:2px 9px;border-radius:7px;letter-spacing:.04em;flex-shrink:0}
+  .observe{font-size:13.5px;color:var(--muted);margin:12px 0 0;border-top:1px dashed var(--border);padding-top:12px}
+  .observe b{color:var(--hue);font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:4px}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:16px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../../index.html">Home</a>
+      <a href="../../roadmap-dashboard.html">Roadmap</a>
+      <a href="../../modules/10-realtime-async-apis.html">Module 10 notes</a>
+      <a href="../../tools/realtime-transport.html">📡 the simulator</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Sandbox Lab</span><span class="sep">·</span><span>Module 10 — Real-Time</span></p>
+      <h1>WebSocket Chat with Redis Fan-out</h1>
+      <p class="sub">Run two identical chat servers behind an nginx load balancer and watch a Redis pub/sub channel fan every message out to clients on <em>both</em> instances — the pattern that lets real-time systems scale past a single box.</p>
+    </header>
+
+    <div class="callout">
+      <p class="lbl">Prerequisites</p>
+      <p>Have <strong>Docker Desktop running</strong> (whale icon steady, not spinning). Then open a terminal and <code>cd</code> into this folder — every command below is run from <code>sandboxes/06-websocket-chat/</code>.</p>
+    </div>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this lab</h2>
+      <ol>
+        <li><a href="#build">What you'll build</a></li>
+        <li><a href="#stack">The stack</a></li>
+        <li><a href="#up">Bring it up</a></li>
+        <li><a href="#exercises">The exercises</a></li>
+        <li><a href="#teardown">Teardown</a></li>
+        <li><a href="#taught">What this taught</a></li>
+      </ol>
+    </nav>
+
+    <section id="build">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>What you'll build</h2>
+      <p class="lead">A tiny group chat that is <strong>horizontally scaled from the first minute</strong>: two copies of the same Node <code>ws</code> server, an nginx load balancer in front on host port <code>8080</code>, and a Redis broker behind them carrying a single pub/sub channel.</p>
+      <p>When you open two browser tabs, nginx may route each to a <em>different</em> chat instance. A message typed in one tab has to reach a client whose socket lives on the <em>other</em> process entirely — a process it shares no memory with. Redis is the shared nervous system that makes that possible: every instance publishes what it receives and subscribes to everything, so each message fans out to all connected clients regardless of which server they landed on.</p>
+
+      <pre><code>   Browser tab A                                    Browser tab B
+        │   ws://localhost:8080/                           │
+        └────────────────┬─────────────────┬───────────────┘
+                         ▼                  ▼
+                 ┌────────────────────────────────┐
+                 │   nginx  :80   (host :8080)     │   round-robin LB
+                 │   HTTP Upgrade → WebSocket      │   + WS upgrade headers
+                 └────────┬───────────────┬────────┘
+                          │               │
+                 ┌────────▼─────┐  ┌───────▼──────┐
+                 │   chat1      │  │   chat2      │    node:20-alpine + ws
+                 │   :3000      │  │   :3000      │    (serves the HTML client)
+                 └────────┬─────┘  └───────┬──────┘
+                  PUBLISH │   SUBSCRIBE     │   (every instance does BOTH)
+                          └───────┬─────────┘
+                           ┌──────▼───────┐
+                           │  redis :6379 │    pub/sub channel "chat"
+                           └──────────────┘</code></pre>
+
+      <div class="callout tip">
+        <p class="lbl">The one idea</p>
+        <p>A WebSocket lives on <strong>one process</strong>. The moment you run more than one server, a client on instance A cannot hear a client on instance B — unless every instance relays messages through a <strong>shared broker</strong>. Redis pub/sub is that broker: <em>publish what you receive, broadcast what you hear.</em></p>
+      </div>
+    </section>
+
+    <section id="stack">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>The stack</h2>
+      <p>Four services, one file. Here is the <code>docker-compose.yml</code> that wires them together — modern Compose schema, no obsolete <code>version:</code> key, tags pinned, one comment per service:</p>
+
+      <pre><code><span class="cmt"># WebSocket Chat sandbox — two chat servers + Redis pub/sub + an nginx load balancer.</span>
+<span class="cmt"># Modern Compose schema (no top-level `version:` key — it is obsolete).</span>
+
+services:
+  <span class="cmt"># Shared Redis broker: the pub/sub channel every chat instance fans messages through.</span>
+  redis:
+    image: redis:7-alpine
+    container_name: ws-chat-redis
+    restart: unless-stopped
+
+  <span class="cmt"># Chat instance #1 — a Node `ws` server that publishes to and subscribes from Redis.</span>
+  chat1:
+    build: .
+    image: ws-chat-lab:1.0
+    container_name: ws-chat-1
+    environment:
+      - INSTANCE_ID=chat1
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  <span class="cmt"># Chat instance #2 — the identical image run as a second replica, so messages must cross Redis.</span>
+  chat2:
+    build: .
+    image: ws-chat-lab:1.0
+    container_name: ws-chat-2
+    environment:
+      - INSTANCE_ID=chat2
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  <span class="cmt"># nginx load balancer: round-robins WebSocket connections across chat1/chat2, published on host :8080.</span>
+  nginx:
+    image: nginx:alpine
+    container_name: ws-chat-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - chat1
+      - chat2
+    restart: unless-stopped</code></pre>
+
+      <p>The rest of the folder is the small custom image these two chat containers build from, plus the load-balancer config:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>File</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td>Dockerfile</td><td>Builds the <code>node:20-alpine</code> image and installs deps</td></tr>
+            <tr><td>package.json</td><td>Deps: <code>ws</code> (WebSockets) + <code>redis</code> (pub/sub client)</td></tr>
+            <tr><td>server.js</td><td>The chat server: <code>ws</code> sockets, Redis publish/subscribe, and it serves its own HTML client</td></tr>
+            <tr><td>nginx.conf</td><td>Upstream of <code>chat1</code>+<code>chat2</code> with the WebSocket <code>Upgrade</code> headers, <code>listen 80</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout tip">
+        <p class="lbl">Why the Upgrade headers matter</p>
+        <p>A WebSocket starts as an ordinary HTTP/1.1 request carrying <code>Upgrade: websocket</code>. For the proxy to let that protocol switch through, <code>nginx.conf</code> sets <code>proxy_http_version 1.1</code>, <code>proxy_set_header Upgrade $http_upgrade</code>, and <code>proxy_set_header Connection "upgrade"</code>. Drop those and the socket silently fails to connect.</p>
+      </div>
+    </section>
+
+    <section id="up">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Bring it up</h2>
+      <p>Build the image and start all four containers in the background:</p>
+      <pre><code>docker compose up -d --build</code></pre>
+      <p>The first run downloads <code>redis:7-alpine</code>, <code>nginx:alpine</code>, and <code>node:20-alpine</code> and installs the npm deps, so give it a minute. When it returns, confirm every container is up:</p>
+      <pre><code>docker compose ps</code></pre>
+      <p>You want to see four services — <code>redis</code>, <code>chat1</code>, <code>chat2</code>, <code>nginx</code> — all <code>Up</code>, with nginx publishing <code>0.0.0.0:8080-&gt;80/tcp</code>. Peek at the chat logs to confirm both instances connected to Redis and are listening:</p>
+      <pre><code>docker compose logs chat1 chat2</code></pre>
+      <p>Each should print a line like:</p>
+      <pre><code>[chat1] chat server listening on http://0.0.0.0:3000
+[chat2] chat server listening on http://0.0.0.0:3000</code></pre>
+
+      <div class="callout tip">
+        <p class="lbl">Port 8080 already in use?</p>
+        <p>If something else owns port 8080, change the left side of the nginx mapping (e.g. <code>"9090:80"</code>) in <code>docker-compose.yml</code>, re-run <code>docker compose up -d</code>, and use that port everywhere below.</p>
+      </div>
+    </section>
+
+    <section id="exercises">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>The exercises</h2>
+      <p>The whole point is to <em>see</em> a message cross the process boundary. Run these in order, keeping the browser tabs and a log window on screen at the same time.</p>
+
+      <div class="step">
+        <h3><span class="tag">1 · Open</span>Two tabs, maybe two instances</h3>
+        <p>Open the chat client in <strong>two separate browser tabs</strong>, both pointed at the load balancer:</p>
+        <pre><code><span class="cmt"># macOS — run twice to get two tabs</span>
+open http://localhost:8080
+open http://localhost:8080
+
+<span class="cmt"># Linux: xdg-open http://localhost:8080   ·   Windows: start http://localhost:8080</span>
+<span class="cmt"># …or just paste http://localhost:8080 into two tabs by hand.</span></code></pre>
+        <p class="observe"><b>What to observe</b>Each tab's header reads <em>"you are connected to chat1"</em> or <em>"…chat2"</em>. Because nginx round-robins new connections, the two tabs often land on <strong>different instances</strong> — that's exactly the split you want to test. (If both show the same one, open a third tab; they alternate.)</p>
+      </div>
+
+      <div class="step">
+        <h3><span class="tag">2 · Chat</span>A message crosses the instance boundary</h3>
+        <p>In the tab connected to <code>chat1</code>, type something and hit <strong>Send</strong>. Then send one from the <code>chat2</code> tab too.</p>
+        <pre><code><span class="cmt"># Nothing to type in the terminal here — use the two browser tabs.</span>
+<span class="cmt"># tab A (chat1):  "hello from tab A"</span>
+<span class="cmt"># tab B (chat2):  "and hi from tab B"</span></code></pre>
+        <p class="observe"><b>What to observe</b>Both messages appear in <strong>both</strong> tabs — even though the two clients are held by two different server processes. Each message is tagged <em>"handled by chat1"</em> or <em>"handled by chat2"</em>, naming the instance that first received it and published it to Redis. That tag is your proof the message travelled through the broker.</p>
+      </div>
+
+      <div class="step">
+        <h3><span class="tag">3 · Trace</span>Watch the fan-out in the logs</h3>
+        <p>Now follow the logs live and send a few more messages, watching which instance does what:</p>
+        <pre><code>docker compose logs -f</code></pre>
+        <p class="observe"><b>What to observe</b>For a single message you'll see it handled once and delivered everywhere. The instance that owns the sending tab prints the <em>publish</em>; <strong>both</strong> instances print the <em>fan-out</em> they got back from Redis:</p>
+        <pre><code>chat1  | [chat1] recv from client -&gt; publish: hello from tab A
+chat1  | [chat1] fan-out from redis &lt;- chat1: hello from tab A
+chat2  | [chat2] fan-out from redis &lt;- chat1: hello from tab A</code></pre>
+        <p style="font-size:13.5px;color:var(--muted)">One <code>publish</code>, two <code>fan-out</code> lines — one per instance. <code>chat2</code> delivered a message it never received from a browser; it only heard it on the Redis channel. Press <code>Ctrl-C</code> to stop following.</p>
+      </div>
+
+      <div class="step">
+        <h3><span class="tag">4 · Prove</span>Why Redis is not optional at scale</h3>
+        <p>Convince yourself the broker is load-bearing by cutting it out from under the running stack:</p>
+        <pre><code>docker compose stop redis</code></pre>
+        <p>Send a message from either tab, then bring Redis back:</p>
+        <pre><code>docker compose start redis</code></pre>
+        <p class="observe"><b>What to observe</b>With Redis stopped, messages stop crossing — a chat server has no other way to tell its peer what happened, and the two instances go deaf to each other. Restart Redis and the fan-out resumes. This is the lesson in one move: <strong>the instant you run more than one WebSocket server, in-memory broadcast is not enough — you need a shared pub/sub layer (Redis here; Kafka, NATS, or a managed bus in production) to reunite clients scattered across processes.</strong></p>
+      </div>
+    </section>
+
+    <section id="teardown">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Teardown</h2>
+      <p>Stop and remove all four containers, the network, and any named volumes in one shot:</p>
+      <pre><code>docker compose down -v</code></pre>
+      <p>Run <code>docker compose ps</code> afterward — it should list nothing for this project. The built image lingers in your local cache; drop it too with <code>docker image rm ws-chat-lab:1.0</code> if you want a spotless machine.</p>
+    </section>
+
+    <section id="taught">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>What this taught + where next</h2>
+      <p>You now have <em>felt</em>, not just read, the core scaling problem of real-time systems:</p>
+      <ul>
+        <li><strong>WebSockets are stateful and process-local.</strong> A connection lives inside one server's memory; a plain in-process broadcast only ever reaches that server's own clients.</li>
+        <li><strong>A load balancer scatters clients.</strong> nginx round-robins connections across instances, so any two users are likely on different servers — and that's the whole reason a single-process broadcast breaks.</li>
+        <li><strong>Pub/sub reunites them.</strong> Every instance publishes what it receives and subscribes to everything, so Redis fans each message out to all instances, which then broadcast to their own sockets. Publish once, deliver everywhere.</li>
+        <li><strong>The upgrade dance is real.</strong> Fronting WebSockets with a proxy means forwarding the HTTP/1.1 <code>Upgrade</code>/<code>Connection</code> headers — a detail that bites everyone once.</li>
+      </ul>
+      <p>In a system design interview, this is exactly the muscle you flex on <em>"how do you scale a chat / notifications / live-feed service past one server?"</em> — the answer is a stateless-ish socket tier plus a shared pub/sub backbone, and now you've watched it work.</p>
+
+      <div class="callout tool">
+        <p class="lbl">Pair it with the simulator →</p>
+        <p>Take this hands-on intuition to the <a href="../../tools/realtime-transport.html">📡 Real-Time Transport simulator</a> and push it further: compare WebSockets against long-polling and Server-Sent Events, and see how message rate and connection count change the trade-offs. You wired one transport here — there you weigh them all.</p>
+      </div>
+      <p>For the theory behind the moves, keep the <a href="../../modules/10-realtime-async-apis.html">Module 10 notes</a> open alongside.</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../../tools/realtime-transport.html">Open the simulator →</a>
+    </div>
+
+    <footer>Sandbox 06 · Module 10 — Real-Time & Async APIs · System Design Mastery. Built to be run: <code>docker compose up -d --build</code>.</footer>
+  </div>
+</body>
+</html>

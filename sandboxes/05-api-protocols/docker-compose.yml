@@ -1,0 +1,14 @@
+# API Protocols sandbox — one Node.js service, three ways to fetch the same 'user'.
+# Modern Compose schema (no top-level `version:` key — it is obsolete).
+
+services:
+  # Single Node.js service (built from ./Dockerfile, node:20-alpine).
+  # Serves the SAME user resource over REST + GraphQL (HTTP/:3000) and gRPC (HTTP/2/:50051).
+  api:
+    build: .
+    image: api-protocols-lab:1.0
+    container_name: api-protocols
+    ports:
+      - "3000:3000"    # REST (GET /users/:id) + GraphQL (POST /graphql) over HTTP/1.1
+      - "50051:50051"  # gRPC (UserService/GetUser) over HTTP/2
+    restart: unless-stopped

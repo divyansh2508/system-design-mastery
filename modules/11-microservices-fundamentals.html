@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Microservices Fundamentals | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#d97b2e; --hue-soft:rgba(217,123,46,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#d97b2e;--hue-soft:rgba(217,123,46,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 4 · Production-Grade</span><span class="sep">·</span><span>Module 11</span><span class="sep">·</span><span>Weeks 6-8 · ~13 hrs</span></p>
+      <h1>Microservices Fundamentals</h1>
+      <p class="sub">How to split one big program into many small services without splitting your sanity — the boundaries, the wiring, and the data-ownership rules that separate a clean distributed system from a distributed <em>mess</em>.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#split">Monolith vs microservices</a></li>
+        <li><a href="#ddd">Bounded contexts &amp; DDD</a></li>
+        <li><a href="#comm">Service communication</a></li>
+        <li><a href="#discovery">Service discovery</a></li>
+        <li><a href="#data">Data ownership boundaries</a></li>
+        <li><a href="#shared-db">The shared-database anti-pattern</a></li>
+        <li><a href="#strava">Worked example: Strava</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="split">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>Monolith vs microservices</h2>
+      <p class="lead">A <strong>monolith</strong> is one codebase, one deployable, usually one database. A <strong>microservices</strong> architecture splits that into many small, independently deployable services, each owning one business capability and its own data. Neither is "advanced." The senior move is knowing <em>which one the problem in front of you actually needs.</em></p>
+      <p>The mistake that gets punished in interviews and in production alike is treating microservices as the default because they sound sophisticated. They are not free — you trade in-process function calls (nanoseconds, transactional, type-checked by the compiler) for network calls (milliseconds, partial-failure-prone, versioned by hand). You buy independent deployability and team autonomy with the currency of operational complexity: service discovery, distributed tracing, retries, idempotency, eventual consistency, and a dozen dashboards. <strong>You should only make that trade when the pain of the monolith is real and specific.</strong></p>
+
+      <h3>When a monolith is the right answer</h3>
+      <p>Start with a monolith — ideally a <em>modular</em> monolith with clean internal module boundaries — when you have a small team, an unproven product, and a domain you don't fully understand yet. You get one repo to reason about, one deploy, one database with real ACID transactions, and refactoring is a compiler-checked rename instead of a cross-service migration. Most successful products live happily as a monolith far longer than engineers expect.</p>
+
+      <h3>When to split</h3>
+      <p>Reach for microservices when you can point at a concrete force pushing you there — not a vibe:</p>
+      <ul>
+        <li><strong>Team scaling.</strong> Many teams stepping on one deploy pipeline and one codebase. Conway's Law says your architecture will mirror your org chart anyway — services let independent teams ship independently.</li>
+        <li><strong>Independent scaling.</strong> One component's load dwarfs the rest. Strava's GPS-upload path and its social feed have wildly different traffic shapes; forcing them to scale together wastes money.</li>
+        <li><strong>Independent deployability &amp; blast radius.</strong> A bad release to the cart shouldn't take down search. Separate services contain failures and let you ship a fix to one capability without redeploying the world.</li>
+        <li><strong>Technology heterogeneity.</strong> The ML-scoring path wants Python + GPUs; the transactional path wants the JVM. Services let each pick its own stack.</li>
+      </ul>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Dimension</th><th>Monolith</th><th>Microservices</th></tr></thead>
+          <tbody>
+            <tr><td>Deployment</td><td>One artifact, one pipeline</td><td>Many independent deploys</td></tr>
+            <tr><td>Scaling</td><td>Whole app scales together</td><td>Per-service, per-load</td></tr>
+            <tr><td>Data</td><td>One DB, real transactions</td><td>DB per service, eventual consistency</td></tr>
+            <tr><td>Failure blast radius</td><td>One bug can down everything</td><td>Contained to a service (if done right)</td></tr>
+            <tr><td>Call cost</td><td>In-process, ~ns, type-safe</td><td>Network, ~ms, partial failure</td></tr>
+            <tr><td>Team fit</td><td>Small, co-located</td><td>Many autonomous teams</td></tr>
+            <tr><td>Cognitive load</td><td>Low — one system</td><td>High — distributed system ops</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>Microservices are an <strong>organizational</strong> solution first and a technical one second. If you don't have the team-scaling, independent-scaling, or blast-radius problem, you're paying the distributed-systems tax for nothing. "Start monolith, extract services when a seam hurts" is the answer that reads as senior.</p>
+      </div>
+    </section>
+
+    <section id="ddd">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>Bounded contexts &amp; DDD</h2>
+      <p>Once you decide to split, the hard question is <em>where to cut.</em> Cut in the wrong place and you get "distributed monolith" — services so chatty and co-dependent that you have all the cost of microservices and none of the independence. The tool that tells you where to cut is <strong>Domain-Driven Design (DDD)</strong>, and its central concept is the <strong>bounded context</strong>.</p>
+
+      <p>A bounded context is a boundary within which a particular <strong>domain model</strong> and its <strong>ubiquitous language</strong> are consistent and unambiguous. The same word can mean genuinely different things in different parts of a business, and a bounded context is where one precise meaning holds. Consider the word "Athlete" at Strava:</p>
+
+      <pre><code><span class="cmt"># The same "Athlete" is a different model in each context</span>
+
+Identity context:     Athlete = { id, email, password_hash, oauth }
+Social context:       Athlete = { id, followers[], following[], blocked[] }
+Activity context:     Athlete = { id, weight, ftp, heart_rate_zones }   <span class="cmt"># for calorie/power calcs</span>
+Billing context:      Athlete = { id, plan, payment_method, renews_at }</code></pre>
+
+      <p>Trying to build one giant shared "Athlete" object that serves all four is the classic mistake — it becomes a god-object that every team must coordinate on, which is the opposite of autonomy. DDD says: let each context own its own model of the athlete, keyed by a shared <code>athlete_id</code>, and keep the fields that only <em>it</em> cares about. The contexts overlap on identity, not on internals.</p>
+
+      <h3>The vocabulary you need</h3>
+      <ul>
+        <li><strong>Domain</strong> — the whole problem space (endurance-sports tracking).</li>
+        <li><strong>Subdomain</strong> — a slice of it (activity recording, social feed, segments, billing). Some are <em>core</em> (segments/leaderboards are Strava's differentiator), some are <em>supporting</em>, some are <em>generic</em> (billing — buy, don't build).</li>
+        <li><strong>Bounded context</strong> — the explicit boundary where one model + one language applies. In practice, a bounded context is your best first guess at a service boundary.</li>
+        <li><strong>Ubiquitous language</strong> — the shared, precise vocabulary that engineers and domain experts both use inside a context. "Kudos," "Segment," "Effort" mean exactly one thing inside the social/segments contexts.</li>
+        <li><strong>Context map</strong> — how contexts relate: which one is upstream, which downstream, and the contract (translation layer) between them.</li>
+      </ul>
+
+      <div class="callout tip">
+        <p class="lbl">Heuristic</p>
+        <p>Draw one service per bounded context, then sanity-check by asking: <em>"Can this team change its schema and deploy without coordinating with another team?"</em> If two services must always deploy together or constantly chat to complete a single user action, your boundary is wrong — you cut through a domain concept instead of around it.</p>
+      </div>
+    </section>
+
+    <section id="comm">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Service communication</h2>
+      <p>Once services are separate processes, they must talk over the network — and <em>how</em> they talk is a first-class design decision. The split is <strong>synchronous</strong> (caller waits for a reply) vs <strong>asynchronous</strong> (caller fires a message and moves on).</p>
+
+      <h3>Synchronous: REST and gRPC</h3>
+      <p>Synchronous request/response is the natural fit when the caller genuinely needs the answer <em>right now</em> to continue — a client fetching a profile, an API gateway assembling a page. <strong>REST over HTTP/JSON</strong> is the lingua franca: universal, human-readable, cacheable, easy to debug with <code>curl</code>. <strong>gRPC</strong> (HTTP/2 + Protocol Buffers) is the choice for high-throughput internal service-to-service calls: binary and compact, a typed contract via <code>.proto</code> files, code-gen for many languages, and native streaming. Rule of thumb: <em>REST at the edge (public/browser), gRPC in the mesh (internal, hot paths).</em></p>
+      <p>The trap with synchronous calls is <strong>temporal coupling</strong>: if service A calls B calls C synchronously, then C being slow or down makes A slow or down. Chains of blocking calls turn one flaky dependency into a system-wide outage unless you defend with timeouts, retries with backoff, and circuit breakers (Module 12).</p>
+
+      <h3>Asynchronous: queues and event streams</h3>
+      <p>Asynchronous messaging via a broker (RabbitMQ, Amazon SQS, or a log like Apache Kafka) decouples the producer from the consumer <em>in time</em>. The producer writes a message and returns immediately; consumers process it whenever they can. This is the right tool when the work can happen in the background, when you need to absorb spikes, or when one event should fan out to many independent consumers.</p>
+      <pre><code><span class="cmt"># Strava: one upload, many downstream reactions — perfect for async</span>
+Upload service  --("activity.uploaded" {id, athlete})-->  [ QUEUE / LOG ]
+                                                              |
+                        +-------------------------+-----------+-----------+
+                        v                         v                       v
+                Segment-matching          Feed fan-out            Achievements
+                 (heavy geo work)        (notify followers)      (PRs, badges)
+<span class="cmt"># Upload returns in ~100ms; the slow, spiky work runs later, independently.</span></code></pre>
+      <p>The cost of async is a harder mental model: eventual consistency (a follower's feed updates a second later), message ordering and deduplication concerns, and the need for <strong>idempotent</strong> consumers (a broker may deliver the same message twice). You also need a dead-letter queue for messages that repeatedly fail.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Style</th><th>Best for</th><th>Watch out for</th></tr></thead>
+          <tbody>
+            <tr><td>REST / HTTP</td><td>Public APIs, browser clients, simple CRUD</td><td>Verbose; chatty over many hops</td></tr>
+            <tr><td>gRPC</td><td>Internal hot paths, typed contracts, streaming</td><td>Not browser-native; binary is harder to eyeball</td></tr>
+            <tr><td>Async queue / log</td><td>Background work, spikes, fan-out, decoupling</td><td>Eventual consistency; needs idempotency + DLQ</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <p class="lbl">Interview line</p>
+        <p>"Use synchronous when the caller <em>needs the result to proceed</em>; use asynchronous when the work <em>can happen later or fan out</em>." Say that, then justify each edge in your diagram with it. Naming why an arrow is sync or async is exactly the trade-off reasoning interviewers grade.</p>
+      </div>
+    </section>
+
+    <section id="discovery">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>Service discovery</h2>
+      <p>In a monolith, module B's address is "wherever B's function lives in memory." In microservices, instances of a service come and go constantly — autoscaling adds them, deploys replace them, crashes remove them — each on a different host and port. Hard-coding IPs is hopeless. <strong>Service discovery</strong> is the mechanism that answers, at request time: <em>"Where are the healthy instances of service X right now?"</em></p>
+      <p>The heart of it is a <strong>service registry</strong> — a live database of <code>{service name → healthy instance addresses}</code>. Instances <em>register</em> on startup and <em>deregister</em> on shutdown, and they send periodic <strong>heartbeats</strong>. If a heartbeat stops arriving, the registry evicts that instance so no traffic is routed to a dead process. Tools: Consul, etcd, ZooKeeper, Netflix Eureka; Kubernetes ships this built in.</p>
+
+      <pre><code><span class="cmt"># Registry lifecycle</span>
+instance boots  --register(name, ip:port)-->  [ SERVICE REGISTRY ]
+instance alive  --heartbeat every ~10s----->  (keeps entry fresh)
+no heartbeat    --------- evicts stale entry after timeout ------
+caller          --"give me healthy Segment instances"-->  [1.2.3.4:9000, 1.2.3.9:9000]</code></pre>
+
+      <h3>Client-side vs server-side discovery</h3>
+      <p>There are two places to put the "pick an instance" logic:</p>
+      <ul>
+        <li><strong>Client-side discovery.</strong> The caller queries the registry itself, gets the list of healthy instances, and load-balances across them in its own process (e.g., Eureka + a client-side balancer like Ribbon). Fewer network hops and smart balancing, but every service — in every language — must embed discovery logic, which is a lot of duplicated client complexity.</li>
+        <li><strong>Server-side discovery.</strong> The caller sends the request to a stable endpoint — a load balancer, gateway, or the platform's virtual IP — and <em>that</em> intermediary queries the registry and forwards to a healthy instance (e.g., a cloud load balancer, or Kubernetes Services + kube-proxy). The client stays dumb and language-agnostic; the cost is an extra hop and a component you must keep highly available.</li>
+      </ul>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Aspect</th><th>Client-side</th><th>Server-side</th></tr></thead>
+          <tbody>
+            <tr><td>Who picks the instance</td><td>The calling service</td><td>A load balancer / gateway</td></tr>
+            <tr><td>Network hops</td><td>Fewer (direct)</td><td>One extra (via LB)</td></tr>
+            <tr><td>Client complexity</td><td>High — logic per language</td><td>Low — client stays dumb</td></tr>
+            <tr><td>Coupling to registry</td><td>Every client knows it</td><td>Only the LB knows it</td></tr>
+            <tr><td>Typical stack</td><td>Eureka + Ribbon</td><td>K8s Services, cloud LB, service mesh</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Modern platforms increasingly hide this entirely behind a <strong>service mesh</strong> (a sidecar proxy next to each service that handles discovery, balancing, retries, and mTLS) — you get server-side-style simplicity for the app with client-side-style locality. That's a Module 12 topic; for now, know the two patterns and the trade-off.</p>
+    </section>
+
+    <section id="data">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Data ownership boundaries</h2>
+      <p>Here is the single rule that most separates real microservices from a distributed monolith: <strong>each service owns its own data, and no other service touches that database directly.</strong> The service's API is the <em>only</em> door to its data. This is "database per service," and it is what actually delivers the independence you split for.</p>
+      <p>Why it matters: a service's schema is its <em>internal implementation detail.</em> If the Activity service alone reads and writes the activity tables, it can add a column, denormalize for speed, or migrate Postgres → Cassandra without asking anyone. The moment another service reaches into those tables, that schema becomes a public contract frozen by every consumer — and you've lost the freedom you paid for.</p>
+      <pre><code><span class="cmt"># Right: data is private; the API is the contract</span>
+   Social service  ──HTTP/gRPC──▶  Activity service  ──owns──▶  [ Activity DB ]
+                                   (only door in)
+
+<span class="cmt"># Wrong: Social reaches straight into Activity's tables (see §06)</span>
+   Social service  ──────SQL──────────────────────────────────▶ [ Activity DB ]</code></pre>
+      <p>Owning your data also means you get to pick the <em>right</em> store per service — the "polyglot persistence" payoff. At Strava: the Activity service leans on object storage for raw GPS streams; Segments/Leaderboards want a Redis sorted set; Social wants a graph or well-indexed relational store; Search wants Elasticsearch. One shared database could never be optimal for all of these at once.</p>
+      <p>The bill for this independence comes due in two places, both real interview talking points: <strong>no cross-service transactions</strong> (you can't <code>BEGIN…COMMIT</code> across two databases — you use the Saga pattern and accept eventual consistency, Module 12), and <strong>no cross-service JOINs</strong> (you assemble data via API composition or by keeping a local read-model built from events). You trade easy consistency for autonomy — on purpose, and you should say so.</p>
+    </section>
+
+    <section id="shared-db">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>The shared-database anti-pattern</h2>
+      <p>The most seductive shortcut in microservices is letting two services share one database — "it's right there, just read the table." It feels efficient. It is the fastest known way to build a <strong>distributed monolith</strong>: the operational cost of many services with the tight coupling of one.</p>
+      <p>What goes wrong when the Social service reads Activity's tables directly:</p>
+      <ul>
+        <li><strong>Schema lock-in.</strong> Activity can no longer rename or restructure a column — an invisible consumer would break. Every migration becomes a cross-team negotiation. Deploys are no longer independent, which was the whole point.</li>
+        <li><strong>Hidden coupling.</strong> The dependency isn't in any API contract; it's buried in a SQL string. Nobody discovers it until a change breaks production.</li>
+        <li><strong>No encapsulation of rules.</strong> Business logic and invariants that the Activity service enforces (validation, derived fields, permissions) get bypassed entirely by a direct writer.</li>
+        <li><strong>Contended failure domain.</strong> One service's runaway query locks tables or saturates connections and takes down the other — you've merged their fates while pretending they're separate.</li>
+      </ul>
+      <div class="callout tip">
+        <p class="lbl">Nuance worth voicing</p>
+        <p>"Shared database" is an anti-pattern, not a law of physics. A read-only reporting replica, or a deliberately shared DB between two services that are really one bounded context split for scaling, can be a pragmatic choice — <em>if you name the coupling and the constraints out loud.</em> Seniority is knowing the rule <strong>and</strong> when a conscious exception is cheaper than the ceremony.</p>
+      </div>
+      <p>The fix is always the same shape: put the data behind the owning service's API and communicate through it — a synchronous query when you need it live, or an emitted event that lets the consumer keep its own local copy. Coupling moves from the invisible schema to a visible, versioned contract.</p>
+    </section>
+
+    <section id="strava">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Worked example: Strava</h2>
+      <p>Let's run the 5-step framework from Module 1 on <em>"Design Strava"</em> — and this time every step is an excuse to spend one of the concepts above. Attempt it yourself first (reps below); read this as the model answer.</p>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Functional:</strong> record &amp; upload an activity (a GPS/sensor time-series — a "ride" or "run"); view an activity with its map and stats; a <em>social feed</em> of the people you follow (with kudos &amp; comments); <em>segments</em> (named stretches of road/trail) with <em>leaderboards</em>.</li>
+        <li><strong>Non-functional:</strong> <strong>durability</strong> — never lose a recorded activity (an athlete's data is sacred); very <strong>read-heavy</strong> feed &amp; leaderboards; <strong>write bursts</strong> at upload (mornings, race days, Strava's infamous holiday spikes); <strong>eventual consistency is fine</strong> for feed, kudos, and leaderboards (a second of lag is invisible); geospatial queries must be fast.</li>
+        <li><strong>Out of scope (say it):</strong> live GPS tracking/"Beacon," full billing, route planning, DM chat. Keep the core tight.</li>
+      </ul>
+
+      <h3>② Estimate</h3>
+      <p>Round hard (powers of ten; day ≈ 10⁵ s from Module 1). The one number that changes the design is <em>points per activity</em>:</p>
+      <pre><code>Say 10M DAU, ~1 activity each/day        ≈ 10M uploads/day  → ÷100k ≈ 100 uploads/s avg
+peak (race morning ×10)                  ≈ ~1,000 uploads/s  <span class="cmt">→ absorb with a queue</span>
+1 GPS point / few sec × ~1hr ride        ≈ ~1,000 points/activity
+10M activities/day × 1,000 pts × ~30 B   ≈ ~300 GB/day of raw stream <span class="cmt">→ object storage, NOT a row/point</span>
+feed reads: 10M users refresh ~10×/day   ≈ 100M reads/day → ~1k QPS avg, cache-friendly</code></pre>
+      <p>Decision the estimate just made for you: <em>store the raw GPS stream as a blob in object storage (S3-style) and keep only lightweight metadata in a database.</em> A row per GPS point would be billions of rows/day for no benefit — you almost always read the whole stream at once to draw a map.</p>
+
+      <h3>③ Interface</h3>
+      <pre><code>POST /api/v1/activities        <span class="cmt"># upload; body = metadata + GPS stream (or a presigned URL)</span>
+   returns 202 { "activityId": "a_88f3" }   <span class="cmt"># 202 Accepted — processing continues async</span>
+GET  /api/v1/activities/{id}    <span class="cmt"># activity detail: stats, map polyline, segment efforts</span>
+GET  /api/v1/feed?cursor=...    <span class="cmt"># the follow-feed, paginated</span>
+POST /api/v1/activities/{id}/kudos
+GET  /api/v1/segments/{id}/leaderboard?window=all|year|following</code></pre>
+      <p>Note the upload returns <strong>202 Accepted</strong>, not 200 with the finished result. That single status code encodes the whole architecture: we durably accept the activity fast, then do the heavy work (segment matching, feed fan-out) asynchronously. Spotting that in the API — before drawing a box — is the senior move from Module 1.</p>
+
+      <h3>④ High-level design — bounded contexts become services</h3>
+      <p>Each service from §02 owns its own datastore (§05). An API gateway fronts them and leans on service discovery (§04) to route:</p>
+      <pre><code>            ┌─────────────── API Gateway ───────────────┐
+ client ───▶ │  (edge REST; auth; routes via discovery)   │
+            └───┬───────┬───────────┬───────────┬────────┘
+                │       │           │           │
+          Upload/    Social/     Segment      User/
+          Activity    Feed      &amp; Leaderboard  Identity
+             │          │            │           │
+        [Meta DB +  [Feed store/  [Redis        [Users DB]
+         GPS blobs]  graph]       sorted sets]
+
+ Upload flow (sync in, async out):
+   1. POST → Activity service stores metadata + GPS blob  → 202 fast   (durable)
+   2. emits "activity.uploaded" ─▶ [ QUEUE ]
+   3. Segment-matching consumes ─▶ finds segments on the route, writes efforts
+   4. Feed consumes ─────────────▶ fans out to followers' feeds
+   5. Leaderboard consumes ──────▶ updates Redis sorted sets (ZADD by time)</code></pre>
+      <p>That one diagram exercises the whole module: <strong>sync REST at the edge</strong> (§03) for the upload and reads, an <strong>async queue</strong> (§03) for the fan-out, <strong>service discovery</strong> (§04) at the gateway, and <strong>data owned per service</strong> (§05) — Social never reads Activity's tables; it reacts to the event and keeps its own feed store.</p>
+
+      <h3>⑤ Deep-dive &amp; scale</h3>
+      <p><strong>Segment matching</strong> is Strava's core, differentiating subdomain — so we invest here. Naively checking each new activity against every segment is O(activities × segments); hopeless. Index geospatially instead: cover the map with a <strong>geohash / quadtree</strong> grid, look up only the segments whose bounding boxes overlap the ride's cells, then run precise polyline matching on that small candidate set. The estimate (heavy CPU per upload) is exactly why this runs off the queue, not in the request.</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Feature</th><th>The problem</th><th>The move</th></tr></thead>
+          <tbody>
+            <tr><td>Raw GPS stream</td><td>Huge, read whole-at-once</td><td>Blob in object storage; metadata in DB</td></tr>
+            <tr><td>Segment matching</td><td>O(all segments) per upload</td><td>Geohash/quadtree candidate set + async</td></tr>
+            <tr><td>Leaderboards</td><td>"Rank of my time" is hot</td><td>Redis sorted set (ZADD / ZRANK)</td></tr>
+            <tr><td>Social feed</td><td>Read-heavy, must feel instant</td><td>Fan-out-on-write to per-user feed + cache</td></tr>
+            <tr><td>Upload spikes</td><td>10× on race mornings</td><td>Queue absorbs the burst; consumers drain</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>Feed fan-out</strong> repeats the classic trade-off: fan-out-on-write (push each new activity into followers' feed lists) makes reads cheap but is expensive for someone with millions of followers — a pro cyclist. So use the <strong>hybrid</strong>: fan-out-on-write for normal athletes, and for celebrity athletes, <em>fan-out-on-read</em> (pull their recent activities in at feed-render time) so one upload doesn't trigger millions of writes. Each escalation is triggered by an NFR or the estimate — never guessed.</p>
+
+      <div class="callout tool">
+        <p class="lbl">See it move → your tool</p>
+        <p>The gateway-to-services routing you just drew is exactly the traffic the <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer Playground</a> lets you stress. Push the upload spike, kill an instance, and watch discovery route around the dead one — the §04 concepts, live.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Your reps this week</h2>
+      <p>Reading is not learning — reps are. Do these, in order:</p>
+      <ol>
+        <li><strong>Whiteboard Strava yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design it end-to-end with the 5-step framework, out loud, timed to ~35 minutes — <em>before</em> re-reading Section 07. For every service you draw, say the bounded context it maps to and name its private datastore.</li>
+        <li><strong>Draw the seams.</strong> Take any monolith you know (or the one at work) and mark three bounded contexts you'd extract first, and the concrete force that justifies each cut (team scaling? independent scaling? blast radius?). If you can't name the force, don't split it.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your Strava design against pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer running a system design interview. Give me the prompt: "Design Strava." Then act as the interviewer — let me drive, ask clarifying and probing questions, and push hard on the microservices fundamentals specifically: make me justify monolith-vs-microservices and WHERE I split (bounded contexts), which calls are sync vs async and WHY, how services discover each other, who owns which data, and whether any two services share a database. Keep asking "why?" and never lead me to the answer. After ~35 minutes (or when I say "done"), grade me 1–5 on each of: requirements &amp; scoping, service decomposition (bounded contexts), communication choices (sync/async), data ownership &amp; consistency, deep-dives &amp; scaling, and communication — with specific feedback and what a strong candidate would have added.</div>
+        <ol start="4">
+        <li><strong>Explain it back.</strong> Teach "database per service" and the shared-database anti-pattern to a rubber duck (or me) without notes — including the one case where a shared DB is a defensible exception. Gaps you can't explain are gaps you don't have yet.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>What concrete force justifies splitting a monolith? · What is a bounded context, in one sentence? · Sync vs async — when each? · Client-side vs server-side discovery — who picks the instance? · Why is a shared database an anti-pattern, and one time it isn't?</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the monolith-vs-microservices and DDD ones <em>before</em> your reps; the discovery and communication ones deepen Sections 03–04. (Durations are approximate.)</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=qYhRvH9tJKw" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>What is a MICROSERVICE ARCHITECTURE and what are its advantages?</b><div class="ch">Gaurav Sen <span class="dur">· ~10 min · monolith vs microservices</span></div><p>The clean intro: why you'd decompose a monolith at all. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=lTAcCNbJ7KE" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>What Are Microservices Really All About? (And When Not To Use It)</b><div class="ch">ByteByteGo <span class="dur">· ~8 min · when to split</span></div><p>The senior framing — including when a monolith is the right call.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=8SPVfacnFvM" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Domain-Driven Design: Bounded Contexts Explained! 🚀</b><div class="ch">ByteMonk <span class="dur">· ~10 min · DDD / bounded contexts</span></div><p>Where to cut: the boundary concept that stops you building a distributed monolith.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=NvBsEnDgA4o" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>DDD Bounded Contexts &amp; Subdomains</b><div class="ch">Drawing Boxes <span class="dur">· ~12 min · DDD / subdomains</span></div><p>Domains, subdomains, and context maps with clear worked examples.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=lWE_UIbm8NA" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Service discovery and heartbeats in micro-services</b><div class="ch">Gaurav Sen <span class="dur">· ~11 min · service discovery</span></div><p>The registry, heartbeats, and how callers find healthy instances — Section 04, visualized.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=YSquncQY9LQ" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>System Design — Microservice Communications | HTTP | Message Driven</b><div class="ch">Code with Irtiza <span class="dur">· ~15 min · sync vs async</span></div><p>Synchronous HTTP vs message-driven async, and when to reach for each.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA Chapter 1 (reliability, scalability, maintainability) — the "evolvability/maintainability" argument <em>is</em> the case for services and clean boundaries. Then the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> sections on <em>Microservices</em> and <em>Service Discovery</em> (free) for a crisp reference.</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/12-advanced-microservices.html">Next module →</a>
+    </div>
+
+    <footer>Module 11 of 24 · System Design Mastery · Phase 4 · Production-Grade. Next up: Module 12 — Advanced Microservices (API gateways, service mesh, the Saga pattern, circuit breakers &amp; resilience).</footer>
+  </div>
+</body>
+</html>

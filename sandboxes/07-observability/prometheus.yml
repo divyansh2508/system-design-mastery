@@ -1,0 +1,19 @@
+# Prometheus scrape configuration — System Design, Module 14 (Observability)
+# Prometheus PULLS metrics from each target on an interval, over HTTP.
+# Two jobs below: Prometheus scrapes itself, and it scrapes node-exporter.
+
+global:
+  scrape_interval: 15s      # how often to pull /metrics from every target
+  evaluation_interval: 15s  # how often to evaluate recording/alerting rules
+
+scrape_configs:
+  # 1) Prometheus scraping its own /metrics (localhost = inside the prometheus container).
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # 2) Prometheus scraping node-exporter over the compose network.
+  #    "node-exporter" is the service name → Docker DNS resolves it to the container.
+  - job_name: "node"
+    static_configs:
+      - targets: ["node-exporter:9100"]

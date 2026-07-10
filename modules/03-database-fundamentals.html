@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Database Fundamentals | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#0ca678; --hue-soft:rgba(12,166,120,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#28c39a;--hue-soft:rgba(40,195,154,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#0ca678;--hue-soft:rgba(12,166,120,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#28c39a;--hue-soft:rgba(40,195,154,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 2 · Data at Scale</span><span class="sep">·</span><span>Module 3</span><span class="sep">·</span><span>Weeks 2-3 · ~13 hrs</span></p>
+      <h1>Database Fundamentals</h1>
+      <p class="sub">The database is the single decision that shapes every other box on your diagram — its data model, its consistency guarantees, and how it fails under load. This module gives you the vocabulary and the judgment to pick the right one and defend it.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#why">Why the database decides the design</a></li>
+        <li><a href="#rdbms-nosql">RDBMS vs NoSQL — and when</a></li>
+        <li><a href="#acid-base">ACID vs BASE</a></li>
+        <li><a href="#cap">CAP theorem &amp; PACELC</a></li>
+        <li><a href="#indexing">Indexing: B-tree, hash, composite</a></li>
+        <li><a href="#schema">Schema design &amp; query optimization</a></li>
+        <li><a href="#bottlenecks">Performance bottlenecks</a></li>
+        <li><a href="#delivery">Case study: Local Delivery Service</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="why">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>Why the database decides the design</h2>
+      <p class="lead">Pick the wrong database and no amount of caching, sharding, or clever code fully saves you — you've committed to a data model, a consistency story, and a scaling ceiling that everything downstream must live with.</p>
+      <p>In an interview, "which database?" is never really about naming a product. It's about connecting the <strong>non-functional requirements</strong> you gathered in Step 1 to a storage engine that satisfies them. Read-heavy with a hot working set? You'll reach for caching and replicas. Money moving between accounts? You need transactions and strong consistency. Billions of append-only events with a flexible shape? A wide-column or document store earns its keep. The database is where the abstract NFRs — consistency, availability, latency, durability, scale — become concrete engineering.</p>
+      <p>This module is the toolkit for that decision. By the end you'll be able to reason out loud like a senior candidate: <em>"Orders need atomic money-plus-inventory updates, so that's a relational store with ACID; live driver locations are high-write and disposable, so those go in a separate key-value store tuned for throughput — different data, different guarantees, different database."</em> That sentence — not the product name — is what gets you hired.</p>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>There is no "best" database — only the best fit for a specific set of requirements. Your job is to make the requirements decide, and to <strong>say the trade-off out loud</strong> every time you choose.</p>
+      </div>
+    </section>
+
+    <section id="rdbms-nosql">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>RDBMS vs NoSQL — and when</h2>
+      <p>A <strong>relational database (RDBMS)</strong> — Postgres, MySQL, SQL Server — stores data in tables with a fixed schema, related through keys, and queried with SQL. Its superpowers are <strong>ACID transactions</strong>, rich joins, and strong consistency. Its classic weakness is scaling <em>writes</em>: the traditional path is to scale up (a bigger box), and scaling out means sharding, which is real work.</p>
+      <p><strong>NoSQL</strong> is an umbrella over several non-relational shapes, each with a different sweet spot. They generally trade some of SQL's guarantees (ACID, joins, ad-hoc queries) for horizontal scalability, flexible schemas, and very high throughput on their happy path.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>NoSQL type</th><th>Shape</th><th>Great for</th><th>Examples</th></tr></thead>
+          <tbody>
+            <tr><td>Key-value</td><td>key → opaque blob</td><td>Caches, sessions, high-throughput lookups</td><td>Redis, DynamoDB</td></tr>
+            <tr><td>Document</td><td>key → JSON document</td><td>Flexible/nested entities, catalogs, profiles</td><td>MongoDB, Couchbase</td></tr>
+            <tr><td>Wide-column</td><td>row key → dynamic columns</td><td>Massive write volume, time-series, feeds</td><td>Cassandra, Bigtable</td></tr>
+            <tr><td>Graph</td><td>nodes + edges</td><td>Relationship-heavy queries (social, fraud)</td><td>Neo4j, Neptune</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The decision, boiled down</h3>
+      <p>Don't memorize a flowchart — reason from the data and the NFRs. A few high-signal questions do most of the work:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Question</th><th>Leans RDBMS</th><th>Leans NoSQL</th></tr></thead>
+          <tbody>
+            <tr><td>Is the schema stable &amp; relational?</td><td>Yes — many entities, many joins</td><td>No — varied/nested, few joins</td></tr>
+            <tr><td>Do you need multi-row ACID transactions?</td><td>Yes (payments, inventory)</td><td>Rarely / single-item only</td></tr>
+            <tr><td>Is write volume enormous &amp; growing?</td><td>Manageable</td><td>Huge — needs horizontal scale</td></tr>
+            <tr><td>Are access patterns known &amp; narrow?</td><td>No — ad-hoc queries needed</td><td>Yes — design tables per query</td></tr>
+            <tr><td>Consistency vs availability priority?</td><td>Strong consistency</td><td>High availability, eventual OK</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The honest senior answer is often <strong>"both"</strong> — a technique called <em>polyglot persistence</em>. Keep transactional order and payment state in Postgres for its guarantees, and push the firehose of clicks, locations, or events into Cassandra or DynamoDB for scale. Naming the split, and why each side lives where it does, is exactly the reasoning interviewers reward.</p>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>Never open with "I'll use MongoDB because it scales." Open with the requirement: <em>"Writes dominate at ~2,500/s and the records are self-contained with no cross-entity transactions, so a horizontally scalable store like Cassandra fits — I'd give up joins here, which is fine because I don't need them."</em> Requirement → choice → trade-off. Every time.</p>
+      </div>
+    </section>
+
+    <section id="acid-base">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>ACID vs BASE</h2>
+      <p>These are two philosophies of what a database promises. <strong>ACID</strong> is the guarantee model of relational databases; <strong>BASE</strong> describes the looser posture many distributed NoSQL systems take to stay available and scalable.</p>
+
+      <h3>ACID — the four letters</h3>
+      <ul>
+        <li><strong>Atomicity</strong> — a transaction is all-or-nothing. Debit account A <em>and</em> credit account B both happen, or neither does. A crash mid-way rolls the whole thing back.</li>
+        <li><strong>Consistency</strong> — every committed transaction moves the database from one valid state to another, respecting all constraints (foreign keys, uniqueness, checks). Invariants never break. <em>(Note: this is not the same "consistency" as in CAP — see the callout below.)</em></li>
+        <li><strong>Isolation</strong> — concurrent transactions don't step on each other; the result is as if they ran one at a time. Databases offer <em>isolation levels</em> (read committed → repeatable read → serializable) trading strictness for concurrency.</li>
+        <li><strong>Durability</strong> — once committed, it survives crashes, usually via a write-ahead log flushed to durable storage before the commit returns.</li>
+      </ul>
+
+      <h3>BASE — the pragmatic opposite</h3>
+      <p><strong>B</strong>asically <strong>A</strong>vailable, <strong>S</strong>oft state, <strong>E</strong>ventually consistent. The system prioritizes staying up and accepting writes even when nodes are out of sync; replicas converge to the same value <em>eventually</em>, not instantly. You trade the "always correct right now" guarantee for availability and scale.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Dimension</th><th>ACID</th><th>BASE</th></tr></thead>
+          <tbody>
+            <tr><td>Consistency</td><td>Strong, immediate</td><td>Eventual</td></tr>
+            <tr><td>Availability</td><td>May block to stay correct</td><td>Prioritized — always answers</td></tr>
+            <tr><td>Scaling model</td><td>Typically scale up / shard</td><td>Scale out horizontally</td></tr>
+            <tr><td>Best for</td><td>Payments, inventory, bookings</td><td>Feeds, sensors, analytics, catalogs</td></tr>
+            <tr><td>Typical home</td><td>Postgres, MySQL</td><td>Cassandra, DynamoDB, Riak</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Neither is "better." A transfer of money must be ACID — a lost or duplicated debit is unacceptable. A "like" count or a driver's last-known location can be BASE — a second of staleness is invisible to users and buys you enormous availability and throughput. Match the guarantee to the cost of being wrong.</p>
+      <div class="callout">
+        <p class="lbl">Watch the word "consistency"</p>
+        <p>ACID's <strong>C</strong> means "constraints stay valid within a transaction." CAP's <strong>C</strong> (next section) means "every node returns the latest write." Same word, different concept — interviewers love to see you distinguish them.</p>
+      </div>
+    </section>
+
+    <section id="cap">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>CAP theorem &amp; PACELC</h2>
+      <p>The CAP theorem is the most-quoted and most-mangled idea in system design. Stated precisely: in a distributed system, <strong>when a network partition occurs</strong> (nodes can't all talk to each other), you must choose between <strong>C</strong>onsistency (every read sees the latest write) and <strong>A</strong>vailability (every request gets a non-error response). You cannot have both <em>during the partition</em>.</p>
+      <p>The subtle, important part: <strong>Partition tolerance is not optional</strong> in any real distributed system — networks drop packets and links fail, full stop. So CAP isn't "pick 2 of 3." It's: given that partitions <em>will</em> happen, when one does, do you sacrifice C or A? That's the only real choice.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Choice</th><th>During a partition…</th><th>Use when</th><th>Examples</th></tr></thead>
+          <tbody>
+            <tr><td>CP (consistency)</td><td>Reject/block requests rather than serve stale data</td><td>Correctness beats uptime (banking, inventory)</td><td>Spanner, HBase, ZooKeeper</td></tr>
+            <tr><td>AP (availability)</td><td>Keep answering, allow temporarily stale reads</td><td>Uptime beats freshness (feeds, carts, locations)</td><td>Cassandra, DynamoDB, Riak</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout tip">
+        <p class="lbl">Common trap</p>
+        <p>CAP only says anything <em>during a partition</em>. When the network is healthy, a well-built system gives you both strong consistency and availability — you are not permanently giving up C or A. If a candidate says "Cassandra sacrifices consistency," push them: it does so <strong>only during a partition</strong>, and even then it's tunable per query.</p>
+      </div>
+
+      <h3>PACELC — the missing half</h3>
+      <p>CAP is silent about the 99.9% of the time when there's <em>no</em> partition — yet distributed systems still make a real trade-off then, between latency and consistency. <strong>PACELC</strong> completes the picture:</p>
+      <pre><code><span class="cmt">if there is a Partition (P):     trade Availability (A) vs Consistency (C)</span>
+<span class="cmt">Else, in normal operation (E):   trade Latency    (L) vs Consistency (C)</span></code></pre>
+      <p>Read it as: "<strong>P</strong> → <strong>A</strong> or <strong>C</strong>; <strong>E</strong>lse → <strong>L</strong> or <strong>C</strong>." The insight is that even with a healthy network, guaranteeing every replica agrees before answering (strong consistency) <em>costs latency</em> — you wait for a quorum or the leader. Relax consistency and you can answer from the nearest replica, faster.</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>System</th><th>PACELC class</th><th>Reading</th></tr></thead>
+          <tbody>
+            <tr><td>Cassandra / DynamoDB</td><td class="num">PA / EL</td><td>Availability under partition; low latency otherwise (both favor A/L over C)</td></tr>
+            <tr><td>Classic single-node RDBMS</td><td class="num">PC / EC</td><td>Consistency under partition and low-latency-be-damned normally</td></tr>
+            <tr><td>Google Spanner</td><td class="num">PC / EC</td><td>Chooses consistency in both regimes (pays latency to get it)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Dropping "PACELC" and correctly placing your chosen database on it is a strong senior signal — it shows you know the trade-off doesn't disappear when the network is fine.</p>
+    </section>
+
+    <section id="indexing">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Indexing: B-tree, hash, composite</h2>
+      <p>An index is a secondary data structure that lets the database <strong>find rows without scanning the whole table</strong>. Without one, a lookup on a billion-row table reads a billion rows (a <em>full table scan</em>); with the right index it reads a handful. The whole point of an index is to <strong>eliminate rows from consideration cheaply</strong>.</p>
+      <p>Indexes aren't free — every write must also update every index on that table, and each index consumes storage. So you index the columns you filter, join, or sort on, and no more. Over-indexing quietly taxes every insert and update.</p>
+
+      <h3>B-tree (really B+ tree) — the default</h3>
+      <p>The workhorse index in every relational database is a <strong>B+ tree</strong>: a balanced, high-fan-out tree where all actual keys live in the <em>leaf</em> level and the leaves are linked in sorted order. Two consequences matter:</p>
+      <ul>
+        <li><strong>O(log n) lookups</strong> — with a fan-out of hundreds, even a billion rows is only ~4–5 levels deep, so a lookup touches a few pages, not the whole table.</li>
+        <li><strong>Range scans are cheap</strong> — because leaves are sorted and linked, <code>WHERE created_at BETWEEN x AND y</code>, <code>&lt;</code>, <code>&gt;</code>, prefix matches, and <code>ORDER BY</code> all walk the leaf chain instead of jumping around. This is why B+ trees dominate.</li>
+      </ul>
+
+      <h3>Hash index — fast equality, nothing else</h3>
+      <p>A hash index stores <code>hash(key) → row location</code>. It gives <strong>O(1) equality lookups</strong> (<code>WHERE id = 42</code>) and is beautifully simple. The catch: hashing destroys ordering, so it supports <em>no</em> range queries, prefix matches, or sorting. Use it when you only ever do exact-match lookups; otherwise a B+ tree is the safer default because it does equality <em>and</em> ranges.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Index</th><th>Equality (=)</th><th>Range / sort</th><th>Cost</th></tr></thead>
+          <tbody>
+            <tr><td>B+ tree</td><td>O(log n)</td><td>Yes — sorted leaves</td><td>Slightly larger, general-purpose</td></tr>
+            <tr><td>Hash</td><td>O(1)</td><td>No</td><td>Compact, equality-only</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Composite index &amp; the leftmost-prefix rule</h3>
+      <p>A <strong>composite index</strong> covers multiple columns in a defined order, e.g. <code>INDEX(merchant_id, status, created_at)</code>. The critical rule: it can be used only for a <strong>leftmost prefix</strong> of its columns. That single index serves:</p>
+      <pre><code>INDEX (merchant_id, status, created_at)  <span class="cmt">column order matters!</span>
+
+<span class="cmt">✓ served</span>   WHERE merchant_id = ?
+<span class="cmt">✓ served</span>   WHERE merchant_id = ? AND status = ?
+<span class="cmt">✓ served</span>   WHERE merchant_id = ? AND status = ? AND created_at &gt; ?
+<span class="cmt">✗ NOT</span>      WHERE status = ?                 <span class="cmt">skips leftmost col</span>
+<span class="cmt">✗ NOT</span>      WHERE created_at &gt; ?             <span class="cmt">skips two leftmost cols</span></code></pre>
+      <p>So column order is a design decision: put the column you <em>always</em> filter on (usually an equality) first, and the range/sort column last. A <em>covering index</em> — one that includes every column a query needs — lets the database answer straight from the index without touching the table at all, the fastest read of all.</p>
+      <div class="callout">
+        <p class="lbl">Rule of thumb</p>
+        <p>Index for your <strong>read patterns</strong>: the columns in your <code>WHERE</code>, <code>JOIN</code>, and <code>ORDER BY</code>. Equality columns go left, range columns go right. Then check the query planner (<code>EXPLAIN</code>) actually uses it — an index the planner ignores is pure write tax.</p>
+      </div>
+    </section>
+
+    <section id="schema">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>Schema design &amp; query optimization</h2>
+      <p>Schema design is choosing how your data is shaped and split across tables (or documents). The central tension is <strong>normalization vs denormalization</strong>.</p>
+      <ul>
+        <li><strong>Normalization</strong> stores each fact once and links by keys. No duplication, so updates are cheap and consistent — but reads pay for <em>joins</em> to reassemble the picture. It's the relational default and great for write-heavy, correctness-critical data.</li>
+        <li><strong>Denormalization</strong> deliberately duplicates data (e.g. embedding the merchant's name inside each order row) so a read needs no join. Reads get faster and simpler; the cost is data that can drift and writes that must update many copies. It's how you buy read speed and how most NoSQL modeling works — you shape tables around the queries you'll run.</li>
+      </ul>
+      <p>The senior instinct: normalize by default for transactional data, then denormalize <em>surgically</em> on the specific read paths that your estimates show are hot — and name the consistency cost you're accepting.</p>
+
+      <h3>Query optimization in practice</h3>
+      <p>Most "slow database" problems are slow <em>queries</em>, not slow databases. The toolkit:</p>
+      <ul>
+        <li><strong><code>EXPLAIN</code> / query plan</strong> — always the first move. It tells you whether the planner is doing an index seek or a full table scan, and where the time goes.</li>
+        <li><strong>Add or fix an index</strong> — a full scan on a filtered column is the number-one culprit; the right index turns it into a seek.</li>
+        <li><strong>Select only what you need</strong> — avoid <code>SELECT *</code>; fetch fewer columns and rows, and paginate large result sets (keyset pagination over huge <code>OFFSET</code>s).</li>
+        <li><strong>Kill N+1 queries</strong> — one query in a loop becomes thousands of round-trips; batch them into a single join or <code>IN (…)</code>.</li>
+        <li><strong>Watch the hot path</strong> — an unindexed join or a query that sorts a million rows in memory will dominate p99 long before CPU or disk does.</li>
+      </ul>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>When asked "the database is slow, what do you do?", resist "add a cache" as the reflex. Say: <em>"First I'd <code>EXPLAIN</code> the hot queries to see if we're scanning instead of seeking, add the missing index, and only then reach for caching or replicas."</em> Diagnose before you scale.</p>
+      </div>
+    </section>
+
+    <section id="bottlenecks">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Performance bottlenecks</h2>
+      <p>Databases almost always break in the same handful of ways. Knowing the failure list lets you predict where a design will strain and fix the real bottleneck instead of guessing.</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Bottleneck</th><th>Symptom</th><th>Typical fix</th></tr></thead>
+          <tbody>
+            <tr><td>Read overload</td><td>Repeated identical reads swamp the DB</td><td>Cache (Redis) + read replicas</td></tr>
+            <tr><td>Write overload</td><td>Single primary saturates on writes</td><td>Shard by key; batch/queue writes</td></tr>
+            <tr><td>Full table scans</td><td>Query latency grows with table size</td><td>Add the right index</td></tr>
+            <tr><td>Hot partition / hot key</td><td>One shard or key gets all the traffic</td><td>Better shard key; split the hot key</td></tr>
+            <tr><td>Lock contention</td><td>Concurrent writes to same rows stall</td><td>Shorter transactions; right isolation level</td></tr>
+            <tr><td>Connection exhaustion</td><td>App opens more connections than DB allows</td><td>Connection pooling (PgBouncer)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The standard scaling escalation for a database mirrors Module 1's story — and each step is triggered by a specific symptom, not applied preemptively:</p>
+      <pre><code>one database ──▶ add a cache            <span class="cmt">(kill repeated reads; hot working set)</span>
+             ──▶ add read replicas      <span class="cmt">(scale reads; primary still takes writes)</span>
+             ──▶ shard the database      <span class="cmt">(scale writes &amp; storage across nodes)</span>
+             ──▶ specialize the store    <span class="cmt">(move firehose data to a fit-for-purpose DB)</span></code></pre>
+      <p><strong>The one to watch:</strong> replicas scale reads but <em>not</em> writes — the primary still absorbs every write. When writes are the bottleneck, replicas don't help; you must shard (or move that write stream to a store built for it). Naming that distinction — "replica for reads, shard for writes" — is a classic senior tell.</p>
+      <div class="callout tool">
+        <p class="lbl">Play with it → your tool</p>
+        <p>Watch reads pile onto a single backend and then spread across replicas in the <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer Playground</a>. It's the read-scaling half of this section, made tangible — push load until one node saturates, then add capacity and watch p99 recover.</p>
+      </div>
+    </section>
+
+    <section id="delivery">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Case study: Local Delivery Service</h2>
+      <p>Let's run the full 5-step framework on <em>"Design a local delivery service (like DoorDash for one metro)"</em> — customers order from nearby merchants, a courier is matched, and everyone tracks the delivery live. Every concept from this module shows up.</p>
+
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>Scope <span class="ft">requirements</span></b><p>Functional: browse nearby merchants, place an order, match the nearest available courier, track the courier live, mark delivered. NFR: high availability (orders must not fail), low-latency live tracking, geo-queries ("couriers near a point"), strong consistency for order + payment state, eventual is fine for live locations.</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>Estimate <span class="ft">the numbers that decide</span></b><p>~500K orders/day and ~10K active couriers pinging location every 4s. Order writes are tiny; location writes are the firehose. That asymmetry decides the whole storage design.</p></div></div>
+        <div class="fstep"><span class="fn">3</span><div><b>Interface <span class="ft">the contract</span></b><p>A handful of endpoints for orders, tracking, courier pings, and a geo merchant search — write path and read path have very different profiles.</p></div></div>
+        <div class="fstep"><span class="fn">4</span><div><b>High-level design <span class="ft">happy path</span></b><p>Split services by data guarantee: an Order service on a relational DB, a Location service on a fast key-value store, a merchant catalog, a matching service.</p></div></div>
+        <div class="fstep"><span class="fn">5</span><div><b>Deep-dive &amp; scale <span class="ft">where it breaks</span></b><p>Geo-indexing for matching, the location write firehose, hot metro partitions, and exactly-once order state.</p></div></div>
+      </div>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Functional:</strong> find nearby merchants; place &amp; pay for an order; match the closest available courier; stream the courier's live location to the customer; complete the delivery.</li>
+        <li><strong>Non-functional:</strong> high availability for ordering; near-real-time tracking (updates within a couple seconds); efficient geospatial queries; <strong>strong consistency</strong> for order/payment/inventory (never double-charge, never assign one courier two conflicting jobs); <strong>eventual consistency acceptable</strong> for live location.</li>
+        <li><strong>Out of scope (say it):</strong> merchant onboarding, ratings, promotions, ML for ETA prediction — keep the core tight.</li>
+      </ul>
+
+      <h3>② Estimate — the asymmetry that decides everything</h3>
+      <pre><code>Orders:     500,000 / day  ÷ 86,400 ≈ 6 writes/s avg
+            peak ×5 (lunch/dinner rush)  ≈ 30 order writes/s   <span class="cmt">→ tiny</span>
+Tracking reads: each order polled ~20×  = 10M reads/day
+            ÷ 86,400 ≈ 116/s avg, peak ×5 ≈ ~600 reads/s      <span class="cmt">→ small</span>
+
+Courier location pings:
+            10,000 active couriers × (1 ping / 4s)
+            = 2,500 location writes/s (sustained)              <span class="cmt">→ THE firehose</span>
+
+Order storage: 500K/day × ~1 KB × 365 × 3 yr ≈ ~550 GB       <span class="cmt">→ fits one DB, shard later</span>
+Location data: ephemeral — only "latest" matters, TTL it</code></pre>
+      <p><strong>Verdict:</strong> order writes are trivial and demand correctness → relational, ACID. Location writes are ~400× heavier and disposable → a separate high-write, in-memory store. <em>The estimate just designed the storage layer for us</em> — this is why we estimate.</p>
+
+      <h3>③ Interface</h3>
+      <pre><code><span class="cmt"># Find merchants near me (geo read)</span>
+GET  /api/v1/merchants?lat=..&amp;lng=..&amp;radius=3km   → 200 [ merchants ]
+
+<span class="cmt"># Place an order (ACID write — money + inventory)</span>
+POST /api/v1/orders   { merchantId, items[], addr }  → 201 { orderId, status }
+
+<span class="cmt"># Courier pushes location (the firehose)</span>
+POST /api/v1/couriers/{id}/location  { lat, lng, ts } → 202 Accepted
+
+<span class="cmt"># Customer streams live tracking (hot read)</span>
+GET  /api/v1/orders/{id}/tracking    → 200 { courierLat, courierLng, eta }</code></pre>
+
+      <h3>④ High-level design — split by guarantee</h3>
+      <pre><code>                         ┌───────────────┐   Postgres (ACID, sharded by city)
+   client ─▶ API GW/LB ─▶ │ Order service │──▶ orders, payments, inventory
+                    │     └───────────────┘
+                    │     ┌────────────────┐  Redis (GEO + TTL) / Cassandra
+                    ├───▶ │ Location svc   │──▶ courier_id → {lat,lng,ts}
+                    │     └────────────────┘   2,500 writes/s, eventual OK
+                    │     ┌────────────────┐  geo index (geohash / S2 / quadtree)
+                    ├───▶ │ Matching svc   │──▶ "couriers within 3km, available"
+                    │     └────────────────┘
+                    └───▶ Merchant catalog (document store, read-heavy, cached)</code></pre>
+      <p>The key move: <strong>different data, different database.</strong> Order/payment state lives in Postgres so a single transaction can atomically reserve inventory, charge the customer, and create the order (Atomicity + Isolation stop double-charges and double-assignments). Courier locations live in Redis/Cassandra, tuned for 2,500 writes/s with a TTL — losing a stale ping is harmless, so we happily trade consistency for throughput (BASE, AP).</p>
+
+      <h3>⑤ Deep-dive &amp; scale</h3>
+      <p><strong>Geospatial matching.</strong> "Find couriers within 3 km" can't use a normal B-tree on lat/lng — a 2-D range isn't a leftmost prefix of anything. Encode location with a <strong>geohash</strong> (or S2/quadtree) that maps 2-D proximity to a 1-D sortable string, then a B-tree/sorted lookup on the geohash prefix returns nearby candidates fast. Redis ships this as <code>GEOADD</code>/<code>GEOSEARCH</code>. This is composite-index thinking applied to geography.</p>
+      <p><strong>The location firehose.</strong> 2,500 writes/s must never touch the orders database. Couriers write to the Location service, which keeps only the latest position per courier in Redis (with a short TTL) and optionally streams the raw pings to Kafka for anyone who wants history — the orders DB stays calm and correct.</p>
+      <p><strong>Hot partitions.</strong> A dense downtown at dinner concentrates couriers and orders in a few geohash cells. Shard orders by <code>city_id</code> to spread load across metros, and for a genuinely hot cell, sub-partition by a finer geohash so one node doesn't take the whole rush.</p>
+      <p><strong>Consistency per store, stated explicitly:</strong></p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Data</th><th>Store</th><th>Model</th><th>CAP / PACELC</th></tr></thead>
+          <tbody>
+            <tr><td>Orders, payments, inventory</td><td>Postgres (sharded)</td><td>ACID, strong</td><td>CP / EC</td></tr>
+            <tr><td>Courier live location</td><td>Redis / Cassandra</td><td>BASE, eventual</td><td>AP / EL</td></tr>
+            <tr><td>Merchant catalog</td><td>Document + cache</td><td>Read-optimized</td><td>AP / EL</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>Indexing the order table.</strong> The hot queries are "a merchant's active orders" and "a customer's recent orders." A composite <code>INDEX(merchant_id, status, created_at)</code> serves the merchant dashboard (equality on merchant_id + status, range/sort on created_at — a perfect leftmost-prefix fit), and a separate <code>INDEX(customer_id, created_at)</code> serves order history. Every index is justified by a query, and each one is checked with <code>EXPLAIN</code>.</p>
+      <div class="callout">
+        <p class="lbl">The through-line</p>
+        <p>One problem exercised every concept: <strong>RDBMS vs NoSQL</strong> (Postgres for orders, Redis/Cassandra for locations), <strong>ACID vs BASE</strong> (charge-atomically vs ping-eventually), <strong>CAP/PACELC</strong> (CP orders, AP locations), <strong>indexing</strong> (composite + geohash), and <strong>bottlenecks</strong> (firehose writes, hot partitions). That integration — not any single fact — is what a senior interview is measuring.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Your reps this week</h2>
+      <p>Reading is not learning — reps are. Do these, in order:</p>
+      <ol>
+        <li><strong>Whiteboard the delivery service yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design it end-to-end with the 5-step framework, out loud, timed to ~35 minutes — <em>before</em> re-reading Section 08. Force yourself to name the store <em>and</em> the consistency model for each kind of data.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your database choices under pressure:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer running a system design interview. Give me the prompt: "Design a local delivery service (like DoorDash for a single metro)." Then act as the interviewer — let me drive, ask clarifying and probing questions, push back on anything hand-wavy, and keep asking "why?". Probe specifically on: which data store I use for order state vs courier locations and why; how I index to answer "find available couriers within 3 km of a pickup point"; exactly where I need ACID transactions vs where BASE / eventual consistency is acceptable; and my CAP + PACELC stance for each datastore. Do NOT give me the answer or lead me. After ~35 minutes (or when I say "done"), grade me 1&ndash;5 on each of: requirements gathering, capacity estimation, API design, high-level design, deep-dives &amp; trade-offs (indexing, geospatial, consistency), and communication &mdash; with specific feedback and what a strong candidate would have added.</div>
+      <ol start="3">
+        <li><strong>Estimate it cold</strong> in the <a href="../tools/capacity-estimator.html">🧮 Capacity Estimator</a> — reproduce the order-writes vs location-firehose split. Did the asymmetry that drives the two-store design fall out of your numbers?</li>
+        <li><strong>Explain it back.</strong> Teach ACID vs BASE and CAP vs PACELC to a rubber duck (or me) without notes. If you can't say why ACID's "C" differs from CAP's "C," that's a gap you just found.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end):
+          <ul>
+            <li><em>When do you choose RDBMS over NoSQL — and vice versa?</em></li>
+            <li><em>ACID and BASE each in one sentence — and what does each optimize for?</em></li>
+            <li><em>What does CAP force you to choose, and only when? What does PACELC add?</em></li>
+            <li><em>Why is a B+ tree the default index but a hash index only good for equality?</em></li>
+            <li><em>Given <code>INDEX(merchant_id, status, created_at)</code>, which queries does it serve and which does it not (leftmost-prefix)?</em></li>
+          </ul>
+        </li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the SQL-vs-NoSQL and CAP/ACID ones <em>before</em> your reps; save the indexing deep-dives for when you want depth on the B+ tree.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=cODCpXtPHbQ" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Database Design Tips — Choosing the Best Database in a System Design Interview</b><div class="ch">codeKarle <span class="dur">· ~20 min · SQL vs NoSQL</span></div><p>Interview-framed decision tree for picking a database from requirements. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=QzLhb1WBFjQ" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>SQL vs NoSQL — Tradeoffs</b><div class="ch">Gaurav Sen <span class="dur">· ~8 min · SQL vs NoSQL</span></div><p>The consistency / scalability / transactions lens for choosing between them.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=GAe5oB742dw" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>ACID Properties in Databases With Examples</b><div class="ch">ByteByteGo <span class="dur">· ~7 min · ACID</span></div><p>Atomicity, Consistency, Isolation, Durability made concrete with examples.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=BHqjEjzAicA" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>CAP Theorem Simplified</b><div class="ch">ByteByteGo <span class="dur">· ~5 min · CAP</span></div><p>The partition-time C-vs-A choice, cleanly explained without the usual myths.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=Jemuod4wKWo" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>what is a database index?</b><div class="ch">Hussein Nasser <span class="dur">· ~14 min · indexing</span></div><p>Builds the "indexes eliminate rows" intuition from first principles.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=09E-tVAUqQw" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Why do databases store data in B+ trees?</b><div class="ch">Arpit Bhayani <span class="dur">· ~17 min · B-tree depth</span></div><p>Exactly why B+ trees win — fan-out, sorted linked leaves, and range scans.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA Chapter 2 (data models &amp; query languages — relational vs document) and Chapter 3 (storage &amp; retrieval — B-trees vs LSM-trees) are the definitive treatment of everything above. And the database section of the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> (free) for a fast interview-oriented recap of RDBMS, NoSQL, and indexing.</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/04-database-scaling.html">Next module →</a>
+    </div>
+
+    <footer>Module 3 of 24 · System Design Mastery · Next up: Module 4 — Database Scaling (replication, sharding, and partitioning — taking the single database you just learned and making it survive real load).</footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>REST · GraphQL · gRPC side by side — Sandbox Lab</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#7048e8; --hue-soft:rgba(112,72,232,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#9a7bff;--hue-soft:rgba(154,123,255,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#7048e8;--hue-soft:rgba(112,72,232,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#9a7bff;--hue-soft:rgba(154,123,255,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .step{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 20px;margin:22px 0;box-shadow:var(--shadow)}
+  .step h3{margin-top:0;display:flex;align-items:baseline;gap:10px}
+  .step h3 .tag{font-family:var(--mono);font-size:11px;font-weight:700;color:#fff;background:var(--hue);padding:2px 9px;border-radius:7px;letter-spacing:.04em;flex-shrink:0}
+  .observe{font-size:13.5px;color:var(--muted);margin:12px 0 0;border-top:1px dashed var(--border);padding-top:12px}
+  .observe b{color:var(--hue);font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:4px}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:16px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../../index.html">Home</a>
+      <a href="../../roadmap-dashboard.html">Roadmap</a>
+      <a href="../../modules/09-api-architectures.html">Module 9 notes</a>
+      <a href="../../tools/protocol-compare.html">🔀 the simulator</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Sandbox Lab</span><span class="sep">·</span><span>Module 9 — APIs</span></p>
+      <h1>REST · GraphQL · gRPC side by side</h1>
+      <p class="sub">Spin up one tiny Node service that answers the <em>same</em> <code>user</code> query three ways — then fetch it over each protocol and watch the payload shapes diverge with your own eyes.</p>
+    </header>
+
+    <div class="callout">
+      <p class="lbl">Prerequisites</p>
+      <p>Have <strong>Docker Desktop running</strong> (whale icon steady, not spinning). Then open a terminal and <code>cd</code> into this folder — every command below is run from <code>sandboxes/05-api-protocols/</code>.</p>
+    </div>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this lab</h2>
+      <ol>
+        <li><a href="#build">What you'll build</a></li>
+        <li><a href="#stack">The stack</a></li>
+        <li><a href="#up">Bring it up</a></li>
+        <li><a href="#exercises">The exercises</a></li>
+        <li><a href="#teardown">Teardown</a></li>
+        <li><a href="#taught">What this taught</a></li>
+      </ol>
+    </nav>
+
+    <section id="build">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>What you'll build</h2>
+      <p class="lead">A single container — <code>node:20-alpine</code> — running one process that exposes the identical <code>user</code> record through three API styles at once: <strong>REST</strong> and <strong>GraphQL</strong> on port <code>3000</code>, and <strong>gRPC</strong> on port <code>50051</code>.</p>
+      <p>One data store, three doors. Because the data is held constant, every difference you see in the response is caused purely by the <em>protocol</em> — that's what makes this a fair comparison instead of three unrelated demos.</p>
+
+      <pre><code>                      ┌──────────────────────────────────────────┐
+  curl ──REST─────▶   │  api  (node:20-alpine container)         │
+                      │                                          │
+  curl ──GraphQL──▶   │   ┌────────────────┐                     │
+                      │   │  Express app   │  :3000  HTTP/1.1    │
+  node ──gRPC─────▶   │   │  REST + GraphQL│                     │
+                      │   └───────┬────────┘                     │
+                      │           │ reads                        │
+                      │   ┌───────▼────────┐                     │
+                      │   │  users{} store │ ◀── single source   │
+                      │   └───────▲────────┘     of truth        │
+                      │           │ reads                        │
+                      │   ┌───────┴────────┐                     │
+                      │   │ grpc-js server │  :50051  HTTP/2     │
+                      │   └────────────────┘                     │
+                      └──────────────────────────────────────────┘</code></pre>
+
+      <div class="callout tip">
+        <p class="lbl">The one idea</p>
+        <p>REST gives you a <strong>fixed shape per URL</strong>. GraphQL lets the <strong>client pick the fields</strong>. gRPC trades human-readable JSON for a <strong>typed, compact binary</strong> contract over HTTP/2. Same data — three very different envelopes.</p>
+      </div>
+    </section>
+
+    <section id="stack">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>The stack</h2>
+      <p>The whole lab is one service. Here is the <code>docker-compose.yml</code> that runs it — modern Compose schema, no obsolete <code>version:</code> key, image tag pinned, and one comment per service:</p>
+
+      <pre><code><span class="cmt"># API Protocols sandbox — one Node.js service, three ways to fetch the same 'user'.</span>
+<span class="cmt"># Modern Compose schema (no top-level `version:` key — it is obsolete).</span>
+
+services:
+  <span class="cmt"># Single Node.js service (built from ./Dockerfile, node:20-alpine).</span>
+  <span class="cmt"># Serves the SAME user resource over REST + GraphQL (HTTP/:3000) and gRPC (HTTP/2/:50051).</span>
+  api:
+    build: .
+    image: api-protocols-lab:1.0
+    container_name: api-protocols
+    ports:
+      - "3000:3000"    <span class="cmt"># REST (GET /users/:id) + GraphQL (POST /graphql) over HTTP/1.1</span>
+      - "50051:50051"  <span class="cmt"># gRPC (UserService/GetUser) over HTTP/2</span>
+    restart: unless-stopped</code></pre>
+
+      <p>Alongside it in this folder sit the files the image builds from — you don't edit them, but it's worth knowing what each is for:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>File</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td>Dockerfile</td><td>Builds the <code>node:20-alpine</code> image and installs deps</td></tr>
+            <tr><td>package.json</td><td>Deps: <code>express</code>, <code>graphql</code>, <code>@grpc/grpc-js</code>, <code>@grpc/proto-loader</code></td></tr>
+            <tr><td>server.js</td><td>The one process: REST + GraphQL on :3000, gRPC on :50051</td></tr>
+            <tr><td>user.proto</td><td>The gRPC contract — a typed <code>User</code> message + <code>GetUser</code> RPC</td></tr>
+            <tr><td>client.js</td><td>A tiny bundled gRPC client (so you don't need grpcurl)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="up">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Bring it up</h2>
+      <p>Build the image and start the container in the background:</p>
+      <pre><code>docker compose up -d --build</code></pre>
+      <p>The first run downloads <code>node:20-alpine</code> and installs the npm deps, so give it a minute. When it returns, confirm the service is healthy and both listeners are live:</p>
+      <pre><code>docker compose ps
+docker compose logs api</code></pre>
+      <p>You want to see the container <code>Up</code> with ports <code>3000</code> and <code>50051</code> published, and these two log lines:</p>
+      <pre><code>REST + GraphQL listening on http://0.0.0.0:3000
+gRPC listening on 0.0.0.0:50051</code></pre>
+
+      <div class="callout tip">
+        <p class="lbl">Port already in use?</p>
+        <p>If <code>curl localhost:3000</code> returns HTML from some <em>other</em> app, you already have a dev server on port 3000. Stop it first, or change the left side of the port mappings (e.g. <code>"3001:3000"</code>) in <code>docker-compose.yml</code> and re-run <code>up -d</code>. The gRPC exercise uses <code>50051</code> and is unaffected.</p>
+      </div>
+    </section>
+
+    <section id="exercises">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>The exercises</h2>
+      <p>Fetch user <code>1</code> — Ada Lovelace — three ways. Run them in order and keep the outputs on screen so you can compare the envelopes at the end.</p>
+
+      <div class="step">
+        <h3><span class="tag">A · REST</span>The whole object, every time</h3>
+        <p>A plain <code>GET</code> against a resource URL. The server decides the shape; you get all of it:</p>
+        <pre><code>curl -s localhost:3000/users/1</code></pre>
+        <p>Response — the entire record, all six fields, whether you needed them or not:</p>
+        <pre><code>{"id":"1","name":"Ada Lovelace","email":"ada@analytical.engine","age":36,"city":"London","role":"Mathematician"}</code></pre>
+        <p class="observe"><b>What to observe</b>You asked for a user and got <em>everything</em> the server models about a user. If your screen only needs the name, you still paid to serialize and download <code>age</code>, <code>city</code>, and <code>role</code>. That is <strong>over-fetching</strong> — the classic REST tax.</p>
+      </div>
+
+      <div class="step">
+        <h3><span class="tag">B · GraphQL</span>You choose the fields — no over-fetch</h3>
+        <p>One <code>POST</code> to a single <code>/graphql</code> endpoint. The <em>query</em> names exactly the fields you want — here just <code>name</code> and <code>email</code>:</p>
+        <pre><code>curl -s -X POST localhost:3000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"{ user(id: \"1\") { name email } }"}'</code></pre>
+        <p>Response — precisely the two fields requested, nested under <code>data</code>, and nothing else:</p>
+        <pre><code>{"data":{"user":{"name":"Ada Lovelace","email":"ada@analytical.engine"}}}</code></pre>
+        <p class="observe"><b>What to observe</b>Same data store, same user — but <code>age</code>, <code>city</code>, and <code>role</code> never left the server. Add a field to the query (try <code>{ user(id: \"1\") { name email city } }</code>) and watch the response grow to match. The <strong>client</strong>, not the server, now controls the payload shape.</p>
+      </div>
+
+      <div class="step">
+        <h3><span class="tag">C · gRPC</span>A typed binary contract over HTTP/2</h3>
+        <p>There's no easy raw <code>curl</code> for gRPC — the wire format is binary protobuf over HTTP/2, and the fields aren't even named on the wire. So call it with the tiny client bundled in the image, straight from inside the container:</p>
+        <pre><code>docker compose exec api node client.js</code></pre>
+        <p>Response — decoded from the compact binary frame back into an object for you to read:</p>
+        <pre><code>{
+  "id": "1",
+  "name": "Ada Lovelace",
+  "email": "ada@analytical.engine",
+  "age": 36,
+  "city": "London",
+  "role": "Mathematician"
+}</code></pre>
+        <p class="observe"><b>What to observe</b>The payload <em>looks</em> like the REST one, but how it travelled is the whole point. On the wire, field names were replaced by the numbered slots in <code>user.proto</code> (<code>name = 2</code>, <code>email = 3</code>…), so the bytes are far smaller and strictly typed. Break the contract on purpose — <code>docker compose exec api node client.js 99</code> — and you get a typed <code>NOT_FOUND</code> status, not a stray 404 page.</p>
+      </div>
+
+      <h3>Put the three envelopes next to each other</h3>
+      <p>This is the payoff — the same <code>user</code>, three shapes:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Protocol</th><th>Who picks the fields</th><th>Wire format</th><th>What came back</th></tr></thead>
+          <tbody>
+            <tr><td>REST</td><td>Server (fixed per URL)</td><td>JSON / HTTP&nbsp;1.1</td><td>All 6 fields — likely over-fetch</td></tr>
+            <tr><td>GraphQL</td><td>Client (per query)</td><td>JSON / HTTP&nbsp;1.1</td><td>Exactly the 2 fields asked for</td></tr>
+            <tr><td>gRPC</td><td>Contract (the <code>.proto</code>)</td><td>Binary protobuf / HTTP&nbsp;2</td><td>Typed message, compact bytes</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>That single table is the entire trade-off space in miniature: REST is simplest and cache-friendly but rigid; GraphQL kills over- and under-fetching at the cost of a query planner; gRPC is fastest and strictest but needs generated stubs and isn't browser-native. You just watched all three, on identical data.</p>
+    </section>
+
+    <section id="teardown">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Teardown</h2>
+      <p>Stop and remove the container, its network, and the named volumes in one shot:</p>
+      <pre><code>docker compose down -v</code></pre>
+      <p>Run <code>docker compose ps</code> afterward — it should list nothing for this project. The built image lingers in your local cache; drop it too with <code>docker image rm api-protocols-lab:1.0</code> if you want a spotless machine.</p>
+    </section>
+
+    <section id="taught">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>What this taught + where next</h2>
+      <p>You now have <em>felt</em>, not just read, the core protocol trade-off:</p>
+      <ul>
+        <li><strong>REST</strong> — resource URLs return a server-defined shape. Dead simple and cacheable, but you over-fetch when the client needs less.</li>
+        <li><strong>GraphQL</strong> — one endpoint, client-selected fields. It eliminates over- and under-fetching, at the price of server-side query execution.</li>
+        <li><strong>gRPC</strong> — a <code>.proto</code> contract compiled to typed stubs, riding compact binary over HTTP/2. Fastest and strictest; ideal service-to-service, awkward straight from a browser.</li>
+      </ul>
+      <p>In a system design interview, this is exactly the muscle you flex when asked <em>"which API style for this edge, and why?"</em> — mobile client on a slow network leans GraphQL, an internal high-throughput service mesh leans gRPC, a public third-party API usually leans REST.</p>
+
+      <div class="callout tool">
+        <p class="lbl">Pair it with the simulator →</p>
+        <p>Take this hands-on intuition to the <a href="../../tools/protocol-compare.html">🔀 Protocol Compare simulator</a> and push it further: dial up payload sizes and request volume to see where gRPC's binary framing and HTTP/2 multiplexing pull ahead, and where REST's cacheability wins. You measured three payloads here — there you watch the curves.</p>
+      </div>
+      <p>For the theory behind the buttons, keep the <a href="../../modules/09-api-architectures.html">Module 9 notes</a> open alongside.</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../../tools/protocol-compare.html">Open the simulator →</a>
+    </div>
+
+    <footer>Sandbox 05 · Module 9 — API Architectures · System Design Mastery. Built to be run: <code>docker compose up -d --build</code>.</footer>
+  </div>
+</body>
+</html>

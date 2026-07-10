@@ -1,0 +1,35 @@
+# OAuth 2.0 / OpenID Connect sandbox — a single Keycloak identity provider.
+# Keycloak is a production-grade, open-source auth server: an OAuth 2.0
+# Authorization Server + OpenID Connect Provider. We run it in DEV mode, so
+# there is NO database to configure and NO custom application code — every
+# exercise happens through the admin console and the standard OIDC endpoints.
+#
+#   Bring up:   docker compose up -d
+#   Watch logs: docker compose logs -f keycloak
+#   Admin UI:   http://localhost:8080/     (user: admin / pass: admin)
+#   Tear down:  docker compose down -v
+#
+# (Modern Compose file — no obsolete top-level `version:` key.)
+
+services:
+  # Keycloak — the OAuth 2.0 Authorization Server + OpenID Connect Provider.
+  # `start-dev` boots the Quarkus distribution in development mode: an in-memory
+  # H2 database, plain HTTP (no TLS certs to generate), and relaxed hostname
+  # checks — exactly what you want for a throwaway local lab. Everything is
+  # ephemeral, which is why teardown uses `-v`.
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest   # official Keycloak image (Quarkus distribution)
+    container_name: sd-keycloak
+    command: ["start-dev"]
+    environment:
+      # First-boot admin account for the master realm / admin console.
+      # Keycloak 26+ renamed these to KC_BOOTSTRAP_ADMIN_*; we set BOTH pairs so
+      # the lab works whether `latest` resolves to a pre-26 or a 26+ release.
+      # The legacy vars aren't KC_-prefixed, so they bypass config validation
+      # and are simply ignored by newer versions — setting both is harmless.
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+    ports:
+      - "8080:8080"   # admin console + OIDC endpoints, published to the host

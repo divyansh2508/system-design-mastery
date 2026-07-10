@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>REST vs GraphQL vs gRPC — System Design</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b1016; --panel:#121a23; --panel-2:#0e151d;
+    --border:#223140; --border-soft:#1a2530;
+    --text:#cdd9e5; --muted:#7d8fa1; --faint:#54626f;
+    --accent:#34d3e0; --accent-dim:rgba(52,211,224,.14);
+    --ok:#3fb950; --warn:#e3b341; --crit:#f85149;
+    --rest:#34d3e0; --rest-dim:rgba(52,211,224,.16);
+    --gql:#e56cc6; --gql-dim:rgba(229,108,198,.16);
+    --grpc:#9d8bff; --grpc-dim:rgba(157,139,255,.16);
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:radial-gradient(1100px 600px at 82% -8%,rgba(52,211,224,.06),transparent 60%),var(--bg);
+    color:var(--text);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased;
+  }
+
+  /* topnav */
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(11,16,22,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:30}
+  .topnav .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .topnav .navlinks{display:flex;gap:6px;flex-wrap:wrap}
+  .topnav .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;transition:color .12s,background .12s}
+  .topnav .navlinks a:hover{color:var(--accent);background:var(--accent-dim)}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 56px}
+
+  header{margin-bottom:8px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);margin:0 0 10px;display:flex;align-items:center;gap:9px}
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  h1{font-family:var(--mono);font-weight:600;font-size:clamp(26px,4.4vw,40px);letter-spacing:-.01em;margin:0 0 10px;text-wrap:balance}
+  .lede{max-width:70ch;color:var(--muted);font-size:15.5px;margin:0}
+  .lede b{color:var(--text);font-weight:600}
+
+  /* controls */
+  .controls{margin-top:24px;padding:18px;display:flex;flex-wrap:wrap;gap:26px;align-items:flex-end;
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);border-radius:14px}
+  .ctrl{display:flex;flex-direction:column;gap:8px}
+  .ctrl>label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px;flex-wrap:wrap}
+  .seg button{font-family:var(--mono);font-size:12px;color:var(--muted);background:transparent;border:0;padding:8px 12px;border-radius:6px;cursor:pointer;transition:background .12s,color .12s;white-space:nowrap}
+  .seg button:hover{color:var(--text)}
+  .seg button[aria-pressed="true"]{background:var(--accent-dim);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(52,211,224,.35)}
+  .slider{display:flex;align-items:center;gap:12px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:190px;height:4px;background:var(--border);border-radius:3px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px rgba(52,211,224,.5)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--accent);cursor:pointer}
+  .rtt-val{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--accent);min-width:64px;font-variant-numeric:tabular-nums}
+  .need{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-left:auto;align-self:center;max-width:34ch;text-align:right}
+  .need b{color:var(--muted);font-weight:600}
+
+  /* protocol comparison */
+  .protogrid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:16px}
+  @media(min-width:840px){.protogrid{grid-template-columns:repeat(3,1fr)}}
+  .proto{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);border-radius:14px;padding:16px 17px;display:flex;flex-direction:column;gap:13px;border-top:3px solid var(--pc,var(--accent))}
+  .proto[data-proto="rest"]{--pc:var(--rest);--pcd:var(--rest-dim)}
+  .proto[data-proto="graphql"]{--pc:var(--gql);--pcd:var(--gql-dim)}
+  .proto[data-proto="grpc"]{--pc:var(--grpc);--pcd:var(--grpc-dim)}
+  .phead{display:flex;align-items:center;gap:9px}
+  .phead .pdot{width:9px;height:9px;border-radius:50%;background:var(--pc);box-shadow:0 0 9px var(--pc);flex-shrink:0}
+  .phead h3{font-family:var(--mono);font-size:15px;font-weight:600;margin:0;letter-spacing:.01em}
+  .phead .sub{font-family:var(--mono);font-size:10px;color:var(--faint);margin-left:auto;letter-spacing:.04em;text-align:right}
+
+  .fitrow{display:flex;align-items:center;gap:8px}
+  .fit{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:6px;border:1px solid transparent}
+  .fit.exact{color:var(--ok);background:rgba(63,185,80,.12);border-color:rgba(63,185,80,.35)}
+  .fit.over{color:var(--warn);background:rgba(227,179,65,.12);border-color:rgba(227,179,65,.35)}
+  .fit.under{color:var(--crit);background:rgba(248,81,73,.12);border-color:rgba(248,81,73,.35)}
+  .fitrow .fitnote{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+
+  .mline{display:grid;grid-template-columns:82px 1fr auto;align-items:center;gap:10px}
+  .mline .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .bar{height:12px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;overflow:hidden;position:relative}
+  .bar .fill{position:absolute;inset:0 auto 0 0;width:0;background:linear-gradient(90deg,var(--pcd),var(--pc));border-radius:6px;transition:width .5s cubic-bezier(.4,0,.2,1)}
+  .mline .v{font-family:var(--mono);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;min-width:58px;text-align:right;color:var(--text)}
+  .mline .v small{font-size:11px;color:var(--muted);font-weight:400}
+  .relnote{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin:-6px 0 0;text-align:right;font-variant-numeric:tabular-nums}
+
+  .attrs{display:flex;flex-wrap:wrap;gap:5px}
+  .attr{font-family:var(--mono);font-size:10.5px;color:var(--muted);background:var(--panel-2);border:1px solid var(--border-soft);border-radius:5px;padding:3px 7px}
+  .attr.good{color:var(--ok);border-color:rgba(63,185,80,.3)}
+  .attr.warnc{color:var(--warn);border-color:rgba(227,179,65,.3)}
+
+  .ttd{font-family:var(--mono);font-size:12px;color:var(--muted);margin:0;padding-top:11px;border-top:1px solid var(--border-soft);font-variant-numeric:tabular-nums}
+  .ttd b{color:var(--pc);font-weight:600}
+  .seq{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+  .seq li{font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;gap:7px;align-items:baseline}
+  .seq li .n{color:var(--faint);flex-shrink:0}
+  .seq li.caveat{color:var(--faint);font-style:italic}
+
+  /* coaching */
+  .coach{margin-top:16px;padding:15px 16px;border:1px solid var(--border);border-radius:14px;background:var(--panel);border-left:3px solid var(--accent)}
+  .coach .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+  .coach p{margin:0;font-size:14px;color:var(--text)}
+  .coach p b{color:var(--text);font-weight:600}
+  .coach .pick{color:var(--ok);font-weight:600}
+
+  /* math breakdown */
+  .math{margin-top:16px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:14px;padding:16px 18px}
+  .math h3{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 12px}
+  .math .line{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin:0 0 9px;line-height:1.6;font-variant-numeric:tabular-nums}
+  .math .line b{color:var(--text);font-weight:600}
+  .math .line .eq{color:var(--accent)}
+  .math .heur{margin-top:12px;padding-top:12px;border-top:1px solid var(--border-soft);font-size:12px;color:var(--faint);line-height:1.6}
+  .math .heur b{color:var(--muted)}
+
+  /* experiments */
+  .labcard{margin-top:16px;padding:20px 22px;border:1px solid var(--border);border-radius:14px;background:linear-gradient(180deg,rgba(52,211,224,.03),transparent),var(--panel)}
+  .labcard h2{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  .labs{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:640px){.labs{grid-template-columns:1fr 1fr}}
+  .lab{display:flex;gap:12px;align-items:flex-start}
+  .lab .n{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(52,211,224,.3);width:24px;height:24px;border-radius:6px;display:grid;place-items:center;flex-shrink:0}
+  .lab p{margin:0;font-size:13.5px;color:var(--muted)}
+  .lab p b{color:var(--text);font-weight:600}
+
+  footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.03em}
+  footer b{color:var(--muted);font-weight:600}
+  a{color:var(--accent)}
+
+  button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../modules/09-api-architectures.html">Module 9 notes</a>
+      <a href="load-balancer-simulator.html">Load Balancer</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span class="dot"></span>System Design · Module 9 — API Architectures</p>
+      <h1>REST vs GraphQL vs gRPC</h1>
+      <p class="lede">Pick a data-fetch <b>scenario</b> and watch the same request cost play out three ways. Each protocol reports its <b>network round-trips</b>, its <b>payload size in bytes</b> (derived field-by-field, not hand-waved), and whether it <b>over-fetches, under-fetches, or hits it exactly</b>. The twist worth internalizing: the smallest payload is <b>not</b> automatically the best fit — codegen, browser reach, and caching decide the real winner.</p>
+    </header>
+
+    <div class="controls">
+      <div class="ctrl">
+        <label id="scen-lbl">Scenario</label>
+        <div class="seg" role="group" aria-labelledby="scen-lbl" id="scenario">
+          <button data-s="profile" aria-pressed="true">Fetch a user profile</button>
+          <button data-s="nested" aria-pressed="false">User + their 3 recent orders (nested)</button>
+          <button data-s="mobile" aria-pressed="false">Mobile: only need name + avatar</button>
+        </div>
+      </div>
+      <div class="ctrl">
+        <label for="rtt">Network round-trip time (RTT)</label>
+        <div class="slider">
+          <input type="range" id="rtt" min="10" max="300" step="10" value="60" aria-describedby="rtt-out">
+          <span class="rtt-val" id="rtt-out">60 ms</span>
+        </div>
+      </div>
+      <p class="need" id="need">The screen needs: <b>the full profile object</b>.</p>
+    </div>
+
+    <div class="protogrid">
+      <article class="proto" data-proto="rest" aria-label="REST results">
+        <div class="phead"><span class="pdot"></span><h3>REST</h3><span class="sub">many endpoints ·<br>server-fixed shape</span></div>
+        <div class="fitrow"><span class="fit" id="rest-fit">exact</span><span class="fitnote" id="rest-fitnote"></span></div>
+        <div class="mline"><span class="k">Round-trips</span><div class="bar"><div class="fill" id="rest-trips-bar"></div></div><span class="v" id="rest-trips">1</span></div>
+        <div class="mline"><span class="k">Payload</span><div class="bar"><div class="fill" id="rest-bytes-bar"></div></div><span class="v" id="rest-bytes">0 <small>B</small></span></div>
+        <p class="relnote" id="rest-rel"></p>
+        <div class="attrs">
+          <span class="attr">JSON · text</span>
+          <span class="attr">HTTP/1.1</span>
+          <span class="attr good">browser-native</span>
+          <span class="attr good">cacheable by URL</span>
+          <span class="attr">no codegen</span>
+        </div>
+        <p class="ttd">To first useful data: <b id="rest-ttd">60 ms</b></p>
+        <ul class="seq" id="rest-seq"></ul>
+      </article>
+
+      <article class="proto" data-proto="graphql" aria-label="GraphQL results">
+        <div class="phead"><span class="pdot"></span><h3>GraphQL</h3><span class="sub">1 endpoint ·<br>client picks fields</span></div>
+        <div class="fitrow"><span class="fit" id="graphql-fit">exact</span><span class="fitnote" id="graphql-fitnote"></span></div>
+        <div class="mline"><span class="k">Round-trips</span><div class="bar"><div class="fill" id="graphql-trips-bar"></div></div><span class="v" id="graphql-trips">1</span></div>
+        <div class="mline"><span class="k">Payload</span><div class="bar"><div class="fill" id="graphql-bytes-bar"></div></div><span class="v" id="graphql-bytes">0 <small>B</small></span></div>
+        <p class="relnote" id="graphql-rel"></p>
+        <div class="attrs">
+          <span class="attr">JSON · text</span>
+          <span class="attr">HTTP/1.1</span>
+          <span class="attr good">browser-native</span>
+          <span class="attr warnc">caching harder</span>
+          <span class="attr warnc">needs schema</span>
+        </div>
+        <p class="ttd">To first useful data: <b id="graphql-ttd">60 ms</b></p>
+        <ul class="seq" id="graphql-seq"></ul>
+      </article>
+
+      <article class="proto" data-proto="grpc" aria-label="gRPC results">
+        <div class="phead"><span class="pdot"></span><h3>gRPC</h3><span class="sub">binary RPC ·<br>compact protobuf</span></div>
+        <div class="fitrow"><span class="fit" id="grpc-fit">exact</span><span class="fitnote" id="grpc-fitnote"></span></div>
+        <div class="mline"><span class="k">Round-trips</span><div class="bar"><div class="fill" id="grpc-trips-bar"></div></div><span class="v" id="grpc-trips">1</span></div>
+        <div class="mline"><span class="k">Payload</span><div class="bar"><div class="fill" id="grpc-bytes-bar"></div></div><span class="v" id="grpc-bytes">0 <small>B</small></span></div>
+        <p class="relnote" id="grpc-rel"></p>
+        <div class="attrs">
+          <span class="attr">Protobuf · binary</span>
+          <span class="attr">HTTP/2</span>
+          <span class="attr warnc">not browser-native</span>
+          <span class="attr warnc">needs codegen</span>
+          <span class="attr good">streaming</span>
+        </div>
+        <p class="ttd">To first useful data: <b id="grpc-ttd">60 ms</b></p>
+        <ul class="seq" id="grpc-seq"></ul>
+      </article>
+    </div>
+
+    <div class="coach">
+      <p class="lbl">What's happening</p>
+      <p id="coach" aria-live="polite"></p>
+    </div>
+
+    <div class="math">
+      <h3>▸ Show the math (payload, byte-by-byte)</h3>
+      <p class="line" id="math-1"></p>
+      <p class="line" id="math-2"></p>
+      <p class="line" id="math-3"></p>
+      <div class="heur">
+        <b>How the bytes are counted:</b> JSON string field = <code>"key":"value",</code> → key + value + 6 B (quotes, colon, comma). Protobuf field = tag (1 B for field #1–15) + length (1 B) + value bytes — the field <b>name never travels</b>, only its number. That's the whole trick: protobuf drops keys, quotes, and braces, and packs small ints as varints. Long string values (URLs, timestamps, bios) cost the <b>same</b> bytes in both — which is why binary is ~1.5–2× smaller on rich objects, not 10×.
+      </div>
+    </div>
+
+    <div class="labcard">
+      <h2>◆ Run these experiments</h2>
+      <div class="labs">
+        <div class="lab"><span class="n">1</span><p><b>Watch round-trips explode.</b> Switch to <b>User + 3 orders</b>: REST jumps to <b>4 round-trips</b> (the N+1 trap) while GraphQL and gRPC stay at 1. Now drag <b>RTT to 200 ms</b> — REST's time-to-data hits ~800 ms. On slow links, <b>round-trips hurt more than bytes</b>.</p></div>
+        <div class="lab"><span class="n">2</span><p><b>Bust the "10× smaller" myth.</b> In <b>Fetch a user profile</b>, gRPC is only ~1.9× smaller than REST — <i>not</i> 10×. Long string values cost the same bytes in binary; protobuf only strips the field names and structural chars. Read the "×N vs gRPC" line under each payload.</p></div>
+        <div class="lab"><span class="n">3</span><p><b>GraphQL isn't always smaller.</b> Still in <b>Fetch a user profile</b>, notice GraphQL is the <i>largest</i> payload — its <code>{data:…}</code> envelope adds bytes when you request every field. GraphQL only wins when you <b>trim fields</b> — flip to the Mobile scenario and watch it collapse.</p></div>
+        <div class="lab"><span class="n">4</span><p><b>Feel the over-fetch.</b> In <b>Mobile</b>, REST ships all 11 fields when the screen uses 2 (~77% wasted). GraphQL and gRPC send only what's asked. Compare the payload bars — then ask why REST is still the pick for a public, cacheable API.</p></div>
+      </div>
+    </div>
+
+    <footer>interactive simulator · pairs with <a href="../modules/09-api-architectures.html">Module 9 notes</a></footer>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+  var el = function(id){ return document.getElementById(id); };
+
+  // ---- data model: realistic field values, byte-accurate ----
+  // type 's' string (v = value byte length), 'n' int (v = decimal digits, vb = varint bytes), 'b' bool
+  var U = {
+    id:            {k:"id",             t:"n", v:3,  vb:1},
+    name:          {k:"name",           t:"s", v:12},              // "Ada Lovelace"
+    email:         {k:"email",          t:"s", v:12},              // "ada@corp.dev"
+    avatarUrl:     {k:"avatarUrl",      t:"s", v:30},              // https://cdn.corp.dev/u/123.png
+    bio:           {k:"bio",            t:"s", v:26},              // "Built the first algorithm."
+    location:      {k:"location",       t:"s", v:10},              // "London, UK"
+    createdAt:     {k:"createdAt",      t:"s", v:20},              // ISO-8601
+    followerCount: {k:"followerCount",  t:"n", v:4,  vb:2},
+    followingCount:{k:"followingCount", t:"n", v:3,  vb:2},
+    verified:      {k:"verified",       t:"b"},
+    website:       {k:"website",        t:"s", v:20}               // https://corp.dev/ada
+  };
+  var USER_ALL = [U.id,U.name,U.email,U.avatarUrl,U.bio,U.location,U.createdAt,U.followerCount,U.followingCount,U.verified,U.website];
+
+  // full order (what a REST GET /orders/{id} returns)
+  var ORDER_ALL = [
+    {k:"id",t:"n",v:4,vb:2},
+    {k:"total",t:"s",v:6},
+    {k:"status",t:"s",v:7},
+    {k:"createdAt",t:"s",v:20},
+    {k:"itemCount",t:"n",v:1,vb:1}
+  ];
+  // curated order subset (what GraphQL / gRPC request for the screen)
+  var ORDER_SUB = [
+    {k:"id",t:"n",v:4,vb:2},
+    {k:"total",t:"s",v:6},
+    {k:"status",t:"s",v:7}
+  ];
+
+  // ---- byte accounting ----
+  function jsonField(f){
+    if(f.t === "s") return f.k.length + f.v + 6;   // "key":"value",
+    if(f.t === "b") return f.k.length + 4 + 4;     // "key":true,
+    return f.k.length + f.v + 4;                    // "key":123,
+  }
+  function protoField(f){
+    if(f.t === "s") return 1 + 1 + f.v;            // tag + len + bytes
+    if(f.t === "b") return 1 + 1;                   // tag + 1
+    return 1 + (f.vb || 1);                         // tag + varint
+  }
+  function jsonObj(fields){                          // {...} with braces
+    var s = 2; for(var i=0;i<fields.length;i++) s += jsonField(fields[i]); return s;
+  }
+  function protoObj(fields){
+    var s = 0; for(var i=0;i<fields.length;i++) s += protoField(fields[i]); return s;
+  }
+  // GraphQL nested: user obj containing a name + an orders:[...] array
+  function graphqlNested(userFields, orderFields, n){
+    var user = 2;                                    // user braces
+    for(var i=0;i<userFields.length;i++) user += jsonField(userFields[i]);
+    var arr = 11;                                    // "orders":[ ... ]
+    for(var j=0;j<n;j++) arr += jsonObj(orderFields) + 1; // per-order braces + comma
+    return user + arr + 18;                          // + {"data":{"user": ... }}
+  }
+  function grpcNested(userFields, orderFields, n){
+    var user = protoObj(userFields);
+    var orders = 0;
+    for(var j=0;j<n;j++) orders += 2 + protoObj(orderFields); // embedded msg: tag + len + body
+    return user + orders;
+  }
+
+  // ---- scenarios ----
+  var NAME = [U.name], NAME_AVATAR = [U.name, U.avatarUrl];
+
+  var SCENARIOS = {
+    profile: {
+      label:"Fetch a user profile",
+      need:"the full profile object",
+      rest:{
+        trips:1, fit:"exact", fitnote:"whole resource, one GET",
+        bytes:jsonObj(USER_ALL),
+        seq:["GET /users/123", "→ full user (all 11 fields)"]
+      },
+      graphql:{
+        trips:1, fit:"exact", fitnote:"but envelope adds bytes",
+        bytes:jsonObj(USER_ALL) + 18,
+        seq:["POST /graphql", "→ query { user { …11 fields } }"]
+      },
+      grpc:{
+        trips:1, fit:"exact", fitnote:"smallest on the wire",
+        bytes:protoObj(USER_ALL),
+        seq:["rpc GetUser(123)", "→ User message (binary)"]
+      },
+      pick:"rest",
+      coach:'Fetching one whole resource is REST\'s home turf: a single cacheable <code>GET</code>, no schema, no codegen. gRPC\'s binary is smallest on the wire (<b id="c-grpc">?</b> vs REST\'s <b id="c-rest">?</b>), yet that saving doesn\'t beat REST\'s simplicity and free HTTP caching here. And GraphQL is actually the <b>largest</b> — its <code>{data:…}</code> envelope costs bytes when you\'re not trimming fields. <span class="pick">Best fit: REST.</span>'
+    },
+    nested: {
+      label:"User + their 3 recent orders (nested)",
+      need:"a user's name + 3 orders (id, total, status)",
+      rest:{
+        trips:4, fit:"under", fitnote:"N+1: 1 user call + 3 order calls",
+        bytes:jsonObj(USER_ALL) + 3*jsonObj(ORDER_ALL),
+        seq:["GET /users/123", "GET /orders/9910", "GET /orders/9911", "GET /orders/9912",
+             "caveat: a purpose-built /users/123/orders?limit=3 cuts this to 2 round-trips"]
+      },
+      graphql:{
+        trips:1, fit:"exact", fitnote:"one query, the whole tree",
+        bytes:graphqlNested(NAME, ORDER_SUB, 3),
+        seq:["POST /graphql", "→ query { user { name orders(last:3){ id total status } } }"]
+      },
+      grpc:{
+        trips:1, fit:"exact", fitnote:"one call, nested binary",
+        bytes:grpcNested(NAME, ORDER_SUB, 3),
+        seq:["rpc GetUserWithOrders(123)", "→ User{ name, repeated Order }"]
+      },
+      pick:"graphql",
+      coach:'This is the classic <b>N+1 trap</b>: REST needs 1 call for the user + 1 per order = <b>4 round-trips</b>, and it over-fetches every object it touches. GraphQL collapses the whole tree into <b>one request</b> for exactly the fields the screen shows. gRPC is smallest on the wire and also 1 round-trip — but it needs a <code>.proto</code> contract + codegen and isn\'t browser-native. For a <b>client-driven nested graph</b>, <span class="pick">best fit: GraphQL.</span> (A bespoke <code>/users/123/orders?limit=3</code> endpoint would cut REST to 2 round-trips — good REST, but you hand-build every shape.)'
+    },
+    mobile: {
+      label:"Mobile: only need name + avatar",
+      need:"just name + avatar, over a flaky link",
+      rest:{
+        trips:1, fit:"over", fitnote:"ships all 11 fields, screen uses 2",
+        bytes:jsonObj(USER_ALL),
+        seq:["GET /users/123", "→ full user — you use 2 of 11 fields"]
+      },
+      graphql:{
+        trips:1, fit:"exact", fitnote:"exactly 2 fields",
+        bytes:jsonObj(NAME_AVATAR) + 18,
+        seq:["POST /graphql", "→ query { user { name avatarUrl } }"]
+      },
+      grpc:{
+        trips:1, fit:"exact", fitnote:"smallest, but needs codegen",
+        bytes:protoObj(NAME_AVATAR),
+        seq:["rpc GetUserCard(123)", "→ slim message (binary)"]
+      },
+      pick:"graphql",
+      coach:'On a flaky mobile link you want the fewest bytes for name + avatar. REST <b>can\'t field-select</b> — it ships all 11 fields (~77% over-fetch). GraphQL returns exactly 2 fields as JSON; gRPC\'s binary is even smaller but needs codegen and a proto contract. For a browser/hybrid app that wants a minimal payload with <b>zero codegen</b>, <span class="pick">best fit: GraphQL</span> — gRPC wins raw bytes only when you own both ends (native mobile ↔ backend).'
+    }
+  };
+
+  // ---- state ----
+  var scen = "profile", rtt = 60;
+
+  function fmtBytes(b){ return b >= 1000 ? (b/1000).toFixed(2)+" KB" : Math.round(b)+" B"; }
+
+  function render(){
+    var S = SCENARIOS[scen];
+    el("need").innerHTML = "The screen needs: <b>" + S.need + "</b>.";
+
+    var protos = ["rest","graphql","grpc"];
+    var maxTrips = 1, maxBytes = 0, minBytes = Infinity;
+    protos.forEach(function(p){
+      if(S[p].trips > maxTrips) maxTrips = S[p].trips;
+      if(S[p].bytes > maxBytes) maxBytes = S[p].bytes;
+      if(S[p].bytes < minBytes) minBytes = S[p].bytes;
+    });
+
+    protos.forEach(function(p){
+      var d = S[p];
+      // fit chip
+      var fit = el(p+"-fit");
+      fit.textContent = d.fit === "exact" ? "exact" : d.fit === "over" ? "over-fetch" : "under-fetch";
+      fit.className = "fit " + (d.fit === "exact" ? "exact" : d.fit === "over" ? "over" : "under");
+      el(p+"-fitnote").textContent = d.fitnote;
+      // round-trips
+      el(p+"-trips").textContent = d.trips;
+      el(p+"-trips-bar").style.width = (100 * d.trips / maxTrips) + "%";
+      // payload
+      el(p+"-bytes").innerHTML = fmtBytes(d.bytes).replace(/ (B|KB)$/, ' <small>$1</small>');
+      el(p+"-bytes-bar").style.width = (100 * d.bytes / maxBytes) + "%";
+      // relative to smallest
+      var rel = el(p+"-rel");
+      if(d.bytes === minBytes){ rel.textContent = "smallest payload"; }
+      else { rel.textContent = "×" + (d.bytes / minBytes).toFixed(1) + " vs gRPC"; }
+      // time to data
+      el(p+"-ttd").textContent = (d.trips * rtt) + " ms";
+      // sequence
+      var ul = el(p+"-seq");
+      ul.innerHTML = "";
+      d.seq.forEach(function(line, i){
+        var li = document.createElement("li");
+        if(line.indexOf("caveat:") === 0){
+          li.className = "caveat";
+          li.textContent = "↳ " + line.slice(7).trim();
+        } else if(line.indexOf("→") === 0 || line.indexOf("↳") === 0){
+          li.innerHTML = '<span class="n">&nbsp;</span>' + line;
+        } else {
+          li.innerHTML = '<span class="n">' + (i+1) + '</span>' + line;
+        }
+        ul.appendChild(li);
+      });
+    });
+
+    // coaching
+    var c = el("coach");
+    c.innerHTML = S.coach;
+    var cr = el("c-rest"), cg = el("c-grpc");
+    if(cr) cr.textContent = fmtBytes(S.rest.bytes);
+    if(cg) cg.textContent = fmtBytes(S.grpc.bytes);
+
+    renderMath(S);
+  }
+
+  function renderMath(S){
+    if(scen === "profile"){
+      el("math-1").innerHTML = '<b>REST</b> GET /users/123 → all 11 fields as JSON <span class="eq">= ' + S.rest.bytes + ' B</span> &nbsp;·&nbsp; exactly what you wanted, but the shape is fixed.';
+      el("math-2").innerHTML = '<b>GraphQL</b> same 11 fields + <code>{"data":{"user":…}}</code> envelope (+18 B) <span class="eq">= ' + S.graphql.bytes + ' B</span> — bigger, because you didn\'t trim anything.';
+      el("math-3").innerHTML = '<b>gRPC</b> same 11 fields, no keys/quotes, varint ints <span class="eq">= ' + S.grpc.bytes + ' B</span> — ×' + (S.rest.bytes/S.grpc.bytes).toFixed(1) + ' smaller than REST, <b>not</b> 10× (the long URLs and ISO date cost the same bytes either way).';
+    } else if(scen === "nested"){
+      var oneOrder = jsonObj(ORDER_ALL);
+      el("math-1").innerHTML = '<b>REST</b> = full user (' + jsonObj(USER_ALL) + ' B) + 3 × full order (' + oneOrder + ' B each) over <b>4 round-trips</b> <span class="eq">= ' + S.rest.bytes + ' B</span>. Every object is over-fetched, and each order is a separate hop.';
+      el("math-2").innerHTML = '<b>GraphQL</b> one query → user.name + orders(id,total,status) ×3, one round-trip <span class="eq">= ' + S.graphql.bytes + ' B</span>. Exactly the tree the screen renders.';
+      el("math-3").innerHTML = '<b>gRPC</b> one GetUserWithOrders call, nested binary <span class="eq">= ' + S.grpc.bytes + ' B</span> — smallest, but browsers can\'t call it without gRPC-Web + a proxy.';
+    } else {
+      var useful = jsonField(U.name) + jsonField(U.avatarUrl);
+      var waste = Math.round(100 * (S.rest.bytes - useful) / S.rest.bytes);
+      el("math-1").innerHTML = '<b>REST</b> ships the whole user (' + S.rest.bytes + ' B) though the screen uses only name + avatar (~' + useful + ' B) <span class="eq">≈ ' + waste + '% over-fetch</span>. REST can\'t select fields.';
+      el("math-2").innerHTML = '<b>GraphQL</b> query { user { name avatarUrl } } → 2 fields + envelope <span class="eq">= ' + S.graphql.bytes + ' B</span>. Exact, and no codegen needed.';
+      el("math-3").innerHTML = '<b>gRPC</b> slim message, 2 fields as binary <span class="eq">= ' + S.grpc.bytes + ' B</span> — the raw-bytes winner, if you can afford the proto contract + codegen and don\'t need the browser.';
+    }
+  }
+
+  // ---- wiring ----
+  var scenBtns = document.querySelectorAll("#scenario button");
+  scenBtns.forEach(function(b){
+    b.addEventListener("click", function(){
+      scen = b.getAttribute("data-s");
+      scenBtns.forEach(function(x){ x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      render();
+    });
+  });
+  el("rtt").addEventListener("input", function(e){
+    rtt = +e.target.value;
+    el("rtt-out").textContent = rtt + " ms";
+    var S = SCENARIOS[scen];
+    ["rest","graphql","grpc"].forEach(function(p){ el(p+"-ttd").textContent = (S[p].trips * rtt) + " ms"; });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt Engineering &amp; Vibe Coding | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#1098ad; --hue-soft:rgba(16,152,173,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#1098ad;--hue-soft:rgba(16,152,173,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#1098ad;--hue-soft:rgba(16,152,173,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#1098ad;--hue-soft:rgba(16,152,173,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Track B · GenAI Development</span><span class="sep">·</span><span>Module B2</span><span class="sep">·</span><span>Weeks 13+ · ~13 hrs</span></p>
+      <h1>Prompt Engineering &amp; Vibe Coding</h1>
+      <p class="sub">The prompt is the new interface to every model you'll ship on — so learning to write one <strong>precisely</strong> is now a core engineering skill, as fundamental to a GenAI developer as reading a stack trace.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#what">From prompts to vibe coding</a></li>
+        <li><a href="#anatomy">Anatomy of a developer prompt</a></li>
+        <li><a href="#shots">Zero-shot → few-shot escalation</a></li>
+        <li><a href="#cot">Chain-of-thought prompting</a></li>
+        <li><a href="#iterate">Iterating &amp; fixing hallucinations</a></li>
+        <li><a href="#worked">Worked example: a real prompt</a></li>
+        <li><a href="#vibe">Vibe coding in practice</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="what">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>From prompts to vibe coding</h2>
+      <p class="lead">Prompt engineering is the craft of shaping an LLM's input so its output is <strong>reliable, correct, and useful</strong> — treating the prompt as a program you write in natural language rather than a wish you toss at a magic box.</p>
+      <p>The same skill scaled into a new way of building software. In early 2025 Andrej Karpathy coined <strong>"vibe coding"</strong> — "fully giving in to the vibes" and letting an AI write the code while you steer in plain English: describe the outcome, read the diff, accept or correct, repeat. Tools like GitHub Copilot, Cursor, and Claude Code turned that from a tweet into a daily workflow. The developer's job shifts from typing every line to <em>specifying intent precisely and reviewing what comes back</em>.</p>
+      <p>That shift is exactly why this belongs in a system-design track. A vague prompt produces plausible-looking code that's subtly wrong the same way a vague requirement produces a system that scales wrong. <strong>Ambiguity in, ambiguity out.</strong> The engineers who win with these tools aren't the ones with secret magic words — they're the ones who are relentlessly specific about context, constraints, and what "done" means.</p>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>You are now programming in English. The prompt is the source of truth, and the model fills every gap you leave with a confident guess — so the skill is <strong>leaving fewer gaps</strong>, not finding clever phrasing.</p>
+      </div>
+    </section>
+
+    <section id="anatomy">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>Anatomy of a developer prompt</h2>
+      <p>A strong developer prompt is not a sentence — it's a small structured document. Four parts do the heavy lifting; a fifth (output format) is the cheap add that saves the most re-work. Assemble them deliberately every time until it's muscle memory.</p>
+
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>Role <span class="ft">who</span></b><p>Assign an expertise so the model draws from the right region of what it learned: <em>"You are a senior Go engineer who values simple, well-tested code."</em> It biases vocabulary, defaults, and rigor.</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>Context <span class="ft">what it needs to know</span></b><p>The facts it can't see: the relevant code, the schema, the exact error, language/library versions, the runtime. A model can't read your repo — if a fact matters to the answer, it must be <em>in the prompt</em>.</p></div></div>
+        <div class="fstep"><span class="fn">3</span><div><b>Task <span class="ft">the one verb</span></b><p>A single, specific instruction. "Refactor this function to be O(n)" beats "improve this code." One clear ask per prompt; split unrelated asks into separate turns.</p></div></div>
+        <div class="fstep"><span class="fn">4</span><div><b>Constraints <span class="ft">the boundaries</span></b><p>The guardrails: language version, style, dependencies allowed or banned, performance targets, and explicit <em>don'ts</em> ("no external packages," "don't change the public API"). Constraints are where correctness lives.</p></div></div>
+        <div class="fstep"><span class="fn">5</span><div><b>Format <span class="ft">how to answer</span></b><p>State the shape you want: a unified diff, a single function, strict JSON, "code only, no explanation." Ambiguous format is the #1 cause of re-prompting.</p></div></div>
+      </div>
+
+      <p>Put the most important instruction <strong>first and last</strong> — models weight the start and end of a prompt more heavily (primacy and recency), and a long middle can get lost. Prefer explicit over implicit: "return only the function body" is a rule the model can follow; "keep it clean" is a vibe it will interpret however it likes.</p>
+
+      <div class="callout tip">
+        <p class="lbl">Practical tip</p>
+        <p>Write constraints as a bulleted checklist, not prose. A list of five explicit rules ("Python 3.11 · type hints · no new deps · thread-safe · no prints") is followed far more reliably than the same rules buried in a paragraph.</p>
+      </div>
+    </section>
+
+    <section id="shots">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Zero-shot → few-shot escalation</h2>
+      <p>Examples are the highest-leverage tool you have, and the right amount is a ladder you climb only as far as you need. This is <strong>in-context learning</strong>: the model adapts to your examples at inference time, with no fine-tuning and no weight changes — the pattern lives entirely in the prompt (the idea popularized by GPT-3, "Language Models are Few-Shot Learners," 2020).</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Rung</th><th>What you give</th><th>Reach for it when</th></tr></thead>
+          <tbody>
+            <tr><td>Zero-shot</td><td>Instruction only, no examples</td><td>Common task, obvious format — the default; start here</td></tr>
+            <tr><td>One-shot</td><td>Instruction + 1 example</td><td>You need to pin an exact output shape or style</td></tr>
+            <tr><td>Few-shot</td><td>Instruction + 2–5 examples</td><td>Niche task, tricky format, or subtle labeling rules</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The discipline: <strong>start zero-shot, escalate only when it fails.</strong> If the model already nails it, examples just burn context tokens and latency. If the output format drifts or the task is unusual, add examples — they teach by demonstration far more efficiently than more description does. A few-shot classifier prompt looks like this:</p>
+
+      <pre><code><span class="cmt"># Classify the sentiment of a code review comment.</span>
+"This finally reads cleanly, nice work."  → POSITIVE
+"Why is this O(n^2)? Redo it."            → NEGATIVE
+"Ship it after the tests pass."           → NEUTRAL
+"You reinvented a stdlib function again." → </code></pre>
+
+      <p>Three rules make few-shot actually work: keep examples <strong>representative</strong> of the real inputs; keep the label set <strong>balanced</strong> and the ordering varied (a lopsided example set biases the model toward the majority label); and format every example <strong>identically</strong> so the pattern is unmistakable. Sloppy examples teach sloppy patterns.</p>
+    </section>
+
+    <section id="cot">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>Chain-of-thought prompting</h2>
+      <p><strong>Chain-of-thought (CoT)</strong> prompting asks the model to produce its intermediate reasoning steps <em>before</em> the final answer. On multi-step problems — arithmetic, logic, debugging, anything with several dependent decisions — writing the steps out measurably improves accuracy, because each step conditions the next instead of the model leaping straight to a guess (Wei et al., 2022).</p>
+      <p>The cheapest version is <strong>zero-shot CoT</strong>: append <em>"Let's think step by step"</em> (Kojima et al., 2022) and the model lays out its reasoning unprompted. For developer work, phrase it as a plan-first instruction:</p>
+      <pre><code><span class="cmt"># Force a plan before code</span>
+Before writing any code, outline your approach in 3–5 bullets:
+edge cases, data structure, and complexity. Then implement it.</code></pre>
+      <p>This surfaces a bad plan while it's still cheap to redirect — you catch "it's about to use a nested loop" before it writes fifty lines around one.</p>
+
+      <div class="callout">
+        <p class="lbl">Important caveat</p>
+        <p>The reasoning text is <strong>not a faithful trace</strong> of the model's internal computation — it's more output, generated the same way. Treat it as a useful scaffold and a review aid, not proof the answer is right. And modern reasoning-tuned models already do this internally, so explicit "think step by step" adds less there; use CoT where it earns its extra tokens and latency, skip it on simple lookups.</p>
+      </div>
+    </section>
+
+    <section id="iterate">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Iterating &amp; fixing hallucinations</h2>
+      <p>Prompting is a <strong>loop, not a one-shot</strong>. The first output is a draft. You read it critically, name the exact gap ("it ignored the timezone" / "that method doesn't exist"), and feed that back as the next, tighter prompt. Expert prompting looks less like one perfect incantation and more like fast, precise correction.</p>
+      <p>The failure you'll fight most is the <strong>hallucination</strong>: confident, fluent output that is simply wrong — a nonexistent library method, an invented function signature, an API parameter that was never real. It happens because the model predicts <em>plausible</em> tokens, not <em>true</em> ones; it has no built-in ground truth and will fill any gap rather than say "I don't know."</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Symptom</th><th>Fix</th></tr></thead>
+          <tbody>
+            <tr><td>Invents an API / method that doesn't exist</td><td>Ground it — paste the real docs, signatures, or schema into context; don't trust parametric memory for specifics</td></tr>
+            <tr><td>Confidently wrong on facts</td><td>Add "if you're unsure, say so" and "cite the source"; verify against docs before you trust it</td></tr>
+            <tr><td>Drifts or over-reaches on a big ask</td><td>Decompose into smaller, checkable steps; constrain scope explicitly</td></tr>
+            <tr><td>Creative/inconsistent on a factual task</td><td>Lower the temperature (less randomness) for code and facts</td></tr>
+            <tr><td>You can't tell if it's right</td><td>Run it — execution is the ultimate ground truth</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout tip">
+        <p class="lbl">The fastest filter</p>
+        <p>Don't argue with a hallucination — <strong>execute it</strong>. Run the code, hit the endpoint, check that the import resolves. A failing run gives you the exact error to paste back, and that grounded correction beats any amount of re-wording.</p>
+      </div>
+    </section>
+
+    <section id="worked">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>Worked example: a real prompt</h2>
+      <p>Watch the same request go from a coin-flip to a reliable one. The task: a token-bucket rate limiter for a service — a nice bridge from the system-design track.</p>
+
+      <h3>v1 — the vague ask (don't do this)</h3>
+      <pre><code>write a rate limiter in python</code></pre>
+      <p>You'll get <em>a</em> rate limiter — but which algorithm, in-memory or distributed, thread-safe or not, with what limits? Every unstated choice is a guess you'll have to catch later.</p>
+
+      <h3>v2 — the structured prompt</h3>
+      <pre><code><span class="cmt"># Role</span>
+You are a senior Python engineer who writes simple, well-tested code.
+
+<span class="cmt"># Context</span>
+FastAPI service, Python 3.11, one process, multiple threads.
+Redis is available via redis-py. Limit is per-user: 100 requests / 60s.
+
+<span class="cmt"># Task</span>
+Implement a token-bucket rate limiter as a single module.
+
+<span class="cmt"># Constraints</span>
+- thread-safe
+- no new dependencies beyond redis-py
+- full type hints; a docstring on the public method
+- return (allowed: bool, retry_after_seconds: int)
+
+<span class="cmt"># Reason first, then format</span>
+Outline the approach in 3 bullets (state, atomicity, clock),
+then output the module only — no prose after the code.</code></pre>
+      <p>Role, context, task, constraints, a chain-of-thought nudge, and an explicit output format — every ambiguity from v1 is now pinned.</p>
+
+      <h3>The iteration — grounding a hallucination</h3>
+      <p>Say the model returns code calling <code>redis.token_bucket(...)</code>. Clean-looking, and <strong>completely invented</strong> — no such method exists. You don't rewrite the whole prompt; you ground the one gap:</p>
+      <pre><code>redis-py has no token_bucket(). Reimplement using only these
+primitives, atomically: run a single Lua script via EVAL that
+reads a counter + timestamp, refills tokens, and returns the
+allow/deny decision. Show the Lua and the Python wrapper.</code></pre>
+      <p>Now it has the real building blocks and a real constraint (atomicity via one Lua round-trip). That's the whole loop: specify precisely → read critically → correct the exact gap. The magic was never a phrase — it was refusing to leave anything to chance.</p>
+    </section>
+
+    <section id="vibe">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Vibe coding in practice</h2>
+      <p>Vibe coding is this loop run at speed with an agent that can edit files and run commands. It's genuinely powerful for prototypes and unfamiliar territory — and it drifts into a mess the moment you stop steering. The workflow that keeps it honest:</p>
+      <ul>
+        <li><strong>Commit before you generate.</strong> Version control is your undo button. A clean <code>git</code> checkpoint means any AI change is a diff you can read and revert in one command.</li>
+        <li><strong>Keep changes small.</strong> One feature or fix per prompt. Huge asks produce huge, unreviewable diffs where bugs hide.</li>
+        <li><strong>Read every diff.</strong> Accepting code you haven't read is how subtle bugs and phantom dependencies ship. You own the code the moment you merge it.</li>
+        <li><strong>Let tests be the ground truth.</strong> Ask for tests alongside the code and run them. Green tests turn "looks right" into "is right."</li>
+        <li><strong>Feed it context, not just vibes.</strong> The best agents work against a spec, a task card, and the surrounding code — the same structure that makes a human contributor effective.</li>
+      </ul>
+      <p>Karpathy's own framing is the right mental model: full vibe mode is great for a throwaway weekend project where a bug just means "try again." For production, you still own correctness — so when you hit critical, unfamiliar, or security-sensitive code, <strong>drop out of vibe mode</strong> and actually read and understand it. The antidote to vibe-coding drift is writing the spec first, which is exactly where the next module goes.</p>
+
+      <div class="callout tool">
+        <p class="lbl">Free resource → drill it</p>
+        <p>The open <a href="https://www.promptingguide.ai" target="_blank" rel="noopener">Prompt Engineering Guide</a> (DAIR.AI) has runnable, technique-by-technique pages for everything above — zero/few-shot, CoT, and more. Open it beside your editor and try each pattern on a task you actually have.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Your reps this week</h2>
+      <p>Reading about prompting doesn't build the instinct — reps do. Do these, in order:</p>
+      <ol>
+        <li><strong>Refactor v1 into v2.</strong> Take a lazy one-line prompt you'd normally type and rewrite it with all five parts — role, context, task, constraints, format. Run both against the same model and compare the outputs side by side.</li>
+        <li><strong>Climb the ladder.</strong> Pick a niche classification or formatting task. Try zero-shot; if it drifts, add one example, then a few. Note the exact rung where it locks in — that's your intuition forming.</li>
+        <li><strong>Force a hallucination, then ground it.</strong> Ask for code using an obscure or made-up library. When it invents a method, fix it <em>only</em> by pasting real signatures or docs into context — don't just re-ask.</li>
+        <li><strong>Vibe-code a throwaway.</strong> Build a tiny tool in an agent editor: commit first, keep prompts small, read every diff, make it write tests. Notice where you had to drop out of vibe mode and read.</li>
+        <li><strong>Run the drill rig below</strong> to pressure-test a prompt against a tougher grader:</li>
+      </ol>
+      <div class="rig">You are a staff engineer and a strict prompt-engineering coach. I will paste a prompt I wrote to get code (or another technical output) from an LLM. Do NOT answer the prompt. Instead: (1) score it 1–5 on each of role, context, task, constraints, and output format; (2) name every ambiguity or missing fact that would force the model to guess; (3) flag anything likely to trigger a hallucination and how to ground it; (4) tell me whether zero-shot, few-shot, or chain-of-thought fits and why; then (5) rewrite it as a tight, production-grade prompt and explain what you changed. Here is my prompt: &lt;paste&gt;</div>
+      <p><strong>Flashcards</strong> (make these 5, review at week's end): <em>The five parts of a developer prompt? · When do you escalate from zero-shot to few-shot? · What does chain-of-thought buy you, and why not trust the reasoning text? · Three ways to fix a hallucination? · What's the one guardrail that makes vibe coding safe?</em></p>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the prompt-engineering and shot/CoT ones <em>before</em> your reps; save the vibe-coding walkthroughs for when you're building.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=_ZvnD73m40o" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Prompt Engineering Tutorial – Master ChatGPT and LLM Responses</b><div class="ch">freeCodeCamp.org <span class="dur">· full tutorial · guide</span></div><p>The comprehensive foundation — principles, structure, and technique end to end. Watch first.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=aOm75o2Z5-o" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Prompt Engineering 101 - Crash Course &amp; Tips</b><div class="ch">AssemblyAI <span class="dur">· crash course · guide</span></div><p>A fast, practical primer if you want the essentials before the full tutorial.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=S9OJC76qZ8A" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Chain of Thought Prompting Explained</b><div class="ch">StormWind Studios <span class="dur">· short · reasoning</span></div><p>Why step-by-step reasoning lifts accuracy on multi-step problems, cleanly explained.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=SNxe2kwgPi4" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Zero, One, and Few Shot Prompting with Langchain and OpenAI LLMs</b><div class="ch">Ryan &amp; Matt Data Science <span class="dur">· hands-on · few-shot</span></div><p>The escalation ladder in real code — see in-context learning actually run.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=wwfJlSF34n8" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>I figured out the best way to vibe code</b><div class="ch">Matthew Berman <span class="dur">· walkthrough · vibe coding</span></div><p>A practical, opinionated workflow for steering an AI agent without losing the plot.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=uianlp3QsmA" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>The Ultimate Vibe Coding Tutorial (5 Hours)</b><div class="ch">Jan Marshal <span class="dur">· ~5 hrs · deep dive</span></div><p>Planning, prompting, execution, and debugging in one long build. Dip in by chapter.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (free, and genuinely apt):</strong> the open <a href="https://www.promptingguide.ai" target="_blank" rel="noopener">Prompt Engineering Guide</a> (DAIR.AI) for technique reference, and <a href="https://learnprompting.org/docs/basics/few_shot" target="_blank" rel="noopener">Learn Prompting</a>'s shot-based prompting chapter for a clean zero/one/few-shot walkthrough.</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/b3-spec-driven-dev.html">Next module →</a>
+    </div>
+
+    <footer>Module B2 · Track B · GenAI Development · System Design Mastery · Next up: Module B3 — Spec-Driven Development (writing the spec that keeps vibe coding honest).</footer>
+  </div>
+</body>
+</html>

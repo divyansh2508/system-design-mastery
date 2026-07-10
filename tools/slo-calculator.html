@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SLO & Error-Budget Calculator — System Design</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b1016; --panel:#121a23; --panel-2:#0e151d;
+    --border:#223140; --border-soft:#1a2530;
+    --text:#cdd9e5; --muted:#7d8fa1; --faint:#54626f;
+    --accent:#34d3e0; --accent-dim:rgba(52,211,224,.14);
+    --ok:#3fb950; --warn:#e3b341; --crit:#f85149; --violet:#9d8bff;
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1100px 600px at 82% -8%,rgba(52,211,224,.06),transparent 60%),var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased}
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(11,16,22,.7);position:sticky;top:0;z-index:30}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:6px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-dim)}
+
+  .wrap{max-width:1080px;margin:0 auto;padding:26px 20px 60px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin:0 0 10px;display:flex;align-items:center;gap:9px}
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  h1{font-family:var(--mono);font-weight:600;font-size:clamp(23px,4vw,34px);letter-spacing:-.01em;margin:0 0 10px}
+  .lede{max-width:66ch;color:var(--muted);font-size:15px;margin:0}
+  .lede b{color:var(--text);font-weight:600}
+
+  .targets{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 4px;align-items:center}
+  .targets .pl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-right:4px}
+  .tgt{font-family:var(--mono);font-size:13px;color:var(--muted);background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:8px 13px;cursor:pointer;transition:all .12s}
+  .tgt:hover{color:var(--text)}
+  .tgt[aria-pressed="true"]{background:var(--accent-dim);color:var(--accent);border-color:var(--accent)}
+
+  .grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:18px}
+  @media(min-width:840px){.grid{grid-template-columns:1fr 1fr}}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+  .card h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 16px}
+
+  .downgrid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border-soft);border-radius:12px;overflow:hidden}
+  .dn{background:var(--panel);padding:13px 15px}
+  .dn .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:0 0 4px}
+  .dn .v{font-family:var(--mono);font-size:21px;font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums}
+
+  .field{margin-bottom:15px}
+  .field .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
+  .field label{font-size:13px;color:var(--text)}
+  .field .val{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent)}
+  input[type=number]{width:100%;font-family:var(--mono);font-size:14px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 11px;font-variant-numeric:tabular-nums}
+  input[type=number]:focus{outline:2px solid var(--accent);outline-offset:1px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;background:var(--border);border-radius:3px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px rgba(52,211,224,.5)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--accent);cursor:pointer}
+
+  .budget .b{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .bigbudget{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--violet)}
+  .meter{height:12px;background:var(--panel-2);border:1px solid var(--border);border-radius:7px;overflow:hidden;margin:14px 0 8px}
+  .meter>i{display:block;height:100%;width:0;background:var(--ok);transition:width .25s,background .25s}
+  .verdict{font-family:var(--mono);font-size:13px;font-weight:600;padding:11px 14px;border-radius:10px;margin-top:12px}
+  .verdict.ok{color:var(--ok);background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3)}
+  .verdict.warn{color:var(--warn);background:rgba(227,179,65,.1);border:1px solid rgba(227,179,65,.3)}
+  .verdict.crit{color:var(--crit);background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3)}
+  .subline{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:8px;font-variant-numeric:tabular-nums}
+  .subline b{color:var(--text)}
+
+  .coach{margin-top:16px;padding:14px 16px;border:1px solid var(--border);border-radius:12px;background:var(--panel);border-left:3px solid var(--accent)}
+  .coach .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+  .coach p{margin:0;font-size:13.5px}
+  footer{margin-top:24px;padding-top:18px;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+  footer b{color:var(--muted)}
+  a{color:var(--accent)}
+  button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../modules/14-observability-monitoring.html">Module 14 notes</a>
+      <a href="load-balancer-simulator.html">🚦 Load Balancer</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <p class="eyebrow"><span class="dot"></span>System Design · Module 14 — Observability</p>
+    <h1>SLO &amp; Error-Budget Calculator</h1>
+    <p class="lede">"How many nines?" isn't a vibe — it's a budget. Pick an availability target and see <b>exactly how much downtime you're allowed</b>, then track your <b>error budget</b>: the pile of failures you're permitted to spend on releases and risk before you've broken your promise.</p>
+
+    <div class="targets" role="group" aria-label="Availability target">
+      <span class="pl">Target</span>
+      <button class="tgt" data-t="99">99%</button>
+      <button class="tgt" data-t="99.9" aria-pressed="true">99.9%</button>
+      <button class="tgt" data-t="99.95">99.95%</button>
+      <button class="tgt" data-t="99.99">99.99%</button>
+      <button class="tgt" data-t="99.999">99.999%</button>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>◆ Allowed downtime at <span id="tgt-label" style="color:var(--accent)">99.9%</span></h2>
+        <div class="downgrid">
+          <div class="dn"><p class="k">per day</p><p class="v" id="d-day">—</p></div>
+          <div class="dn"><p class="k">per week</p><p class="v" id="d-week">—</p></div>
+          <div class="dn"><p class="k">per 30-day month</p><p class="v" id="d-month">—</p></div>
+          <div class="dn"><p class="k">per year</p><p class="v" id="d-year">—</p></div>
+        </div>
+        <div class="coach">
+          <p class="lbl">What this means</p>
+          <p id="coach-nines">At 99.9% ("three nines"), you're allowed ~43 minutes of downtime a month. Every extra nine cuts your allowed downtime by 10×.</p>
+        </div>
+      </div>
+
+      <div class="card budget">
+        <h2>◆ Error budget this month</h2>
+        <div class="field">
+          <div class="row"><label for="req">Requests / month</label></div>
+          <input type="number" id="req" min="0" step="1000000" value="100000000">
+        </div>
+        <div class="field">
+          <div class="row"><label for="errs">Failed requests so far</label></div>
+          <input type="number" id="errs" min="0" step="1000" value="45000">
+        </div>
+        <div class="field">
+          <div class="row"><label for="elapsed">Month elapsed</label><span class="val" id="elapsed-v">40%</span></div>
+          <input type="range" id="elapsed" min="0" max="100" step="5" value="40">
+        </div>
+
+        <p class="subline">Budget = requests × (1 − SLO) = <b id="budget-total">—</b> failures allowed</p>
+        <div class="meter"><i id="meter"></i></div>
+        <p class="subline"><b id="consumed-pct">—</b> of budget consumed &nbsp;·&nbsp; <b id="remaining">—</b> left</p>
+        <div class="verdict ok" id="verdict">—</div>
+      </div>
+    </div>
+
+    <footer>Learning tool <b>#4</b> · archetype: <b>calculator</b> · pairs with <a href="../modules/14-observability-monitoring.html">Module 14 notes</a> (SLI/SLO/SLA &amp; error budgets)</footer>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+  var target=99.9;
+  var PERIOD={day:86400, week:604800, month:2592000, year:31536000}; // seconds
+
+  function dur(sec){
+    sec=Math.max(0,Math.round(sec));
+    var d=Math.floor(sec/86400); sec-=d*86400;
+    var h=Math.floor(sec/3600); sec-=h*3600;
+    var m=Math.floor(sec/60); sec-=m*60;
+    var p=[];
+    if(d) p.push(d+"d");
+    if(h) p.push(h+"h");
+    if(m) p.push(m+"m");
+    if(sec||!p.length) p.push(sec+"s");
+    return p.slice(0,2).join(" ");
+  }
+  function num(id){ var v=parseFloat($(id).value); return isNaN(v)?0:v; }
+
+  function compute(){
+    var s=target/100, unavail=1-s;
+    $("tgt-label").textContent=target+"%";
+    $("d-day").textContent=dur(unavail*PERIOD.day);
+    $("d-week").textContent=dur(unavail*PERIOD.week);
+    $("d-month").textContent=dur(unavail*PERIOD.month);
+    $("d-year").textContent=dur(unavail*PERIOD.year);
+
+    var nines={99:"two nines",99.9:"three nines",99.95:"three-and-a-half nines",99.99:"four nines",99.999:"five nines"};
+    $("coach-nines").textContent="At "+target+"% ("+(nines[target]||"")+"), you may be down about "+dur(unavail*PERIOD.month)+" per 30-day month ("+dur(unavail*PERIOD.year)+" per year). Every extra nine shrinks that budget by 10×.";
+
+    var req=num("req"), errs=num("errs"), elapsed=num("elapsed");
+    var budget=req*unavail;
+    var consumedPct=budget>0?(errs/budget*100):0;
+    var remaining=Math.max(0,budget-errs);
+    $("elapsed-v").textContent=elapsed+"%";
+    $("budget-total").textContent=Math.round(budget).toLocaleString();
+    $("consumed-pct").textContent=(consumedPct).toFixed(1)+"%";
+    $("remaining").textContent=Math.round(remaining).toLocaleString()+" failures";
+
+    var mt=$("meter"); mt.style.width=Math.min(100,consumedPct)+"%";
+    var v=$("verdict");
+    if(consumedPct>=100){
+      mt.style.background="var(--crit)"; v.className="verdict crit";
+      v.textContent="✕ Budget exhausted — you've broken the SLO. Freeze risky releases; focus on reliability.";
+    } else if(consumedPct>elapsed+5){
+      mt.style.background="var(--warn)"; v.className="verdict warn";
+      v.textContent="⚠ Burning too fast — "+consumedPct.toFixed(0)+"% of budget spent at "+elapsed+"% of the month. Slow down; you'll blow the SLO at this rate.";
+    } else {
+      mt.style.background="var(--ok)"; v.className="verdict ok";
+      v.textContent="✓ On track — "+consumedPct.toFixed(0)+"% spent at "+elapsed+"% elapsed. Budget to spare; safe to ship and take risks.";
+    }
+  }
+
+  document.querySelectorAll(".tgt").forEach(function(b){
+    b.addEventListener("click",function(){
+      target=parseFloat(b.getAttribute("data-t"));
+      document.querySelectorAll(".tgt").forEach(function(x){ x.setAttribute("aria-pressed", x===b?"true":"false"); });
+      compute();
+    });
+  });
+  ["req","errs","elapsed"].forEach(function(id){ $(id).addEventListener("input",compute); });
+  compute();
+})();
+</script>
+</body>
+</html>

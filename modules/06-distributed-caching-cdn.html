@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Distributed Caching &amp; CDN | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#0ca678; --hue-soft:rgba(12,166,120,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#28c39a;--hue-soft:rgba(40,195,154,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#0ca678;--hue-soft:rgba(12,166,120,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#28c39a;--hue-soft:rgba(40,195,154,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+      <a href="../tools/cache-playground.html">🗃️ Cache Playground</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 2 · Data at Scale</span><span class="sep">·</span><span>Module 6</span><span class="sep">·</span><span>Weeks 2-3 · ~13 hrs</span></p>
+      <h1>Distributed Caching &amp; CDN</h1>
+      <p class="sub">A read that would slam a database can instead be served from memory in a microsecond or from a server one city away — this module is how you place, invalidate, and scale those copies so a feed loads instantly for two billion people.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#stack">Where caching lives</a></li>
+        <li><a href="#redis">Redis Cluster deep-dive</a></li>
+        <li><a href="#vs">Memcached vs Redis</a></li>
+        <li><a href="#headers">CDN cache-control headers</a></li>
+        <li><a href="#edge">Edge caching &amp; latency</a></li>
+        <li><a href="#tiers">Multi-tier caching (L1/L2/L3)</a></li>
+        <li><a href="#warming">Cache warming &amp; cold starts</a></li>
+        <li><a href="#feed">Worked example: News Feed</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="stack">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>Where caching lives</h2>
+      <p class="lead">A cache is a <strong>copy of data kept somewhere faster or closer</strong> than its source. That's the whole idea — and it recurs at every layer of a request, from the user's browser down to the database's own memory.</p>
+      <p>Before you reach for Redis, know the map. A single page load can be satisfied by any of these tiers, each faster and closer than the one behind it:</p>
+      <pre><code>browser cache   <span class="cmt">on the device — 0 ms, but only that one user</span>
+   │
+CDN / edge      <span class="cmt">a PoP near the user — ~10-30 ms, static + cacheable dynamic</span>
+   │
+app-local cache <span class="cmt">in-process (L1) — ~100 ns, but per-instance, small</span>
+   │
+distributed cache <span class="cmt">Redis / Memcached (L2) — ~0.5 ms network hop, shared</span>
+   │
+database         <span class="cmt">buffer pool caches hot pages — then disk at ~10 ms</span></code></pre>
+      <p>The default read pattern you'll name in almost every interview is <strong>cache-aside</strong> (lazy loading): the app checks the cache; on a hit it returns; on a miss it reads the database, writes the value back into the cache, and returns. Writes get their own policy — <strong>write-through</strong> (write cache and DB together, always fresh, slower writes), <strong>write-back</strong> (write cache now, flush to DB async — fast but can lose data), or <strong>write-around</strong> (write only the DB, let the cache fill lazily). Each is a latency-vs-freshness-vs-durability trade.</p>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>Phil Karlton's line is the whole module: <em>"There are only two hard things in computer science: cache invalidation and naming things."</em> Adding a cache is trivial; keeping it <strong>correct</strong> as the source changes — and knowing what stale data your users can tolerate — is the actual work.</p>
+      </div>
+      <p>Two failure modes to keep in your pocket from the start. A <strong>hot key</strong> is a single popular entry (a celebrity's profile) whose one cache shard melts under load. A <strong>cache stampede</strong> is what happens when a popular key expires and thousands of concurrent misses all hammer the database at once. We'll defuse both by the end.</p>
+    </section>
+
+    <section id="redis">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>Redis Cluster deep-dive</h2>
+      <p>Redis is an in-memory data-structure store. Unlike a plain key-value cache, its values are <strong>rich data types</strong>, which lets you push logic into the cache instead of round-tripping to the app. Knowing which structure fits a problem is a senior signal:</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Structure</th><th>What it is</th><th>Classic use</th></tr></thead>
+          <tbody>
+            <tr><td>String</td><td>Bytes up to 512 MB; counters via <code>INCR</code></td><td>Cached JSON, rate-limit counters, sessions</td></tr>
+            <tr><td>Hash</td><td>Field→value map under one key</td><td>An object (user profile) without re-serializing</td></tr>
+            <tr><td>List</td><td>Ordered, push/pop both ends</td><td>Simple queues, recent-items timelines</td></tr>
+            <tr><td>Set</td><td>Unordered unique members</td><td>Tags, unique visitors, membership tests</td></tr>
+            <tr><td>Sorted set (ZSET)</td><td>Members ordered by a score</td><td>Leaderboards, <strong>a ranked news feed</strong>, priority queues</td></tr>
+            <tr><td>Bitmap / HyperLogLog</td><td>Bit ops / probabilistic cardinality</td><td>Daily-active flags; unique counts in ~12 KB</td></tr>
+            <tr><td>Stream</td><td>Append-only log with consumer groups</td><td>Event pipelines, fan-out messaging</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>How a single Redis stays fast</h3>
+      <p>Redis executes commands on a <strong>single thread</strong>. That sounds like a bottleneck but is a feature: no locks, no context switches, and every command is effectively atomic. The work is in RAM and the limiter is the network, not the CPU — one node comfortably does 100k+ ops/sec. (Redis 6+ added threaded <em>I/O</em> for reading sockets, but command execution stays single-threaded.) The corollary: <strong>never run an <code>O(n)</code> command on a huge key</strong> (<code>KEYS *</code>, a giant <code>SMEMBERS</code>) — it blocks every other client for the duration.</p>
+
+      <h3>Scaling out: hash slots</h3>
+      <p>One node's RAM and throughput eventually cap out, so <strong>Redis Cluster</strong> shards the keyspace across many masters. It does <em>not</em> use classic consistent hashing — it uses a fixed ring of <strong>16,384 hash slots</strong>. Each key is mapped by <code>CRC16(key) mod 16384</code>, and every master owns a contiguous range of slots. Add a node and you migrate some slots to it; no full reshuffle.</p>
+      <pre><code>CRC16("user:42:feed") mod 16384  =  slot 9203
+                                         │
+   ┌─────────────┬──────────────┬───────┴──────┐
+ Master A        Master B        Master C
+ slots 0-5460    5461-10922      10923-16383
+   │  replica      │  replica       │  replica
+   └─ A'           └─ B'            └─ C'      <span class="cmt">async replication → failover</span>
+
+Client asks wrong node → gets  -MOVED 9203 10.0.0.2:6379  <span class="cmt">and retries</span></code></pre>
+      <p>Clients are <strong>cluster-aware</strong>: they cache the slot→node map and talk to the right master directly (no proxy). If a slot is mid-migration you get a <code>-ASK</code> redirect; if it has permanently moved, a <code>-MOVED</code>. To run a multi-key command (e.g. <code>MGET</code>) the keys must live in the same slot — force that with a <strong>hash tag</strong>: braces make Redis hash only the tagged part, so <code>{user:42}:feed</code> and <code>{user:42}:profile</code> co-locate.</p>
+
+      <h3>Consistency: what Redis Cluster does NOT promise</h3>
+      <p>Replication from master to replica is <strong>asynchronous</strong>, so Redis Cluster is <em>not</em> strongly consistent. A master can acknowledge a write to the client and then crash <em>before</em> the replica receives it — that acknowledged write is lost on failover. This is a deliberate AP-leaning choice (recall CAP from Module 1): favor availability and latency, accept a small write-loss window. If a client is partitioned onto a minority side, after <code>node-timeout</code> the master stops accepting writes to avoid a split-brain. You can ask for stronger guarantees with <code>WAIT n ms</code> (block until <code>n</code> replicas ack), and back the data with <strong>persistence</strong> — RDB point-in-time snapshots and/or AOF (append-only file, replay the write log on restart) — but a cache treated as the source of truth is a design smell. Cache first, database of record second.</p>
+    </section>
+
+    <section id="vs">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Memcached vs Redis</h2>
+      <p>Both are in-memory key-value stores with sub-millisecond latency, and interviewers love asking you to choose. The honest answer in 2026 is "Redis, almost always" — but you earn the point by knowing <em>where Memcached still wins</em> and saying so.</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Dimension</th><th>Memcached</th><th>Redis</th></tr></thead>
+          <tbody>
+            <tr><td>Data model</td><td>Opaque strings only (≤1 MB)</td><td>Strings, hashes, lists, sets, ZSETs, streams…</td></tr>
+            <tr><td>Threading</td><td>Multi-threaded — scales up on many cores</td><td>Single-threaded commands (+ threaded I/O in 6+)</td></tr>
+            <tr><td>Persistence</td><td>None — purely volatile</td><td>Optional RDB snapshots + AOF log</td></tr>
+            <tr><td>Replication / HA</td><td>None built in (client-side sharding)</td><td>Replicas, Sentinel, Cluster with failover</td></tr>
+            <tr><td>Eviction</td><td>LRU per slab</td><td>8 policies (LRU, LFU, TTL, random, noeviction)</td></tr>
+            <tr><td>Extras</td><td>Dead simple, tiny footprint</td><td>Pub/sub, Lua scripts, transactions, geo, TTLs</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>Pick Memcached</strong> when the job is a pure, huge, simple look-aside cache of opaque blobs and you want to saturate a many-core box with the least operational surface — its multi-threading can edge out Redis on raw string GET/SET throughput. <strong>Pick Redis</strong> for everything with structure: leaderboards, feeds, rate limiters, sessions you can't afford to drop cold on restart, or anything needing replication and failover. Because Redis is a superset of Memcached's use case, most teams standardize on it to avoid running two systems.</p>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>Don't just say "Redis is better." Say <em>"Memcached if I need a simple multi-threaded blob cache and nothing else; Redis the moment I want data structures, persistence, or built-in HA — which is usually."</em> Naming the boundary is what scores.</p>
+      </div>
+    </section>
+
+    <section id="headers">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>CDN cache-control headers</h2>
+      <p>A CDN doesn't guess how long to hold a copy — <strong>your HTTP response headers tell it</strong>. Getting these right is the difference between a CDN that offloads 95% of traffic and one that stampedes your origin. Three headers carry the weight: <code>Cache-Control</code>, <code>ETag</code>, and <code>Vary</code>.</p>
+      <pre><code><span class="cmt"># A versioned, fingerprinted static asset — cache hard, forever</span>
+Cache-Control: public, max-age=31536000, immutable
+ETag: "9f2b-c1a4"
+
+<span class="cmt"># A personalized API response — never store shared, always revalidate</span>
+Cache-Control: private, no-cache
+Vary: Accept-Encoding, Accept-Language
+
+<span class="cmt"># A news feed page — serve fast, refresh in the background</span>
+Cache-Control: public, s-maxage=30, stale-while-revalidate=120</code></pre>
+      <p><strong><code>Cache-Control</code></strong> is the policy. Key directives: <code>max-age</code> (freshness seconds for any cache), <code>s-maxage</code> (overrides it for <em>shared</em> caches like the CDN only), <code>public</code> vs <code>private</code> (may a shared cache store it? — mark anything user-specific <code>private</code>), <code>no-cache</code> (store, but revalidate before each use), <code>no-store</code> (never keep it — for secrets), <code>immutable</code> (this bytes-for-this-URL will never change, skip revalidation), and <code>stale-while-revalidate</code> (serve the stale copy instantly, refresh async — a stampede killer).</p>
+      <p><strong><code>ETag</code></strong> is a content fingerprint for cheap revalidation. When a cached copy goes stale, the client/CDN sends <code>If-None-Match: "9f2b-c1a4"</code>; if the content is unchanged the origin replies <code>304 Not Modified</code> with an empty body — you pay one tiny round-trip instead of re-sending the whole payload. (<code>Last-Modified</code> + <code>If-Modified-Since</code> does the same with timestamps, at one-second granularity.)</p>
+      <p><strong><code>Vary</code></strong> defines the <em>cache key's extra dimensions</em>. <code>Vary: Accept-Encoding</code> stores gzip and brotli versions separately — correct and cheap. But <code>Vary: Cookie</code> or <code>Vary: User-Agent</code> explodes the key space into near-uniqueness and destroys your hit rate; those are classic footguns. The rule: cache <em>shared</em> content aggressively with <code>ETag</code>s, and mark truly personalized content <code>private</code> rather than trying to <code>Vary</code> your way out.</p>
+    </section>
+
+    <section id="edge">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Edge caching &amp; latency</h2>
+      <p>A CDN is a fleet of <strong>Points of Presence (PoPs)</strong> — edge servers in hundreds of cities. The physics is the point: a cross-continent round-trip is ~150 ms (Module 1's latency table), but an edge server one metro away answers in ~10-30 ms. Cache the response at the edge and you've deleted the long-haul trip <em>and</em> the origin's work in one move.</p>
+      <p>How a user reaches the nearest edge is usually <strong>Anycast</strong>: the same IP is advertised from every PoP, and internet routing delivers the packet to the closest one automatically. From there the edge does a normal cache-aside against your origin, governed by the headers above.</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Concept</th><th>What it means</th><th>Why you care</th></tr></thead>
+          <tbody>
+            <tr><td>Pull CDN</td><td>Edge fetches from origin on first miss, then caches</td><td>Default; origin stays lean, first user pays the miss</td></tr>
+            <tr><td>Push CDN</td><td>You upload assets to the CDN ahead of time</td><td>Large/predictable files (video, releases)</td></tr>
+            <tr><td>Origin shield</td><td>One mid-tier cache all PoPs pull through</td><td>Collapses N PoP misses into 1 origin hit</td></tr>
+            <tr><td>TTL</td><td>How long the edge holds a copy (from <code>max-age</code>)</td><td>Trades freshness against origin offload</td></tr>
+            <tr><td>Purge / invalidation</td><td>Actively evict a URL before its TTL</td><td>Ship a fix without waiting out the TTL</td></tr>
+            <tr><td>Edge compute</td><td>Run small logic at the PoP (auth, A/B, rewrite)</td><td>Personalize without a trip to origin</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The metric that rules everything here is <strong>cache hit ratio</strong> — the fraction of requests the edge answers without touching origin. Push it toward 95%+ and your origin fleet shrinks, your p99 drops, and a traffic spike lands on the CDN instead of your database. Static assets (images, JS, CSS, video segments) are the natural win; the frontier is caching <em>dynamic</em> content for short TTLs with <code>stale-while-revalidate</code> so even a personalized-looking page is mostly edge-served.</p>
+    </section>
+
+    <section id="tiers">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>Multi-tier caching (L1/L2/L3)</h2>
+      <p>Serious systems don't pick one cache — they <strong>stack</strong> them, each trading capacity for speed like CPU cache levels. A request falls through the tiers and stops at the first hit:</p>
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>L1 — in-process (local) <span class="ft">~100 ns</span></b><p>A cache <em>inside</em> the app process (Caffeine, Guava, an LRU map). No network at all, so it's the fastest possible hit — but it's per-instance, small, and every replica holds its own copy, so invalidation across instances is the hard part.</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>L2 — distributed (remote) <span class="ft">~0.5 ms</span></b><p>A shared Redis/Memcached cluster all app servers hit over the network. One coherent copy, big capacity, survives an app restart. This is the workhorse tier and where "the cache" usually means.</p></div></div>
+        <div class="fstep"><span class="fn">3</span><div><b>L3 — CDN / edge (or DB buffer pool) <span class="ft">~10-30 ms</span></b><p>For content servable to many users, the CDN edge is the outermost tier — closest to the user, furthest from origin. (For internal data paths, the database's own page cache plays the L3 role before disk.)</p></div></div>
+      </div>
+      <p>The pattern of L1 in front of a shared L2 is a <strong>near cache</strong>: keep the few hottest keys local to kill the network hop, fall back to Redis for the long tail. The cost is <strong>coherence</strong> — when data changes, an L1 copy on some server can go stale. You manage it with short L1 TTLs, small L1 sizes (hot set only), and pub/sub invalidation messages that tell every instance to drop a key. The golden rule: <em>add a tier only when the tier behind it is measurably the bottleneck</em>, and never let a lower tier serve data staler than the product can tolerate.</p>
+      <div class="callout tool">
+        <p class="lbl">Play with it → your tool</p>
+        <p>Open the <a href="../tools/cache-playground.html">🗃️ Cache Playground</a> and dial the working-set size, TTL, and request skew. Watch the <strong>hit ratio</strong> climb as the hot set fits in cache, see a stampede form when a hot key expires, and feel how L1+L2 tiers change the numbers. Change one knob at a time and build the intuition for why 95% hit rate is a design goal, not luck.</p>
+      </div>
+    </section>
+
+    <section id="warming">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Cache warming &amp; cold starts</h2>
+      <p>A cache is only fast once it's <strong>warm</strong>. The dangerous moments are the cold ones: right after a deploy, a failover to an empty replica, or a scheduled flush. With the cache empty, every request is a miss, all of them fall through to the database <em>simultaneously</em>, and the origin — sized for a 5% miss rate — buckles under 100%. That's a <strong>cache stampede</strong> (a.k.a. thundering herd), and it's how "just restart Redis" takes down the database behind it.</p>
+      <p><strong>Warming</strong> pre-fills the hot set before real traffic arrives:</p>
+      <ul>
+        <li><strong>Preload on startup</strong> — replay the top-N keys (from analytics or yesterday's access log) into the cache before the instance takes traffic.</li>
+        <li><strong>Shadow / canary traffic</strong> — send a trickle of real requests to a fresh node to warm it, then ramp up.</li>
+        <li><strong>Scheduled refresh</strong> — a background job re-computes expensive, popular entries just before they expire, so users never hit a miss.</li>
+        <li><strong>Write-through</strong> — populate the cache on the write path so data is warm the instant it's created.</li>
+      </ul>
+      <p>And when a miss <em>does</em> happen on a hot key, stop the herd rather than let it trample the DB:</p>
+      <ul>
+        <li><strong>Request coalescing (single-flight)</strong> — let exactly one request recompute a missing key; everyone else waits for and shares that result.</li>
+        <li><strong>Stale-while-revalidate</strong> — serve the slightly-stale copy instantly and refresh in the background (the same header trick from §4, applied at the app tier).</li>
+        <li><strong>Jittered TTLs + early recompute</strong> — spread expirations with random jitter so a million keys don't die at the same second; probabilistically refresh popular keys a little <em>before</em> their TTL (the XFetch idea).</li>
+      </ul>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>When you add a cache in a design, proactively say <em>"and on a cold start I'd warm the top keys and coalesce misses so I don't stampede the database."</em> Anticipating the failure mode of your own solution is exactly the senior instinct interviewers probe for.</p>
+      </div>
+    </section>
+
+    <section id="feed">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Worked example: Facebook News Feed</h2>
+      <p>Now we run all five framework steps on the canonical caching-heavy problem — <em>"Design the Facebook News Feed."</em> Watch how every concept above shows up: Redis sorted sets, a Memcached-vs-Redis choice, CDN headers for media, edge caching, tiering, and warming.</p>
+
+      <h3>① Scope</h3>
+      <ul>
+        <li><strong>Functional:</strong> a user publishes a post; a user opens their feed and sees a <em>ranked</em> list of recent posts from the people/pages they follow, with media, like and comment counts, paged by infinite scroll.</li>
+        <li><strong>Non-functional:</strong> brutally read-heavy, feed must load fast (p99 &lt; ~200 ms), very high availability, <strong>eventual consistency is fine</strong> (a post or like lagging a second or two is acceptable), and it must scale to billions of users.</li>
+        <li><strong>Out of scope (say it):</strong> the ML ranking model itself, ads insertion, messaging. We design the <em>delivery</em> system and treat ranking as a scoring function.</li>
+      </ul>
+
+      <h3>② Estimate</h3>
+      <pre><code>~2B DAU, each opens the feed ~10×/day
+  feed reads = 2B × 10 = 20B/day  ÷ 100k  ≈ 200k reads/s avg
+                                   × ~3 peak ≈ 600k reads/s   <span class="cmt">→ must be cache-served</span>
+posts: ~2B × 0.2/day = 400M writes/day ÷ 100k ≈ 4-5k writes/s <span class="cmt">100:1+ read-heavy</span>
+avg followees ≈ 200  → naive fan-out = 400M × 200 = 80B feed inserts/day
+media: images/video dominate bytes → belongs on a CDN, not the feed store</code></pre>
+      <p>Verdict: reads must never touch the primary DB → <strong>precompute feeds into a cache</strong>. Writes are modest but <em>fan-out amplifies them 200×</em> — that amplification is the real design problem. Media bytes go to blob storage + CDN, not into the feed path.</p>
+
+      <h3>③ Interface</h3>
+      <pre><code>GET  /v1/feed?cursor=&lt;opaque&gt;&amp;limit=20   <span class="cmt">→ ranked page + next cursor</span>
+POST /v1/posts  { "authorId", "text", "mediaIds": [...] }  <span class="cmt">→ 201</span></code></pre>
+      <p>Cursor-based paging (not offset) so infinite scroll stays stable as new posts arrive.</p>
+
+      <h3>④ High-level design — fan-out</h3>
+      <p>The core choice is <strong>when</strong> to assemble a feed:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Model</th><th>How</th><th>Trade-off</th></tr></thead>
+          <tbody>
+            <tr><td>Fan-out on write (push)</td><td>On each post, insert its id into every follower's precomputed feed</td><td>Reads are instant (just read your list); writes explode for popular authors</td></tr>
+            <tr><td>Fan-out on read (pull)</td><td>Build the feed at read time by merging followees' recent posts</td><td>Writes are cheap; reads are heavy and slow — bad for 600k reads/s</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Since we're 100:1 read-heavy, we lean <strong>push</strong>: when a post is created, a fan-out service reads the author's followers and pushes the post id into each follower's feed. Each user's feed is a <strong>Redis sorted set</strong> — <code>ZADD feed:{userId} &lt;score&gt; &lt;postId&gt;</code>, score = rank/timestamp — so a read is a single <code>ZREVRANGE</code> of the top ~20 ids, then a batched <code>MGET</code> to hydrate post bodies from a post cache.</p>
+      <pre><code>WRITE:  POST → append to posts DB (source of truth)
+             → enqueue fan-out job (Kafka)
+             → worker: for each follower  ZADD feed:{follower} score postId
+
+READ:   GET feed → ZREVRANGE feed:{me} 0 19        <span class="cmt">(top 20 post ids, L2 Redis)</span>
+                 → MGET post:{id...}               <span class="cmt">(hydrate bodies)</span>
+                 → media URLs point at the CDN     <span class="cmt">(images/video never hit us)</span></code></pre>
+
+      <h3>⑤ Deep-dive &amp; scale</h3>
+      <ul>
+        <li><strong>The celebrity problem (hot fan-out).</strong> Pushing a post from an account with 50M followers is 50M writes — a stampede in itself. Go <strong>hybrid</strong>: push for normal accounts, but for celebrities <em>don't</em> fan out; instead pull their recent posts at read time and merge them into the pushed feed. Now write cost is bounded and reads stay cheap.</li>
+        <li><strong>Shard the feed cache.</strong> Feeds live in <strong>Redis Cluster</strong>, sharded by <code>userId</code> via the 16,384 hash slots (§2). A user's whole feed is one slot, so reads are single-node. Each master has a replica for failover; a lost, unacked feed insert is harmless — it re-derives from the posts DB.</li>
+        <li><strong>Tier it (§6).</strong> L1 in-process cache holds each app server's currently-scrolling users; L2 Redis Cluster holds all feeds; the <strong>CDN (L3)</strong> serves every image and video segment with <code>Cache-Control: public, max-age=31536000, immutable</code> on fingerprinted media URLs (§4) — that alone offloads the vast majority of bytes.</li>
+        <li><strong>Redis vs Memcached here (§3).</strong> The feed <em>needs</em> sorted sets and TTLs → <strong>Redis</strong>. The stateless post-body cache is a pure blob look-aside → Memcached would do, but teams keep one Redis to avoid running two systems.</li>
+        <li><strong>Warming &amp; stampedes (§7).</strong> After a deploy or failover, warm the feeds of currently-active users first and coalesce misses so an empty cache doesn't fall through 600k reads/s onto the posts DB. Jitter feed-entry TTLs so they don't all expire together.</li>
+        <li><strong>Consistency.</strong> Everything is eventually consistent by design: your new post appears in followers' feeds as the fan-out drains (usually sub-second); a like count is served from a counter that lags slightly. That's the AP trade we accepted in Step 1 — and it's why this scales.</li>
+      </ul>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Your reps this week</h2>
+      <p>Reading is not learning — reps are. Do these, in order:</p>
+      <ol>
+        <li><strong>Whiteboard the News Feed yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design it end-to-end with the 5-step framework, out loud, timed to ~35 minutes — <em>before</em> re-reading Section 08 or watching the videos. Force yourself to draw the fan-out and name the sorted set.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your caching decisions against pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer running a system design interview. Give me the prompt: "Design the Facebook News Feed." Then act as the interviewer — let me drive, ask clarifying and probing questions, and push hard on the caching layer specifically: make me justify fan-out on write vs read, how I shard the feed cache, what happens to a celebrity with 50M followers, which cache (Redis vs Memcached) and why, how I keep media off the hot path with CDN headers, and what happens on a cold cache after a deploy. Do NOT give me the answer or lead me — keep asking "why?" and "what breaks first?". After ~35 minutes (or when I say "done"), grade me 1–5 on each of: requirements gathering, capacity estimation, API design, high-level design, caching &amp; CDN deep-dives, and communication — with specific feedback and what a strong candidate would have added.</div>
+      <ol start="3">
+        <li><strong>Break a cache in the tool.</strong> In the <a href="../tools/cache-playground.html">🗃️ Cache Playground</a>, shrink the cache below the working set and watch the hit ratio collapse; then expire a hot key and watch the stampede. Reproduce the fix (coalescing / stale-while-revalidate) and see the origin load flatten.</li>
+        <li><strong>Explain it back.</strong> Teach fan-out on write vs read, and why Redis Cluster is AP-not-CP, to a rubber duck (or me) without notes. Gaps you can't explain are gaps you don't have yet.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>What maps a key to a shard in Redis Cluster? · When is Memcached the right call over Redis? · What does <code>stale-while-revalidate</code> buy you? · ETag vs Vary — what does each control? · How do you stop a cache stampede on a cold start?</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the CDN and caching-systems ones <em>before</em> your reps; save the Redis internals deep-dives for when you want to defend the consistency answer.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=RI9np1LWzqw" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>What Is A CDN? How Does It Work?</b><div class="ch">ByteByteGo <span class="dur">· ~5 min · how CDN works</span></div><p>Crisp animated primer on PoPs, edge servers, and pull-through caching. Start here.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=b4_6thkYZXs" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>What is a CDN (Content Delivery Network)?</b><div class="ch">Gaurav Sen <span class="dur">· ~9 min · edge caching</span></div><p>Whiteboard walk of push vs pull CDNs and where edge caching actually pays off.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=dGAgxozNWFE" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Cache Systems Every Developer Should Know</b><div class="ch">ByteByteGo <span class="dur">· ~8 min · caching tiers</span></div><p>Tours the whole stack — browser, CDN, app, and distributed cache — the map for §6.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=1NngTUYPdpI" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Caching in System Design Interviews w/ Meta Staff Engineer</b><div class="ch">Hello Interview <span class="dur">· ~35 min · Redis vs Memcached</span></div><p>When to reach for Redis vs Memcached and how to actually talk caching in a real interview.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=h30k7YixrMo" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Why and How Is Single-Threaded Redis Fast? | Redis Internals</b><div class="ch">Arpit Bhayani <span class="dur">· ~15 min · Redis internals</span></div><p>The mental model behind one thread saturating the network — groundwork for Redis Cluster.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=VLTPqImLapM" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Can Redis be used as a Primary database?</b><div class="ch">Hussein Nasser <span class="dur">· ~20 min · persistence &amp; consistency</span></div><p>Pushes on Redis durability, persistence, and the consistency limits from §2.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA Chapter 6 (Partitioning) — the general theory behind Redis Cluster's hash slots and how sharded systems rebalance. And the <a href="https://github.com/donnemartin/system-design-primer#cache" target="_blank" rel="noopener">System Design Primer — Cache section</a> for a crisp tour of cache-aside, write-through/back, and CDN caching (free).</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/07-messaging-systems.html">Next module →</a>
+    </div>
+
+    <footer>Module 6 of 24 · System Design Mastery · Phase 2 · Data at Scale — you can now place, invalidate, and tier a cache from browser to edge to Redis Cluster. Next up: Module 7 — Messaging Systems &amp; Async Processing (queues, Kafka, and the fan-out you just leaned on).</footer>
+  </div>
+</body>
+</html>

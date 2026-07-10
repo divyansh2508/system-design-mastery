@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloud Architecture (AWS) | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#e64980; --hue-soft:rgba(230,73,128,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#e64980;--hue-soft:rgba(230,73,128,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#e64980;--hue-soft:rgba(230,73,128,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#e64980;--hue-soft:rgba(230,73,128,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Phase 5 · Cloud &amp; DevOps</span><span class="sep">·</span><span>Module 17</span><span class="sep">·</span><span>Weeks 9–10 · ~13 hrs</span></p>
+      <h1>Cloud Architecture (AWS)</h1>
+      <p class="sub">Every design you've drawn so far — load balancers, caches, queues, sharded databases — has a concrete AWS service behind it; this module maps the boxes on your whiteboard to real infrastructure you can name, price, and defend in an interview.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#model">The AWS mental model</a></li>
+        <li><a href="#compute">Compute &amp; storage: EC2, ECS, Lambda, S3</a></li>
+        <li><a href="#data">Databases &amp; caching: RDS, ElastiCache</a></li>
+        <li><a href="#vpc">VPC: your private network</a></li>
+        <li><a href="#lb">Load balancing: ALB vs NLB</a></li>
+        <li><a href="#sqs">Decoupling with SQS</a></li>
+        <li><a href="#iac">Infrastructure as Code (Terraform)</a></li>
+        <li><a href="#cost">Cloud cost optimization</a></li>
+        <li><a href="#instagram">Worked example: Design Instagram</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="model">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>The AWS mental model</h2>
+      <p class="lead">The cloud is just <strong>someone else's data center, rented by the second, and driven by an API</strong>. AWS's value isn't the servers — it's that every piece of infrastructure you'd otherwise rack, wire, and babysit is now a managed service you provision in seconds and pay for only while it runs.</p>
+      <p>Before the service names blur together, anchor two geographic concepts that shape every availability and latency decision you'll make:</p>
+      <ul>
+        <li><strong>Region</strong> — a physical location (e.g. <code>us-east-1</code> in Virginia, <code>eu-west-1</code> in Ireland). You pick a region to be close to users and to satisfy data-residency rules. Data and traffic <em>between</em> regions costs money and crosses the public backbone.</li>
+        <li><strong>Availability Zone (AZ)</strong> — one or more isolated data centers <em>within</em> a region, on independent power and networking. AZs in a region are close enough for low-latency replication but far enough that one failing doesn't take the others down. <strong>The golden rule: deploy across at least two AZs.</strong> A single-AZ system is a single point of failure with extra steps.</li>
+      </ul>
+      <p>Everything else slots into four buckets, and every module you've done maps onto them: <strong>compute</strong> (run code), <strong>storage</strong> (keep bytes), <strong>networking</strong> (connect and protect), and <strong>managed services</strong> (databases, queues, caches you don't operate yourself). Your job as an architect is to pick the right service in each bucket for the requirements — the same trade-off lens from Module 1, now with a price tag attached.</p>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>AWS runs on a <strong>shared responsibility model</strong>: AWS secures the cloud (hardware, the hypervisor, the physical network); <em>you</em> secure what's <em>in</em> it (your data, your IAM permissions, your security-group rules, patching your own instances). Interviewers love the candidate who knows where that line sits.</p>
+      </div>
+    </section>
+
+    <section id="compute">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>Compute &amp; storage: EC2, ECS, Lambda, S3</h2>
+      <p>Three compute services form a ladder from "most control, most ops" to "zero servers, zero ops." You choose by how much operational burden you want to trade for control and cost predictability.</p>
+
+      <h3>EC2 — virtual machines</h3>
+      <p><strong>Elastic Compute Cloud</strong> gives you a raw virtual server: pick an instance type (a family + size like <code>m6i.large</code> — general-purpose; <code>c7g</code> — compute-optimized; <code>r6i</code> — memory-optimized), boot it from an <strong>AMI</strong> (a machine image), attach an <strong>EBS</strong> volume for persistent disk, and it's yours to configure. You own the OS, the patching, the runtime. To scale, you put EC2 instances behind a load balancer in an <strong>Auto Scaling Group</strong> that adds or removes instances based on a metric like CPU or request count. EC2 is the fallback for anything that doesn't fit a higher-level service: legacy apps, specialized runtimes, GPU workloads.</p>
+
+      <h3>ECS / Fargate — containers</h3>
+      <p><strong>Elastic Container Service</strong> runs Docker containers for you. You define a <em>task</em> (one or more containers + CPU/memory) and a <em>service</em> (how many copies to keep running behind a load balancer). Two launch modes: on <strong>EC2</strong> you manage the underlying instances; on <strong>Fargate</strong> you don't — you just say "run this container with 0.5 vCPU and 1 GB" and AWS finds the capacity. Fargate is the sweet spot for most microservices: containerized portability without babysitting servers. (Full container depth is Module 18 — Kubernetes.)</p>
+
+      <h3>Lambda — functions (serverless)</h3>
+      <p><strong>Lambda</strong> runs a function in response to an event — an HTTP request via API Gateway, a new object in S3, a message on a queue — and you pay per millisecond of execution, nothing while idle. No servers, automatic scaling from zero to thousands of concurrent invocations. The trade-offs that matter in interviews: a <strong>cold start</strong> (first invocation after idle spins up a runtime, adding latency), a <strong>15-minute max</strong> execution time, and statelessness (no local disk you can rely on between calls). Perfect for spiky, event-driven, short-lived work; wrong for long-running or latency-critical hot paths.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Choose</th><th>When</th><th>You manage</th><th>Scaling</th></tr></thead>
+          <tbody>
+            <tr><td>EC2</td><td>Full control, legacy, GPU, custom OS</td><td>OS, patching, capacity</td><td>Auto Scaling Group (minutes)</td></tr>
+            <tr><td>ECS / Fargate</td><td>Containerized services, steady traffic</td><td>Container image only (Fargate)</td><td>Service desired-count (seconds)</td></tr>
+            <tr><td>Lambda</td><td>Event-driven, spiky, glue code</td><td>Just the function code</td><td>Automatic, per-request (instant)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>S3 — object storage</h3>
+      <p><strong>Simple Storage Service</strong> is where the internet keeps its files. You put <em>objects</em> (any blob — an image, a video, a backup, a log) into <em>buckets</em>, addressed by key. It is effectively infinite, offers <strong>eleven nines of durability</strong> (99.999999999% — it replicates every object across multiple AZs), and is dirt cheap per GB. S3 is <em>not</em> a filesystem and not a database — it's a key→blob store with HTTP access. Core uses that show up in designs: storing user uploads, serving static website assets, holding data-lake/analytics files, and backups. Two features worth naming: <strong>storage classes</strong> (Standard for hot data, Infrequent Access and Glacier for cold/archival — cheaper storage, pricier retrieval) and <strong>presigned URLs</strong> (a time-limited signed link that lets a client upload or download directly to S3 without routing bytes through your servers — the standard pattern for photo/video uploads).</p>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>When a design involves large media (photos, video), the senior move is: <strong>store the blob in S3, put CloudFront (the CDN) in front, and keep only the metadata + S3 key in your database.</strong> Never stream big files through your app servers — let clients hit S3/CloudFront directly via presigned URLs. You'll use exactly this in the Instagram case study below.</p>
+      </div>
+    </section>
+
+    <section id="data">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Databases &amp; caching: RDS, ElastiCache</h2>
+      <p>You learned the <em>concepts</em> of databases and caches in Phase 2. AWS gives you managed versions so you're not hand-rolling replication and failover on EC2.</p>
+
+      <h3>RDS — managed relational databases</h3>
+      <p><strong>Relational Database Service</strong> runs PostgreSQL, MySQL, MariaDB, SQL Server, or Oracle and handles the operational grind: backups, patching, and — critically — <strong>Multi-AZ</strong> and <strong>read replicas</strong>. Multi-AZ keeps a synchronous standby in a second AZ and fails over automatically if the primary dies (that's your <em>availability</em> lever). Read replicas are asynchronous copies you point read traffic at to scale reads (your <em>read-scaling</em> lever from Module 4). <strong>Aurora</strong> is AWS's cloud-native reimplementation of Postgres/MySQL — it separates compute from a distributed storage layer replicated 6 ways across 3 AZs, giving better throughput and near-instant replicas. Reach for RDS/Aurora whenever you need real transactions, joins, and strong consistency.</p>
+      <p>When the access pattern is key-based, massive-scale, and doesn't need joins, the AWS answer is <strong>DynamoDB</strong> — a managed, horizontally partitioned NoSQL store with single-digit-millisecond reads and effectively unlimited scale. It's the natural fit for high-write feed metadata, session stores, and anything you'd otherwise shard by hand.</p>
+
+      <h3>ElastiCache — managed Redis / Memcached</h3>
+      <p><strong>ElastiCache</strong> is a managed in-memory cache (Redis or Memcached) that sits between your app and the database to absorb the hot read path. Everything from Module 5 applies: cache-aside, TTLs, eviction. In an AWS design you'll name ElastiCache (Redis) for <strong>session storage</strong>, <strong>read-through caching</strong> of expensive queries, <strong>rate limiting</strong>, and <strong>leaderboards / feeds</strong> (Redis sorted sets). The one-line justification interviewers want: <em>"reads dominate ~100:1, so I put ElastiCache in front of RDS to keep p99 low and shield the database."</em></p>
+      <div class="callout">
+        <p class="lbl">The pattern to internalize</p>
+        <p><strong>Client → CloudFront (CDN) → ALB → app (ECS/Lambda) → ElastiCache → RDS/DynamoDB</strong>, with big blobs living in S3. Nearly every read-heavy web system you design on AWS is a variation of this spine. Learn it cold and you always have a defensible starting diagram.</p>
+      </div>
+    </section>
+
+    <section id="vpc">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>VPC: your private network</h2>
+      <p>A <strong>Virtual Private Cloud</strong> is your own isolated slice of the AWS network — a private IP space where your resources live, invisible to the internet until you deliberately open a door. Understanding it separates candidates who "use AWS" from those who can architect it securely.</p>
+
+      <h3>The building blocks</h3>
+      <ul>
+        <li><strong>CIDR block</strong> — the VPC's private IP range, e.g. <code>10.0.0.0/16</code> (65,536 addresses). Everything inside gets an IP from here.</li>
+        <li><strong>Subnets</strong> — you carve the VPC into subnets, each pinned to <em>one AZ</em>. A <strong>public subnet</strong> has a route to an <strong>Internet Gateway (IGW)</strong>, so resources in it can be reached from the internet (your load balancer, a bastion). A <strong>private subnet</strong> has no such route — databases and app servers live here, unreachable from outside.</li>
+        <li><strong>NAT Gateway</strong> — private-subnet resources often still need <em>outbound</em> internet (to pull packages, call an external API). A NAT Gateway lives in a <strong>public</strong> subnet and lets private instances make <strong>outbound-only</strong> connections — the internet can never initiate a connection back in. It's the one-way valve for private egress.</li>
+      </ul>
+
+      <pre><code><span class="cmt"># A textbook 2-AZ VPC (10.0.0.0/16)</span>
+                         Internet
+                            │
+                      [Internet GW]
+              ┌─────────────┴─────────────┐
+        AZ-a  │                           │  AZ-b
+   ┌──────────┴──────────┐     ┌──────────┴──────────┐
+   │ PUBLIC 10.0.1.0/24  │     │ PUBLIC 10.0.2.0/24  │
+   │  ALB node · NAT GW  │     │  ALB node · NAT GW  │
+   ├─────────────────────┤     ├─────────────────────┤
+   │ PRIVATE 10.0.11.0/24│     │ PRIVATE 10.0.12.0/24│
+   │  app (ECS) + RDS    │     │  app (ECS) + RDS    │
+   └─────────────────────┘     └─────────────────────┘
+   outbound from private ──▶ NAT GW ──▶ IGW ──▶ internet</code></pre>
+
+      <h3>Two firewalls: security groups vs NACLs</h3>
+      <p>AWS gives you two layers of traffic control, and mixing them up is a classic interview stumble. The distinction is <strong>stateful vs stateless</strong> and <strong>where they attach</strong>:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>&nbsp;</th><th>Security Group</th><th>Network ACL (NACL)</th></tr></thead>
+          <tbody>
+            <tr><td>Attaches to</td><td>The instance / ENI</td><td>The whole subnet</td></tr>
+            <tr><td>State</td><td><strong>Stateful</strong> — reply traffic auto-allowed</td><td><strong>Stateless</strong> — must allow return traffic explicitly</td></tr>
+            <tr><td>Rules</td><td>Allow rules only</td><td>Allow <em>and</em> deny rules</td></tr>
+            <tr><td>Evaluation</td><td>All rules evaluated together</td><td>Numbered, first match wins</td></tr>
+            <tr><td>Default</td><td>Deny all inbound, allow all outbound</td><td>Default NACL allows all both ways</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>In practice: <strong>security groups are your primary tool</strong> — they're stateful, so if you allow inbound port 443, the response flows back automatically. You chain them by reference: the ALB's SG allows 443 from the internet; the app's SG allows traffic only <em>from the ALB's SG</em>; the database's SG allows 5432 only <em>from the app's SG</em>. That reference-chaining is the clean, least-privilege pattern. NACLs are the coarse, subnet-wide backstop — most teams leave them permissive and do the real work in security groups.</p>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>Say "<strong>stateful</strong>" for security groups and "<strong>stateless</strong>" for NACLs and you'll sound like you've operated AWS. The follow-up trap: "if a security group allows inbound, do you need an outbound rule for the reply?" — <strong>No</strong>, because it's stateful. For a NACL, <strong>yes</strong>, you'd need to allow the ephemeral return ports.</p>
+      </div>
+    </section>
+
+    <section id="lb">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Load balancing: ALB vs NLB</h2>
+      <p>Module 2 taught load balancing as a concept; AWS's <strong>Elastic Load Balancing</strong> offers two you must be able to choose between, and the choice is exactly the <strong>Layer 4 vs Layer 7</strong> distinction from the OSI model.</p>
+      <ul>
+        <li><strong>Application Load Balancer (ALB)</strong> — operates at <strong>Layer 7</strong> (HTTP/HTTPS). It reads the actual request: the URL path, host header, HTTP method, cookies. That lets it do <em>content-based routing</em> — send <code>/api/*</code> to one target group and <code>/images/*</code> to another, terminate TLS, do sticky sessions, health-check on an HTTP path. It is the default choice for web apps and microservices.</li>
+        <li><strong>Network Load Balancer (NLB)</strong> — operates at <strong>Layer 4</strong> (TCP/UDP). It doesn't open the packet; it just forwards connections by IP and port at extreme speed. That buys you <em>ultra-low latency</em>, the ability to handle millions of connections and sudden spikes, a <strong>static IP per AZ</strong>, and support for non-HTTP protocols (raw TCP, UDP, TLS passthrough). It preserves the client's source IP.</li>
+      </ul>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Dimension</th><th>ALB (L7)</th><th>NLB (L4)</th></tr></thead>
+          <tbody>
+            <tr><td>OSI layer</td><td>7 — application (HTTP)</td><td>4 — transport (TCP/UDP)</td></tr>
+            <tr><td>Routes on</td><td>Path, host, headers, method</td><td>IP + port only</td></tr>
+            <tr><td>Latency</td><td>Higher (inspects request)</td><td>Lowest (just forwards)</td></tr>
+            <tr><td>Static IP</td><td>No (DNS name)</td><td>Yes, per AZ</td></tr>
+            <tr><td>Protocols</td><td>HTTP, HTTPS, gRPC, WebSocket</td><td>TCP, UDP, TLS passthrough</td></tr>
+            <tr><td>Reach for it when</td><td>Web apps, microservice routing</td><td>Extreme throughput, non-HTTP, static IP</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The default heuristic: <strong>use an ALB unless you have a specific reason to drop to an NLB</strong> — you need raw TCP/UDP, you're chasing every millisecond of latency, or you need a fixed IP to hand a partner to allow-list. Both distribute across AZs and integrate with Auto Scaling and target groups.</p>
+      <div class="callout tool">
+        <p class="lbl">Play with it → your tool</p>
+        <p>Open the <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer Playground</a> and drive traffic through different algorithms — round-robin, least-connections — then watch what happens when a target goes unhealthy. It's the same distribution logic an ALB runs, made visible.</p>
+      </div>
+    </section>
+
+    <section id="sqs">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>Decoupling with SQS</h2>
+      <p><strong>Simple Queue Service</strong> is AWS's managed message queue — the async-decoupling pattern from Module 7, as a service you never operate. A producer drops a message; a consumer pulls it when ready. That one hop of indirection buys you three things every scalable system needs: <strong>spike absorption</strong> (the queue holds a burst so a sudden 10× doesn't crush your workers), <strong>decoupling</strong> (producer and consumer scale and fail independently), and <strong>resilience</strong> (if a worker dies mid-task the message reappears and another worker retries).</p>
+      <p>The mechanics worth naming in an interview:</p>
+      <ul>
+        <li><strong>Standard vs FIFO</strong> — Standard queues are near-infinite throughput with <em>at-least-once</em> delivery and best-effort ordering (design consumers to be <strong>idempotent</strong>). FIFO queues guarantee exactly-once processing and strict order, at lower throughput. Default to Standard unless order truly matters.</li>
+        <li><strong>Visibility timeout</strong> — when a consumer picks up a message it becomes invisible to others for N seconds; if the consumer finishes and deletes it, done — if it crashes, the message reappears for retry. This is what makes the queue self-healing.</li>
+        <li><strong>Dead-letter queue (DLQ)</strong> — after a message fails processing K times, route it to a separate DLQ so one poison message doesn't block the line, and you can inspect failures later.</li>
+        <li><strong>SQS vs SNS</strong> — SQS is one queue, pulled by workers (point-to-point). <strong>SNS</strong> is pub/sub — one publish fans out to many subscribers. The classic combo is <strong>SNS → many SQS queues</strong> (fan-out): publish an event once, and several independent services each get their own copy to process.</li>
+      </ul>
+      <pre><code><span class="cmt"># Async write path — user uploads a photo, response returns fast</span>
+client ─▶ ALB ─▶ app: store original in S3, write metadata row
+                     │
+                     └─▶ SQS ("process-image")
+                              │
+              ┌───────────────┼────────────────┐
+        [worker] resize     [worker] ML tag    [worker] update feeds
+        thumbnails→S3       (labels)           (fan-out to followers)
+
+<span class="cmt">The user got a 201 in ~50 ms; the heavy work drains from the queue.</span></code></pre>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>The moment you hear "this step is slow / spiky / can happen later" — <strong>image processing, sending email, generating a feed, transcoding video</strong> — say "I'll do that <strong>asynchronously via SQS</strong> so the user-facing request stays fast." Then mention idempotent consumers and a DLQ, and you've shown production instinct, not just theory.</p>
+      </div>
+    </section>
+
+    <section id="iac">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Infrastructure as Code (Terraform)</h2>
+      <p>Clicking around the AWS console to build infrastructure is fine for learning and fatal for production — it's unrepeatable, undocumented, and impossible to review. <strong>Infrastructure as Code (IaC)</strong> fixes this: you <em>declare</em> your infrastructure in text files, version them in Git, and a tool makes reality match the file. <strong>Terraform</strong> (by HashiCorp) is the cloud-agnostic standard; AWS's native equivalent is <strong>CloudFormation</strong>.</p>
+      <p>Terraform is <strong>declarative</strong> — you describe the desired end state, not the steps. You write resources in HCL, run <code>terraform plan</code> to see a diff of what will change, then <code>terraform apply</code> to make it so:</p>
+      <pre><code><span class="cmt"># main.tf — declare an S3 bucket and a security group</span>
+provider "aws" {
+  region = "us-east-1"
+}
+
+resource "aws_s3_bucket" "media" {
+  bucket = "myapp-user-media-prod"
+}
+
+resource "aws_security_group" "web" {
+  name        = "web-sg"
+  description = "allow HTTPS in"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]   <span class="cmt"># open 443 to the world</span>
+  }
+}
+
+<span class="cmt"># workflow:  terraform init  →  plan (preview diff)  →  apply</span></code></pre>
+      <p>Three concepts make Terraform click:</p>
+      <ul>
+        <li><strong>Providers</strong> — plugins that know how to talk to a platform (AWS, GCP, Cloudflare). One config, many clouds.</li>
+        <li><strong>State</strong> — Terraform records what it has created in a <em>state file</em> so it can compute the diff between "what exists" and "what you declared." In a team you store this remotely (an S3 bucket + DynamoDB lock) so everyone shares one source of truth and two people can't apply at once.</li>
+        <li><strong>Modules</strong> — reusable, parameterized bundles of resources (a "VPC module," a "service module") so you don't copy-paste a network layout across five environments.</li>
+      </ul>
+      <div class="callout tip">
+        <p class="lbl">Interview tip</p>
+        <p>The single most important IaC idea to voice: infrastructure changes go through the <strong>same pull-request review as code</strong> — <code>plan</code> shows the diff, a human approves, CI runs <code>apply</code>. That makes infra <strong>reviewable, repeatable, and auditable</strong>, and lets you rebuild an entire environment from scratch. Mishandled remote <strong>state</strong> (no locking, committed to Git with secrets) is the most common real-world Terraform failure — name it and you sound experienced.</p>
+      </div>
+    </section>
+
+    <section id="cost">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Cloud cost optimization</h2>
+      <p>In the cloud, <strong>architecture decisions are cost decisions</strong>. Elasticity cuts both ways: you can scale down and save, or leave things running and bleed money. Senior engineers reason about the bill, and interviewers increasingly probe it. Start with the compute pricing models — the biggest lever:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Model</th><th>Discount vs on-demand</th><th>Use for</th></tr></thead>
+          <tbody>
+            <tr><td>On-Demand</td><td class="num">baseline</td><td>Spiky, unpredictable, short-lived</td></tr>
+            <tr><td>Savings Plans / Reserved</td><td class="num">up to ~72%</td><td>Steady baseline load (1–3 yr commit)</td></tr>
+            <tr><td>Spot Instances</td><td class="num">up to ~90%</td><td>Fault-tolerant, interruptible batch/workers</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The playbook for keeping a bill sane:</p>
+      <ul>
+        <li><strong>Right-size and auto-scale.</strong> The cheapest server is the one you turned off. Match instance size to real utilization and let Auto Scaling shrink capacity at night — don't pay peak 24/7.</li>
+        <li><strong>Commit to your baseline, burst on-demand.</strong> Cover the steady floor of load with Savings Plans; handle spikes with on-demand; run interruptible workers on Spot.</li>
+        <li><strong>Tier your storage.</strong> Use S3 lifecycle rules to move cold objects to Infrequent Access and Glacier automatically. Old logs and backups don't belong in hot Standard storage.</li>
+        <li><strong>Watch data-transfer costs.</strong> Data <em>into</em> AWS is free; data <em>out</em> to the internet and <em>across regions/AZs</em> is not. A CDN (CloudFront) in front of S3 both speeds delivery and cuts egress. Cross-AZ chatter adds up — a real, invisible line item.</li>
+        <li><strong>Prefer serverless for spiky, low-volume work.</strong> Lambda + S3 + DynamoDB scale to zero — you pay nothing when idle, which beats a permanently-running EC2 fleet for bursty workloads.</li>
+      </ul>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>When you add a component in a design, add a sentence on its cost posture: <em>"CloudFront in front of S3 cuts egress and offloads reads,"</em> or <em>"these workers are interruptible, so Spot."</em> Naming the money trade-off alongside the latency/availability one is a senior signal that costs you nothing to say.</p>
+      </div>
+    </section>
+
+    <section id="instagram">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Worked example: Design Instagram</h2>
+      <p>Let's run the Module 1 five-step framework on a classic — <em>"Design Instagram"</em> — and pin every box to a concrete AWS service so the abstract becomes real. Read it once, then do it yourself in the reps below.</p>
+
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>Scope <span class="ft">~5 min</span></b><p>Functional: upload a photo (with caption); view a home feed of photos from people you follow; follow/unfollow; like &amp; comment. Non-functional: <em>extremely</em> read-heavy, very high availability, low-latency feed, durable media (never lose a photo), eventual consistency is fine (a new post appearing a few seconds late is OK). Out of scope (say it): DMs, Stories, search, ads.</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>Estimate <span class="ft">~5 min</span></b><p>Size the load to justify choices — reads vs writes and media storage are what drive the architecture.</p></div></div>
+        <div class="fstep"><span class="fn">3</span><div><b>Interface <span class="ft">~5 min</span></b><p>A small REST surface — upload, feed, follow — plus the presigned-URL trick so media never flows through app servers.</p></div></div>
+        <div class="fstep"><span class="fn">4</span><div><b>High-level design <span class="ft">~10 min</span></b><p>Lay the AWS spine — CloudFront, S3, ALB, ECS, ElastiCache, DynamoDB/RDS — and trace an upload and a feed read end-to-end.</p></div></div>
+        <div class="fstep"><span class="fn">5</span><div><b>Deep-dive &amp; scale <span class="ft">~15 min</span></b><p>The feed. Fan-out on write vs read, the celebrity problem, and the hybrid that real systems use.</p></div></div>
+      </div>
+
+      <h3>② Estimate</h3>
+      <pre><code>500M DAU
+uploads: 100M photos/day  ÷ 100k  ≈ 1,000 writes/s   <span class="cmt">peak ×3 ≈ 3k/s</span>
+feed reads: each user opens feed ~10×, ~20 photos each
+            500M × ~100 photo-reads/day = 50B/day
+            50B ÷ 100k ≈ 500,000 reads/s               <span class="cmt">read:write ≈ 500:1 — brutally read-heavy</span>
+media: 100M photos/day × ~1.5 MB (multi-resolution)
+       ≈ 150 TB/day → petabytes/year                   <span class="cmt">→ S3, tiered; never a database</span></code></pre>
+      <p>The estimate already dictates the design: <strong>500:1 reads</strong> screams CDN + cache + fan-out; <strong>petabytes of media</strong> means blobs live in S3 with only metadata in the database. No sharding decision is guessed — the numbers force each one.</p>
+
+      <h3>③ Interface</h3>
+      <pre><code><span class="cmt"># Get a presigned S3 URL, upload the bytes directly to S3, then commit metadata</span>
+POST /api/v1/media/presign   → 200 { "uploadUrl": "https://s3...", "key": "..." }
+PUT  &lt;uploadUrl&gt;              <span class="cmt"># client → S3 directly, bytes never touch our servers</span>
+POST /api/v1/posts           body: { "s3Key": "...", "caption": "..." } → 201
+
+<span class="cmt"># Read the home feed (the hot path — must be fast)</span>
+GET  /api/v1/feed?cursor=&lt;ts&gt;&amp;limit=20  → 200 { "posts": [...], "next": "&lt;ts&gt;" }
+
+POST /api/v1/follow          body: { "targetUserId": "..." } → 204</code></pre>
+
+      <h3>④ High-level design on AWS</h3>
+      <pre><code>                         ┌──────────────┐
+        photo bytes ─────▶│  S3 (media)  │◀──── CloudFront (CDN) ────▶ viewers
+        (presigned PUT)   └──────────────┘         serves images at the edge
+                                 ▲
+ client ─▶ CloudFront ─▶ ALB ─▶ ECS/Fargate app ──▶ ElastiCache (feed cache, hot)
+                                    │                      │ miss
+                                    │                      ▼
+                                    ├──▶ DynamoDB: posts, follows, feed entries
+                                    │
+                                    └──▶ SQS ─▶ fan-out workers (build followers' feeds)</code></pre>
+      <p><strong>Upload path:</strong> client asks the app for a presigned URL → <code>PUT</code>s the photo straight to <strong>S3</strong> (bytes never touch our servers) → app writes a post row to <strong>DynamoDB</strong> → drops a message on <strong>SQS</strong> for async work. <strong>Read path:</strong> the feed request hits <strong>CloudFront</strong> → <strong>ALB</strong> → <strong>ECS</strong> app → serve the precomputed feed from <strong>ElastiCache</strong>; the image URLs point at CloudFront, so the actual JPEGs are served from the edge, not our backend. Metadata is small and lives in DynamoDB; the multi-petabyte media lives in S3.</p>
+
+      <h3>⑤ Deep-dive: how is the feed built?</h3>
+      <p>This is the heart of Instagram, and a perfect trade-off discussion. When you open the app, how does the server produce your feed quickly out of 500,000 reads/s?</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Strategy</th><th>How</th><th>Trade-off</th></tr></thead>
+          <tbody>
+            <tr><td>Fan-out on read (pull)</td><td>At read time, query everyone you follow and merge</td><td>Cheap writes; <em>slow, expensive reads</em> — bad at 500:1</td></tr>
+            <tr><td>Fan-out on write (push)</td><td>On post, push the post ID into each follower's precomputed feed</td><td>Instant reads; but a celebrity post = millions of writes</td></tr>
+            <tr><td>Hybrid (what real systems do)</td><td>Push for normal users; pull for celebrities, merged at read</td><td>Best of both; more moving parts</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The winning answer names the <strong>celebrity problem</strong>: pure push breaks when one user has 100M followers (one post → 100M feed writes). So the hybrid: <strong>fan-out on write</strong> for ordinary accounts — when you post, SQS workers push your post ID into your followers' feed lists in <strong>ElastiCache/DynamoDB</strong>, so their read is a single fast lookup — but for celebrities, <strong>skip the fan-out</strong> and merge their recent posts in at read time. Then scale the pieces: <strong>CloudFront</strong> absorbs the media reads globally, <strong>ElastiCache</strong> holds hot feeds, <strong>DynamoDB</strong> partitions metadata by user so writes spread, and <strong>SQS</strong> smooths the fan-out spikes. Every move is triggered by the estimate — not guessed.</p>
+      <div class="callout">
+        <p class="lbl">Notice the reuse</p>
+        <p>Nothing here is new — it's Module 5's caching, Module 7's queues, Module 4's sharding, and Module 6's CDN, now wearing AWS names (ElastiCache, SQS, DynamoDB, CloudFront). That's the whole point of this module: you already know the architecture; now you can <strong>provision and price it</strong>.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">10 &nbsp;</span>Your reps this week</h2>
+      <p>Reading is not learning — reps are. Do these, in order:</p>
+      <ol>
+        <li><strong>Whiteboard Instagram on AWS yourself.</strong> Open <a href="https://excalidraw.com" target="_blank" rel="noopener">Excalidraw</a> (free) and design it end-to-end using the 5-step framework, out loud, timed to ~35 minutes — <em>before</em> re-reading Section 09. Force yourself to name a concrete AWS service for every box (which load balancer? where's the cache? what stores the photos?).</li>
+        <li><strong>Label a reference architecture.</strong> Draw the VPC from Section 04 (2 AZs, public/private subnets, IGW, NAT) and annotate which security group allows what — ALB SG → app SG → database SG. If you can't chain the rules, re-read the firewall table.</li>
+        <li><strong>Run a mock interview.</strong> Paste the rig below into me (or any LLM) and defend your design against pushback:</li>
+      </ol>
+      <div class="rig">You are a senior staff engineer at AWS running a system design interview. Give me the prompt: "Design Instagram." Then act as the interviewer — let me drive, ask clarifying and probing questions, and push back hard on anything hand-wavy. Specifically probe: which compute (EC2 vs ECS vs Lambda) and why; where photos are stored and how they reach users; ALB vs NLB for the front door; how the home feed is built (make me defend fan-out on write vs read and handle the celebrity case); how I keep it inside a VPC securely (subnets, security groups); and one question on cost. Do NOT give me the answer or lead me — keep asking "why?". After ~35 minutes (or when I say "done"), grade me 1–5 on each of: requirements gathering, capacity estimation, API design, high-level design, deep-dives &amp; trade-offs, and communication — with specific feedback and what a strong candidate would have added.</div>
+        <ol start="4">
+        <li><strong>Explain it back.</strong> Teach the CloudFront → ALB → app → ElastiCache → database spine to a rubber duck (or me) without notes, and say <em>why</em> each layer earns its place. Gaps you can't explain are gaps you don't have yet.</li>
+        <li><strong>Flashcards</strong> (make these 5, review at week's end): <em>Security group vs NACL — which is stateful, and at what level does each attach? · ALB vs NLB — which layer, and when do you pick NLB? · Why does a NAT gateway sit in a public subnet, and what direction of traffic does it allow? · Fan-out on write vs read — which suits Instagram's 500:1 reads, and what breaks it? · Name the three EC2 pricing models and which workload each fits.</em></li>
+      </ol>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">11 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Watch the EC2/S3 and VPC ones <em>before</em> your reps; treat the long freeCodeCamp and Terraform courses as references to dip into by chapter, not cover-to-cover.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=t5Ee67IGfSc" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Beginners Guide to AWS EC2</b><div class="ch">Johnny Chivers <span class="dur">· ~19 min · compute</span></div><p>Clear, hands-on tour of EC2 — instances, AMIs, the console flow. Start here for compute.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=SJmGzLLJDuA" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Amazon S3 Bucket Explained in 5 Minutes | AWS for Beginners</b><div class="ch">SKSecOps <span class="dur">· ~5 min · storage</span></div><p>Fast primer on buckets, objects, and durability — the storage half of Section 02.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=g2JOHLHh4rI" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>AWS VPC Beginner to Pro — Virtual Private Cloud Tutorial</b><div class="ch">freeCodeCamp.org <span class="dur">· ~1 hr · networking (reference)</span></div><p>The definitive free VPC walkthrough — subnets, route tables, IGW, NAT, security. Dip in by chapter.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=aKMLgFVxZYk" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Load balancing in Layer 4 vs Layer 7 with HAPROXY Examples</b><div class="ch">Hussein Nasser <span class="dur">· ~9 min · load balancing</span></div><p>The exact L4-vs-L7 distinction behind NLB vs ALB, explained crisply. Watch before Section 05.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=wAwVOFf0Xq4" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Terraform for Beginners: AWS Infrastructure as Code</b><div class="ch">Telusko <span class="dur">· ~35 min · IaC</span></div><p>Approachable first pass at Terraform on AWS — providers, resources, plan/apply.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=7xngnjfIlK4" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Complete Terraform Course — From BEGINNER to PRO!</b><div class="ch">DevOps Directive <span class="dur">· ~2.5 hrs · IaC (deep-dive)</span></div><p>The thorough course — state, modules, remote backends. Bookmark and work through sections.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> DDIA Chapter 1 (reliability, scalability, maintainability) reframes every AWS choice above as an availability/scalability trade-off. For AWS-native architecture guidance, skim the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> sections on CDNs, load balancers, and asynchronism — they map one-to-one onto CloudFront, ELB, and SQS.</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/18-containers-kubernetes.html">Next module →</a>
+    </div>
+
+    <footer>Module 17 of 24 · System Design Mastery · Phase 5 — Cloud &amp; DevOps · Next up: Module 18 — Containers &amp; Kubernetes (from ECS tasks to orchestrating them at scale).</footer>
+  </div>
+</body>
+</html>

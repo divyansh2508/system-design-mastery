@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Postgres Indexing &amp; Replication — Sandbox Lab</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#0ca678; --hue-soft:rgba(12,166,120,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#28c39a;--hue-soft:rgba(40,195,154,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#0ca678;--hue-soft:rgba(12,166,120,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#28c39a;--hue-soft:rgba(40,195,154,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+  .ok{color:var(--teal);font-weight:600}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../../index.html">Home</a>
+      <a href="../../roadmap-dashboard.html">Roadmap</a>
+      <a href="../../modules/04-database-scaling.html">Module 3-4 notes</a>
+      <a href="../../tools/consistent-hashing.html">🔗 the simulator</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Sandbox Lab</span><span class="sep">·</span><span>Module 3-4 — Databases</span></p>
+      <h1>Postgres Indexing &amp; Replication</h1>
+      <p class="sub">Spin up a real Postgres <strong>primary + streaming read-replica</strong> with Docker, watch a sequential scan turn into an index scan, and prove that writes on the primary appear on the replica — the two moves that scale every read-heavy database.</p>
+    </header>
+
+    <div class="callout tip">
+      <p class="lbl">Prerequisites</p>
+      <p><strong>Docker Desktop must be running</strong> (check the whale icon / <code>docker info</code> succeeds). Then open a terminal and <code>cd</code> into this folder — every command below is run from <code>sandboxes/02-postgres-replication/</code>, right next to the <code>docker-compose.yml</code>.</p>
+    </div>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this lab</h2>
+      <ol>
+        <li><a href="#build">What you'll build</a></li>
+        <li><a href="#stack">The stack</a></li>
+        <li><a href="#up">Bring it up</a></li>
+        <li><a href="#exercises">The exercises</a></li>
+        <li><a href="#teardown">Teardown</a></li>
+        <li><a href="#taught">What this taught</a></li>
+      </ol>
+    </nav>
+
+    <section id="build">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>What you'll build</h2>
+      <p class="lead">Two Postgres containers wired into a <strong>streaming replication</strong> pair: a <strong>primary</strong> that takes writes and a <strong>read-replica</strong> that continuously replays the primary's write-ahead log (WAL). This is the exact pattern behind "add read replicas to scale reads" from the Module 3-4 notes.</p>
+      <p>There is <strong>no application code</strong> here — the whole topology is declared with a handful of Bitnami environment variables. You'll drive everything through <code>docker compose exec … psql</code>, so you're talking to real Postgres, not a mock.</p>
+      <pre><code>          writes                      streaming WAL
+  client ────────▶  ┌───────────────┐  ═══════════════▶  ┌───────────────┐
+                    │   PRIMARY     │                     │   REPLICA     │
+   reads ◀───────── │  (read/write) │                     │ (read-only)   │ ◀──── reads
+                    │  service:     │                     │  service:     │
+                    │   primary     │                     │   replica     │
+                    │  :5432 -> host│                     │  :5432 -> 5433│
+                    └───────────────┘                     └───────────────┘
+                     bitnami/postgresql:16                bitnami/postgresql:16
+                     REPLICATION_MODE=master              REPLICATION_MODE=slave
+                                                          MASTER_HOST=primary
+
+   • Writes (INSERT/UPDATE/DDL) go ONLY to the primary.
+   • The primary ships its WAL to the replica over the Docker network.
+   • The replica replays that WAL and serves read-only queries.
+   • CREATE INDEX on the primary also replicates — the replica speeds up too.</code></pre>
+    </section>
+
+    <section id="stack">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>The stack</h2>
+      <p>Here is the complete <code>docker-compose.yml</code> — a modern Compose file (no obsolete top-level <code>version:</code> key), with pinned image tags. Replication is set up <em>purely</em> through environment variables; the replica runs <code>pg_basebackup</code> from the primary on first boot, then streams the WAL forever after.</p>
+      <pre><code><span class="cmt"># Postgres streaming replication sandbox — one PRIMARY, one READ-REPLICA.</span>
+<span class="cmt"># Replication is configured entirely through Bitnami env vars; NO custom code.</span>
+
+services:
+  <span class="cmt"># PRIMARY — accepts writes and streams its WAL to every connected replica.</span>
+  primary:
+    image: docker.io/bitnami/postgresql:16
+    container_name: sd-pg-primary
+    ports:
+      - "5432:5432"                                   <span class="cmt"># optional host access for a GUI client</span>
+    environment:
+      - POSTGRESQL_REPLICATION_MODE=master
+      - POSTGRESQL_REPLICATION_USER=repl_user
+      - POSTGRESQL_REPLICATION_PASSWORD=repl_password
+      - POSTGRESQL_PASSWORD=postgres_password         <span class="cmt"># password for the `postgres` superuser</span>
+      - POSTGRESQL_DATABASE=labdb                     <span class="cmt"># a database to play in</span>
+    volumes:
+      - primary_data:/bitnami/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  <span class="cmt"># REPLICA — read-only hot standby; pulls the WAL stream from `primary`.</span>
+  replica:
+    image: docker.io/bitnami/postgresql:16
+    container_name: sd-pg-replica
+    depends_on:
+      primary:
+        condition: service_healthy
+    ports:
+      - "5433:5432"                                   <span class="cmt"># host 5433 -> replica's 5432</span>
+    environment:
+      - POSTGRESQL_REPLICATION_MODE=slave
+      - POSTGRESQL_REPLICATION_USER=repl_user
+      - POSTGRESQL_REPLICATION_PASSWORD=repl_password
+      - POSTGRESQL_MASTER_HOST=primary
+      - POSTGRESQL_MASTER_PORT_NUMBER=5432
+    volumes:
+      - replica_data:/bitnami/postgresql
+
+volumes:
+  primary_data:
+  replica_data:</code></pre>
+      <div class="callout">
+        <p class="lbl">Why the same replication creds on both sides</p>
+        <p>The replica authenticates to the primary as <code>repl_user</code> to open the WAL stream, so <code>POSTGRESQL_REPLICATION_USER</code> / <code>POSTGRESQL_REPLICATION_PASSWORD</code> must match on both services. <code>POSTGRESQL_MASTER_HOST=primary</code> resolves to the primary container by its Compose service name over the default network.</p>
+      </div>
+    </section>
+
+    <section id="up">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Bring it up</h2>
+      <p>Start both containers in the background:</p>
+      <pre><code>docker compose up -d</code></pre>
+      <p>Confirm both are up and the primary is healthy:</p>
+      <pre><code>docker compose ps</code></pre>
+      <p>Watch the replica finish its base backup and switch to streaming — you're looking for a line like <em>"database system is ready to accept read only connections"</em>:</p>
+      <pre><code>docker compose logs replica | grep -i "read only"</code></pre>
+      <p>The fastest proof it worked is to ask the primary who's connected as a replica — this should return <strong>one row</strong> whose <code>state</code> is <code>streaming</code>:</p>
+      <pre><code>docker compose exec primary \
+  psql -U postgres -d labdb -c "SELECT client_addr, state, sync_state FROM pg_stat_replication;"</code></pre>
+      <div class="callout tip">
+        <p class="lbl">If psql asks for a password</p>
+        <p>Local socket connections inside the container are trusted, so <code>psql -U postgres</code> normally just works. If you ever hit a prompt, the superuser password is <code>postgres_password</code> — or prefix the command with <code>-e PGPASSWORD=postgres_password</code>, e.g. <code>docker compose exec -e PGPASSWORD=postgres_password primary psql -U postgres -d labdb</code>.</p>
+      </div>
+    </section>
+
+    <section id="exercises">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>The exercises</h2>
+      <p>Four short exercises. Copy each block verbatim. Steps A, C and D run on the <strong>primary</strong>; step B runs on the <strong>replica</strong> to prove the data crossed over.</p>
+
+      <div class="framebox">
+        <div class="fstep"><span class="fn">A</span><div><b>Create a table &amp; bulk-insert 100k rows <span class="ft">on PRIMARY</span></b><p>Open a shell into the primary and generate a realistic events table.</p></div></div>
+        <div class="fstep"><span class="fn">B</span><div><b>Read the same rows <span class="ft">on REPLICA</span></b><p>Prove replication: the rows are already there, and writes are rejected.</p></div></div>
+        <div class="fstep"><span class="fn">C</span><div><b>Seq scan → index scan <span class="ft">on PRIMARY</span></b><p><code>EXPLAIN ANALYZE</code> before and after <code>CREATE INDEX</code>.</p></div></div>
+        <div class="fstep"><span class="fn">D</span><div><b>Measure replication lag <span class="ft">on PRIMARY</span></b><p>Read <code>pg_stat_replication</code> to see how far behind the replica is.</p></div></div>
+      </div>
+
+      <h3>Exercise A — create &amp; bulk-insert (PRIMARY)</h3>
+      <p>Drop into a <code>psql</code> session on the primary:</p>
+      <pre><code>docker compose exec primary psql -U postgres -d labdb</code></pre>
+      <p>Then paste this SQL. <code>generate_series</code> lets Postgres build all 100,000 rows server-side in one statement:</p>
+      <pre><code><span class="cmt">-- a simple analytics-style events table</span>
+CREATE TABLE events (
+  id          bigserial     PRIMARY KEY,
+  user_id     integer       NOT NULL,
+  event_type  text          NOT NULL,
+  payload     text,
+  created_at  timestamptz   NOT NULL DEFAULT now()
+);
+
+<span class="cmt">-- bulk-insert 100,000 rows of pseudo-random traffic</span>
+INSERT INTO events (user_id, event_type, payload)
+SELECT (random() * 10000)::int,
+       (ARRAY['click','view','purchase','signup','logout'])[(random() * 4)::int + 1],
+       md5(random()::text)
+FROM generate_series(1, 100000);
+
+SELECT count(*) FROM events;   <span class="cmt">-- expect: 100000</span></code></pre>
+      <p><strong>What to observe:</strong> the <code>count</code> is <code>100000</code>. Leave this row count in mind — you'll check for the exact same number on the replica next. Type <code>\q</code> to exit (or keep it open in a second terminal tab).</p>
+
+      <h3>Exercise B — read it back from the replica (REPLICA)</h3>
+      <p>Now open a session on the <em>replica</em> and run read queries. You never inserted anything here — the rows arrived over the WAL stream:</p>
+      <pre><code>docker compose exec replica psql -U postgres -d labdb</code></pre>
+      <pre><code><span class="cmt">-- the data is already here, streamed from the primary</span>
+SELECT count(*) FROM events;                 <span class="cmt">-- expect: 100000</span>
+SELECT id, user_id, event_type FROM events ORDER BY id LIMIT 5;
+
+<span class="cmt">-- confirm this really is a read-only standby:</span>
+INSERT INTO events (user_id, event_type) VALUES (1, 'nope');
+<span class="cmt">-- ERROR:  cannot execute INSERT in a read-only transaction</span></code></pre>
+      <p><strong>What to observe:</strong> the count matches the primary's <code>100000</code> — replication works. The <code>INSERT</code> is <strong>rejected</strong> with <em>"cannot execute INSERT in a read-only transaction"</em>, which is the whole point of a read-replica: it scales reads, and all writes must go to the primary. Exit with <code>\q</code>.</p>
+
+      <h3>Exercise C — watch a seq scan become an index scan (PRIMARY)</h3>
+      <p>Back on the primary. First, ask Postgres how it plans to find one user's events <em>before</em> any index exists:</p>
+      <pre><code>docker compose exec primary psql -U postgres -d labdb</code></pre>
+      <pre><code><span class="cmt">-- BEFORE the index: Postgres must scan every row</span>
+EXPLAIN ANALYZE
+SELECT * FROM events WHERE user_id = 4242;</code></pre>
+      <p>Look for <code>Seq Scan on events</code> and a large <code>rows</code> count / higher execution time — Postgres reads all 100k rows to find the handful that match. Now build an index on that column:</p>
+      <pre><code>CREATE INDEX idx_events_user_id ON events (user_id);</code></pre>
+      <p>Run the <em>exact same</em> query again:</p>
+      <pre><code><span class="cmt">-- AFTER the index: Postgres jumps straight to the matching rows</span>
+EXPLAIN ANALYZE
+SELECT * FROM events WHERE user_id = 4242;</code></pre>
+      <p><strong>What to observe:</strong> the plan flips from <code>Seq Scan</code> to a <code>Bitmap Index Scan</code> / <code>Index Scan</code> using <code>idx_events_user_id</code>, and the <em>actual time</em> drops sharply — the query no longer touches every row. This is the single highest-leverage database tuning move: index the columns you filter and join on.</p>
+      <div class="callout">
+        <p class="lbl">Bonus — the index replicates too</p>
+        <p><code>CREATE INDEX</code> is DDL, and DDL travels over the WAL just like data. Re-run the <code>EXPLAIN ANALYZE</code> from Exercise B on the <em>replica</em> and you'll see it use <code>idx_events_user_id</code> as well — you tuned both databases with one statement.</p>
+      </div>
+
+      <h3>Exercise D — measure replication lag (PRIMARY)</h3>
+      <p>The primary tracks every attached replica in <code>pg_stat_replication</code>. Run this on the primary:</p>
+      <pre><code>docker compose exec primary \
+  psql -U postgres -d labdb -c "SELECT * FROM pg_stat_replication;"</code></pre>
+      <p>For a readable lag view, compute the byte distance between what the primary has <em>sent</em> and what the replica has <em>replayed</em>:</p>
+      <pre><code>docker compose exec primary psql -U postgres -d labdb -c "
+SELECT client_addr,
+       state,
+       sync_state,
+       pg_wal_lsn_diff(sent_lsn, replay_lsn) AS replay_lag_bytes
+FROM pg_stat_replication;"</code></pre>
+      <p><strong>What to observe:</strong> one row, <code>state = streaming</code>, and <code>replay_lag_bytes</code> at or near <code>0</code> — the replica is caught up. To <em>see</em> lag appear, run the 100k-row <code>INSERT</code> from Exercise A again on the primary and immediately re-run this query: the byte gap briefly jumps, then settles back to ~0 as the replica catches up. That transient gap is <strong>replication lag</strong> — the reason read-replicas give you <em>eventual</em>, not strong, consistency.</p>
+    </section>
+
+    <section id="teardown">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>Teardown</h2>
+      <p>Stop and remove both containers <em>and</em> their data volumes so you start clean next time:</p>
+      <pre><code>docker compose down -v</code></pre>
+      <p><strong>What to observe:</strong> Compose removes the containers, the default network, and the named volumes (<code>primary_data</code>, <code>replica_data</code>). Omit the <code>-v</code> if you want to keep the data and restart the same cluster later with <code>docker compose up -d</code>.</p>
+    </section>
+
+    <section id="taught">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>What this taught</h2>
+      <ul>
+        <li><strong>Indexing</strong> turns an O(n) sequential scan into a targeted index lookup — you saw the query plan change and the time drop, live.</li>
+        <li><strong>Streaming replication</strong> ships the primary's WAL to a read-only replica: writes go to one node, reads fan out across replicas. That's how you scale a read-heavy workload without sharding.</li>
+        <li><strong>Replication lag</strong> is real and measurable in <code>pg_stat_replication</code>. A replica is <em>eventually</em> consistent, so reads that must be perfectly fresh have to hit the primary — the classic read-your-writes trade-off from the notes.</li>
+      </ul>
+      <div class="callout tool">
+        <p class="lbl">Pairs with → the simulator</p>
+        <p>Replicas scale reads, but eventually a single primary can't hold all the <em>data or writes</em> — you shard. The next question is <em>which node owns which key</em>, and how to add or remove nodes without reshuffling everything. Play with that in the <a href="../../tools/consistent-hashing.html">🔗 Consistent Hashing simulator</a>: add and drop nodes and watch how few keys move. Replication (this lab) + sharding (the simulator) are the two halves of scaling a stateful database. Full theory in the <a href="../../modules/04-database-scaling.html">Module 3-4 notes</a>.</p>
+      </div>
+    </section>
+
+    <div class="nextnav">
+      <a href="../../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../../tools/consistent-hashing.html">Open the simulator →</a>
+    </div>
+
+    <footer>Sandbox Lab · Module 3-4 — Databases · System Design Mastery. Runs entirely on your machine with Docker; nothing leaves localhost.</footer>
+  </div>
+</body>
+</html>

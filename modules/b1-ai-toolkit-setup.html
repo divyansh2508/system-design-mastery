@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The AI Toolkit &amp; Developer Setup | System Design</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --text:#18202c; --muted:#576374; --faint:#8b97a6;
+    --border:#e3e7ee; --border-soft:#edf0f5;
+    --accent:#3b5bdb; --accent-soft:rgba(59,91,219,.10);
+    --hue:#1098ad; --hue-soft:rgba(16,152,173,.10);
+    --tip:#c77d17; --tip-soft:rgba(199,125,23,.10);
+    --teal:#0ca678; --teal-soft:rgba(12,166,120,.10);
+    --shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#1098ad;--hue-soft:rgba(16,152,173,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+  }
+  :root[data-theme="light"]{--bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef1f6;--text:#18202c;--muted:#576374;--faint:#8b97a6;--border:#e3e7ee;--border-soft:#edf0f5;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.10);--hue:#1098ad;--hue-soft:rgba(16,152,173,.10);--tip:#c77d17;--tip-soft:rgba(199,125,23,.10);--teal:#0ca678;--teal-soft:rgba(12,166,120,.10);--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 20px rgba(20,30,50,.05)}
+  :root[data-theme="dark"]{--bg:#0e131a;--surface:#161d27;--surface-2:#111823;--text:#d8e0ea;--muted:#95a4b6;--faint:#5e6c7d;--border:#242e3b;--border-soft:#1c2530;--accent:#7b93f5;--accent-soft:rgba(123,147,245,.13);--hue:#1098ad;--hue-soft:rgba(16,152,173,.13);--tip:#e3b341;--tip-soft:rgba(227,179,65,.12);--teal:#28c39a;--teal-soft:rgba(40,195,154,.13);--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.28)}
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 22px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .navlinks{display:flex;gap:4px;flex-wrap:wrap}
+  .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;transition:color .12s,background .12s}
+  .navlinks a:hover{color:var(--accent);background:var(--accent-soft)}
+
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px 80px}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--hue);margin:0 0 14px;display:flex;gap:10px;flex-wrap:wrap}
+  .eyebrow .sep{color:var(--faint)}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(30px,5.5vw,44px);line-height:1.06;letter-spacing:-.015em;margin:0 0 16px;text-wrap:balance}
+  .sub{font-size:17px;color:var(--muted);margin:0;max-width:62ch}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 22px;margin:28px 0 40px;box-shadow:var(--shadow)}
+  .toc h2{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px}
+  @media(max-width:560px){.toc ol{columns:1}}
+  .toc li{font-size:13.5px;margin-bottom:7px;break-inside:avoid}
+  .toc a{text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+
+  section{margin:0 0 14px}
+  h2.sec{font-family:var(--serif);font-size:clamp(23px,4vw,30px);font-weight:600;letter-spacing:-.01em;margin:44px 0 4px;scroll-margin-top:70px}
+  .sec-n{font-family:var(--mono);font-size:13px;color:var(--hue);font-weight:600}
+  h3{font-family:var(--sans);font-size:18px;font-weight:650;margin:28px 0 8px}
+  p{margin:0 0 16px}
+  strong{font-weight:650}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin-bottom:8px}
+  .lead{font-size:17.5px;color:var(--text)}
+
+  .callout{border:1px solid var(--border);border-left:3px solid var(--hue);background:var(--hue-soft);border-radius:11px;padding:15px 18px;margin:22px 0}
+  .callout .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--hue);font-weight:600;margin:0 0 6px}
+  .callout p{margin:0;font-size:14.5px}
+  .callout.tip{border-left-color:var(--tip);background:var(--tip-soft)} .callout.tip .lbl{color:var(--tip)}
+  .callout.tool{border-left-color:var(--teal);background:var(--teal-soft)} .callout.tool .lbl{color:var(--teal)}
+  .callout.tool a{color:var(--teal);font-weight:600}
+
+  .framebox{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:6px 8px;margin:24px 0;box-shadow:var(--shadow);overflow:hidden}
+  .fstep{display:flex;gap:14px;padding:15px 14px;border-bottom:1px solid var(--border-soft)}
+  .fstep:last-child{border-bottom:0}
+  .fstep .fn{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;background:var(--hue);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .fstep b{display:block;font-size:15.5px;margin-bottom:2px}
+  .fstep .ft{font-family:var(--mono);font-size:11px;color:var(--faint);float:right;font-weight:600}
+  .fstep p{font-size:13.5px;color:var(--muted);margin:0}
+
+  .tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+  td:first-child{font-weight:600}
+  tr:last-child td{border-bottom:0}
+  td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:20px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;box-shadow:var(--shadow)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:5px;padding:1px 6px}
+  pre code{background:none;border:0;padding:0}
+  .cmt{color:var(--faint)}
+
+  .videos{display:grid;gap:12px;margin:22px 0}
+  .vid{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .13s,border-color .13s}
+  .vid:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .vid .pl{font-size:20px;flex-shrink:0;margin-top:1px}
+  .vid .m b{font-size:14.5px;display:block;line-height:1.35}
+  .vid .m .ch{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:3px 0 5px}
+  .vid .m .ch .dur{color:var(--faint)}
+  .vid .m p{font-size:13px;color:var(--muted);margin:0}
+
+  .rig{background:var(--surface-2);border:1px dashed var(--border);border-radius:11px;padding:16px 18px;margin:18px 0;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+
+  .nextnav{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:48px;padding-top:24px;border-top:1px solid var(--border)}
+  .nextnav a{font-family:var(--mono);font-size:13px;text-decoration:none;padding:12px 18px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:border-color .13s,color .13s}
+  .nextnav a:hover{border-color:var(--accent)}
+  .nextnav .fwd{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  footer{margin-top:40px;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="../index.html">◇ SD Mastery</a>
+    <div class="navlinks">
+      <a href="../index.html">Home</a>
+      <a href="../roadmap-dashboard.html">Roadmap</a>
+      <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow"><span>Track B · GenAI Development</span><span class="sep">·</span><span>Module B1</span><span class="sep">·</span><span>Weeks 13+ · ~13 hrs</span></p>
+      <h1>The AI Toolkit &amp; Developer Setup</h1>
+      <p class="sub">System design taught you to reason about systems — this track adds the other half of the modern senior job: wielding LLMs and AI tools as a daily engineering multiplier, starting with a clear map of the landscape and a dev environment set up the <strong>right</strong> way.</p>
+    </header>
+
+    <nav class="toc" aria-label="Contents">
+      <h2>In this module</h2>
+      <ol>
+        <li><a href="#what">What the AI toolkit actually is</a></li>
+        <li><a href="#map">The map: four families of tools</a></li>
+        <li><a href="#categories">Category deep-dive</a></li>
+        <li><a href="#eval">The evaluation lens</a></li>
+        <li><a href="#helps">When AI helps vs hurts</a></li>
+        <li><a href="#setup">Setting up your AI dev environment</a></li>
+        <li><a href="#worked">Worked example: an AI pair</a></li>
+        <li><a href="#reps">Your reps this week</a></li>
+        <li><a href="#watch">Watch &amp; read</a></li>
+      </ol>
+    </nav>
+
+    <section id="what">
+      <h2 class="sec"><span class="sec-n">01 &nbsp;</span>What the AI toolkit actually is</h2>
+      <p class="lead">The AI toolkit is the set of <strong>models, editors, and agents</strong> you use to think, write, and ship code faster — and knowing how to choose them and wire them together is now a core engineering skill, not a party trick.</p>
+      <p>Keep three layers separate in your head, because tools blur them and it causes confusion. The <strong>model</strong> is the LLM itself — the raw intelligence (GPT, Claude, Gemini, Llama). The <strong>surface</strong> is how you reach it — a chat window, an IDE plugin, a terminal, or a raw API call. The <strong>agent</strong> is a loop wrapped around the model that lets it take actions — read files, run commands, call tools, check the result, and try again. The same underlying model can show up as a chat box, an autocomplete, or a fully autonomous coding agent; what changes is the surface and the loop around it.</p>
+      <p>Here's the mental model that makes all of this click: treat an LLM as an <strong>extremely fast, widely-read junior engineer with confident recall but no accountability</strong>. It has read more code than you ever will, produces a plausible answer in seconds, and will state a wrong answer with exactly the same confidence as a right one. Your job is not to "prompt" it — your job is to give it good context, aim it at verifiable work, and build the guardrails (tests, types, code review, small diffs) that turn its speed into trustworthy output.</p>
+      <div class="callout">
+        <p class="lbl">Key idea</p>
+        <p>The durable skill isn't typing clever prompts — it's <strong>judgment</strong>: which tool to reach for, how much to trust it, and how to verify. Models change every few weeks; that judgment transfers across all of them.</p>
+      </div>
+    </section>
+
+    <section id="map">
+      <h2 class="sec"><span class="sec-n">02 &nbsp;</span>The map: four families of tools</h2>
+      <p>The space feels chaotic because vendors ship weekly, but almost everything sorts into four families. Learn the <em>families</em>, not the logos — new products just fill an existing slot.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Family</th><th>What it's for</th><th>Representative tools</th></tr></thead>
+          <tbody>
+            <tr><td>Frontier chat models</td><td>General reasoning, writing, planning, one-off code</td><td>ChatGPT (OpenAI), Claude (Anthropic), Gemini (Google); open-weight: Llama, Mistral, DeepSeek, Qwen</td></tr>
+            <tr><td>IDE copilots</td><td>Inline completion &amp; in-editor edits, in flow</td><td>GitHub Copilot, Cursor, Windsurf, JetBrains AI, Amazon Q, Cody</td></tr>
+            <tr><td>CLI / agentic coders</td><td>Multi-step tasks across a repo, from the terminal</td><td>Claude Code, OpenAI Codex CLI, Aider, Gemini CLI, Cline</td></tr>
+            <tr><td>AI search / research</td><td>Grounded, cited answers instead of a stack of tabs</td><td>Perplexity, Phind, Kagi, Exa; in-engine AI overviews</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Three more categories sit adjacent and you'll meet them later in Track B: <strong>embeddings + RAG</strong> (search over your own data), <strong>multimodal generation</strong> (image / audio / video), and <strong>orchestration frameworks</strong> (LangGraph, LlamaIndex, the vendor Agents SDKs) for stitching models into pipelines. For this module we stay on the four that a working developer touches every single day.</p>
+    </section>
+
+    <section id="categories">
+      <h2 class="sec"><span class="sec-n">03 &nbsp;</span>Category deep-dive</h2>
+
+      <h3>Frontier chat models — the raw intelligence</h3>
+      <p>These are the general-purpose reasoners. You reach them two ways: through a <strong>chat UI</strong> (fast, throwaway iteration — debugging, brainstorming, explaining a stack trace) or through the <strong>API</strong> (when you want to automate the same call inside a script or product). The web chat and the API hit the same model; pick the surface by whether the work is a conversation or a program. Every other tool below is, under the hood, one of these models with a different loop bolted on.</p>
+
+      <h3>IDE copilots — intelligence in your editor</h3>
+      <p>Copilots operate in two modes. <strong>Inline completion</strong> predicts the next lines as you type (the grey ghost text you Tab to accept) — great for boilerplate and staying in flow. <strong>Agentic edit</strong> takes a natural-language instruction and rewrites across multiple files while you watch. Architecturally there's a real split: <strong>Copilot</strong> is a plugin bolted onto existing editors (VS Code, JetBrains, Neovim), while <strong>Cursor</strong> and <strong>Windsurf</strong> are AI-native forks of VS Code that rebuilt the editor around the model, which buys tighter multi-file control at the cost of leaving your existing setup.</p>
+
+      <h3>CLI / agentic coders — the autonomous loop</h3>
+      <p>These run in your terminal and are given real capabilities: read and edit any file, run commands, execute tests, read the output, and iterate — a genuine agent loop. They shine on larger, multi-step tasks ("add auth to these three routes and update the tests") where you supervise by reviewing the <strong>git diff</strong> rather than watching every keystroke. More power, more blast radius: you run these on a branch, never straight onto <code>main</code>.</p>
+
+      <h3>AI search — cited synthesis</h3>
+      <p>AI search replaces "search, open six tabs, reconcile them" with a single synthesized answer plus citations. It's excellent for "what's the current best way to do X" and for unfamiliar libraries. The discipline is non-negotiable: <strong>follow the citations</strong>. A confident summary with a fabricated or misread source is worse than no answer, because it looks done.</p>
+    </section>
+
+    <section id="eval">
+      <h2 class="sec"><span class="sec-n">04 &nbsp;</span>The evaluation lens</h2>
+      <p>This is the backbone of the whole module. When someone asks "which model / tool should I use?", the senior answer is never a name — it's <em>"for what task, judged on which of these four axes?"</em> Every choice is a trade-off across accuracy, context, cost, and latency.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Axis</th><th>The question</th><th>How to weigh it</th></tr></thead>
+          <tbody>
+            <tr><td>Accuracy</td><td>Does it get <em>your</em> tasks right?</td><td>Measure on your own tasks; public benchmarks (SWE-bench, HumanEval, GPQA, MMLU) are directional and leak into training</td></tr>
+            <tr><td>Context window</td><td>How much can it hold at once?</td><td>Roughly 128K → 1M+ tokens today; bigger fits more code/docs, but attention degrades and cost rises with every token</td></tr>
+            <tr><td>Cost</td><td>What does a call actually cost?</td><td>Priced per million input/output tokens (output usually dearer); small "mini/flash" tiers can be an order of magnitude cheaper</td></tr>
+            <tr><td>Latency</td><td>How fast does it respond?</td><td>Time-to-first-token + tokens/sec; critical for interactive autocomplete, irrelevant for an overnight batch refactor</td></tr>
+            <tr><td>Ergonomics</td><td>Does it fit your workflow?</td><td>Editor/CLI integration, tool + MCP support, and data-retention / privacy policy for proprietary code</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>A worked instinct: reaching for a top frontier model to reformat a JSON file is like chartering a jet to cross the street — it works, but you're paying premium tokens and latency for a task a tiny fast model nails. Conversely, saving pennies with a weak model on a security-critical refactor is a false economy. <strong>Match the model tier to the value and verifiability of the task.</strong> Two useful token facts to internalize: <em>a token is ~4 characters / ~0.75 words</em>, and <em>context degrades in the middle</em> — a model with a 1M window still attends best to the start and end, so where you put information in the prompt matters.</p>
+
+      <div class="callout tip">
+        <p class="lbl">The move that beats every leaderboard</p>
+        <p>Build a <strong>golden set</strong> of 8–12 real tasks from your own codebase, with known-good answers. Re-run it on each new model or tool and score it yourself. Your eval on your work is worth more than any public benchmark — and it takes an afternoon to build.</p>
+      </div>
+    </section>
+
+    <section id="helps">
+      <h2 class="sec"><span class="sec-n">05 &nbsp;</span>When AI helps vs when it hurts</h2>
+      <p>The single predictor of whether AI helps is <strong>verifiability</strong>. AI accelerates work you can quickly check; it's dangerous precisely where you <em>can't</em> tell if the output is wrong — because a plausible-but-wrong answer costs you more than no answer.</p>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Reach for it</th><th>Slow down / keep the human in charge</th></tr></thead>
+          <tbody>
+            <tr><td>Boilerplate, scaffolding, config</td><td>Novel algorithm or data-structure design</td></tr>
+            <tr><td>Unit tests for existing code</td><td>Security / auth / crypto / payments code</td></tr>
+            <tr><td>Glue for an unfamiliar API or library</td><td>Anything you can't read and verify yourself</td></tr>
+            <tr><td>Mechanical refactors under a test suite</td><td>Large, ambiguous tasks with no plan or tests</td></tr>
+            <tr><td>Explaining unfamiliar code; regex &amp; SQL drafts</td><td>Subtle concurrency / consistency / correctness bugs</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The failure mode to fear isn't a crash — it's <strong>confidently wrong output that compiles and looks right</strong>: a hallucinated method that doesn't exist, an off-by-one in a boundary the tests don't cover, a subtly incorrect concurrency assumption. That's exactly the territory your system-design training warns about — the bugs live where you weren't looking.</p>
+
+      <div class="callout">
+        <p class="lbl">Systems lens</p>
+        <p>Think of an LLM as an <strong>AP system</strong> from Module 1: highly available, eventually-<em>ish</em>-correct, never strongly consistent with reality. Treat every output as a <em>proposal to be validated</em>, not a source of truth — and put the strongest guardrails where the blast radius is largest.</p>
+      </div>
+    </section>
+
+    <section id="setup">
+      <h2 class="sec"><span class="sec-n">06 &nbsp;</span>Setting up your AI dev environment</h2>
+      <p>A good setup is deliberate, not "install everything." Five steps get you a workflow that compounds instead of one that fights you:</p>
+
+      <div class="framebox">
+        <div class="fstep"><span class="fn">1</span><div><b>Choose your layers <span class="ft">pick 3</span></b><p>One editor copilot for flow (Copilot / Cursor / Windsurf), one CLI agent for bigger tasks (Claude Code / Aider), and one chat model for thinking and debugging. More tools ≠ better; depth in a few beats shallow use of many.</p></div></div>
+        <div class="fstep"><span class="fn">2</span><div><b>Write a rules / context file <span class="ft">highest ROI</span></b><p>Add a <code>CLAUDE.md</code>, <code>.cursorrules</code>, or <code>AGENTS.md</code> at the repo root: your stack, conventions, how to run tests and lint, and explicit do/don'ts. This one file is the difference between an agent that respects your codebase and one that reinvents it every session.</p></div></div>
+        <div class="fstep"><span class="fn">3</span><div><b>Wire tools via MCP <span class="ft">capabilities</span></b><p>Give the agent real hands instead of copy-paste. The Model Context Protocol (MCP) lets it read your docs, query a database, run the test suite, or drive a browser through standard servers — turning a chat box into something that can actually check its own work.</p></div></div>
+        <div class="fstep"><span class="fn">4</span><div><b>Secure your keys &amp; data <span class="ft">non-negotiable</span></b><p>API keys live in env vars or a secret manager — never in prompts, code, or commits. Know each tool's data-retention / training policy, and use zero-retention or enterprise modes before you point an agent at proprietary code.</p></div></div>
+        <div class="fstep"><span class="fn">5</span><div><b>Establish the loop <span class="ft">the habit</span></b><p>Branch per agent task; let tests and the type-checker be the guardrails; review every diff before you commit; commit in small steps. Reach for the cheapest model that clears the task, and escalate only when it can't.</p></div></div>
+      </div>
+
+      <div class="callout tip">
+        <p class="lbl">Do this first</p>
+        <p>If you do only one thing this week, write the <strong>rules file</strong> (step 2). It's the highest-leverage setup action by a wide margin — quality of agent output tracks the quality of that file more than the model you pick.</p>
+      </div>
+    </section>
+
+    <section id="worked">
+      <h2 class="sec"><span class="sec-n">07 &nbsp;</span>Worked example: shipping a feature with an AI pair</h2>
+      <p>Let's add <strong>rate limiting</strong> to the URL shortener from Module 1 — protect <code>POST /api/v1/urls</code> so one client can't flood it. Watch how the human owns the trade-offs and the model owns the typing.</p>
+
+      <pre><code><span class="cmt"># A good agent prompt — context first, plan before code</span>
+Context: Node/Express service. Rules in CLAUDE.md. The handler is in
+  src/routes/urls.js; existing middleware live in src/middleware/.
+Task: add per-API-key rate limiting to POST /api/v1/urls.
+Constraints: use our Redis client (src/redis.js); add tests; do NOT
+  touch the redirect hot path GET /{code}.
+First: give me a short PLAN and the key trade-off. Do not write code yet.</code></pre>
+
+      <p>The agent proposes a <strong>token-bucket in Redis</strong> (atomic <code>INCR</code> + <code>EXPIRE</code>) over an in-memory counter — correct, because in-memory state doesn't survive multiple app servers (a Module 1 reflex). But it surfaces the decision <em>you</em> must make:</p>
+
+      <pre><code>Plan:
+  1. Redis token bucket keyed by api_key, window = 60s, limit = 100.
+  2. Express middleware on POST /urls only; return 429 + Retry-After.
+  3. Tests: under limit → 201, over limit → 429, window resets.
+
+Open question for YOU:  if Redis is DOWN, do we
+  fail-OPEN  (allow the write, lose the limit)  or
+  fail-CLOSED (reject the write, stay protected)?   <span class="cmt">← a design call, not a code call</span></code></pre>
+
+      <p>You decide <strong>fail-open</strong> here — availability of link creation beats perfect rate enforcement during a Redis blip (again, the AP instinct). You tell the agent, it implements the middleware and tests, you run the suite, read the diff, confirm the redirect path is untouched, and commit. Total human effort: three decisions and a review. The model wrote the code; <em>you</em> owned the trade-off it can't own.</p>
+
+      <div class="callout">
+        <p class="lbl">The whole skill in one line</p>
+        <p>The model handled the <strong>mechanism</strong> (Redis bucket, middleware, tests); you handled the <strong>judgment</strong> (fail-open vs fail-closed under partition). That division of labor — AI for mechanism, human for trade-offs — is what senior AI-assisted engineering looks like.</p>
+      </div>
+    </section>
+
+    <section id="reps">
+      <h2 class="sec"><span class="sec-n">08 &nbsp;</span>Your reps this week</h2>
+      <p>Reading about tools is not skill — running them under discipline is. Do these, in order:</p>
+      <ol>
+        <li><strong>Build your golden eval set.</strong> Pull 8–12 real tasks from your own codebase (a bug, a refactor, a test to write, an API to explain). Run each through two different tools and score accuracy, latency, and rough cost. You now have an opinion grounded in your work, not hype.</li>
+        <li><strong>Write a rules file.</strong> Add a <code>CLAUDE.md</code> / <code>.cursorrules</code> to your main repo — stack, conventions, test/lint commands, do/don'ts. Re-run one task from rep 1 and feel the difference.</li>
+        <li><strong>Ship one real change with a CLI agent</strong>, end to end: branch, ask for a plan first, let it implement, run the tests, review the diff line by line, commit. Notice where you had to step in.</li>
+        <li><strong>Cost audit.</strong> Take a task you did on a frontier model and redo it on a cheap "mini/flash" tier. Was the quality actually different for that task? Downshift everything that passes.</li>
+        <li><strong>Coach + flashcards.</strong> Paste the rig below into any LLM to be quizzed on this module, then keep the 5 flashcards for the week's end.</li>
+      </ol>
+
+      <div class="rig">You are an interviewer for a senior / Forward-Deployed engineering role, drilling me on the modern AI developer toolkit. Ask me ONE question at a time, wait for my answer, then push back on anything vague and ask a harder follow-up before moving on. Cover: (1) the four families of AI tools and an example of each; (2) the difference between a model, a surface, and an agent; (3) the four evaluation axes — accuracy, context window, cost, latency — and how each changes a tool choice; (4) when AI helps vs when it hurts, and WHY verifiability is the deciding factor; (5) how you'd set up an AI dev environment and why a rules/context file matters; (6) a scenario: "an agent wrote code that passes tests but you're uneasy — what do you check?" After ~15 minutes, score me 1–5 on: tool-landscape fluency, evaluation reasoning, risk judgment, and setup discipline — with specific gaps and what a strong candidate would have added.</div>
+
+      <p><strong>Flashcards</strong> (make these 5, review at week's end): <em>Name the four tool families + one example each · Model vs surface vs agent — what's the difference? · The four evaluation axes, and one decision each one drives · Why is verifiability the predictor of whether AI helps? · What is a rules/context file and why is it the highest-ROI setup step?</em></p>
+    </section>
+
+    <section id="watch">
+      <h2 class="sec"><span class="sec-n">09 &nbsp;</span>Watch &amp; read</h2>
+      <p>Free videos, hand-picked and link-verified for this module. Start with what an LLM <em>is</em>, then work outward to picking models and wiring tools into your workflow.</p>
+
+      <div class="videos">
+        <a class="vid" href="https://www.youtube.com/watch?v=LPZh9BOjkQs" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Large Language Models explained briefly</b><div class="ch">3Blue1Brown <span class="dur">· ~8 min · foundations</span></div><p>The clearest short explanation of what an LLM actually is under the hood. Watch first — it makes every tool choice make sense.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=18mkropUvl0" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>I Tested Gemini vs Claude vs ChatGPT So You Don't Have To</b><div class="ch">Parker Prompts <span class="dur">· ~9 min · model comparison</span></div><p>A hands-on head-to-head of the frontier chat models. Watch for the method of comparing, not the specific verdicts.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=NAWcnIebQ-o" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>I Ranked Every AI Coding Assistant</b><div class="ch">Jan Marshal <span class="dur">· ~30 min · tool landscape</span></div><p>A tour across the coding-assistant field — use it to place each tool into the four-family map from Section 02.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=Wl5NJVieiBM" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Github Copilot vs Cursor: which AI coding assistant is better?</b><div class="ch">Steve (Builder.io) <span class="dur">· ~8 min · Cursor vs Copilot</span></div><p>The core IDE-copilot head-to-head: how a plugin-on-an-editor differs from an AI-native editor in real use.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=2E610yzqQwg" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>My Workflow With AI: How I Code, Test, and Deploy Faster Than Ever</b><div class="ch">DevOps Toolkit <span class="dur">· ~18 min · dev environment</span></div><p>A practical look at wiring AI into the code → test → deploy loop — the Section 06 setup in motion.</p></div>
+        </a>
+        <a class="vid" href="https://www.youtube.com/watch?v=-QFHIoCo-Ko" target="_blank" rel="noopener">
+          <span class="pl">▶</span><div class="m"><b>Full Walkthrough: Workflow for AI Coding — Matt Pocock</b><div class="ch">AI Engineer <span class="dur">· ~96 min · deep workshop</span></div><p>A disciplined, plan-and-context-first AI-coding workflow, in depth. Save it for when you want the full masterclass.</p></div>
+        </a>
+      </div>
+
+      <p><strong>Read (optional depth):</strong> there's no DDIA chapter on AI tooling — but <strong>DDIA Chapter 1</strong> (reliability, scalability, maintainability) is exactly the lens you apply the moment an LLM goes into production, because an AI feature is still a system that can fail. Pair it with the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> for the fundamentals your AI-built services still rest on.</p>
+    </section>
+
+    <div class="nextnav">
+      <a href="../roadmap-dashboard.html">↩ Back to roadmap</a>
+      <a class="fwd" href="../modules/b2-prompt-engineering.html">Next module →</a>
+    </div>
+
+    <footer>Module B1 · Track B · GenAI Development · System Design Mastery · Next up: Module B2 — Prompt Engineering &amp; Context Design (turning good tools into reliable output).</footer>
+  </div>
+</body>
+</html>

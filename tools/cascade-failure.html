@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cascading Failure &amp; Circuit Breaker — System Design</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b1016;
+    --panel:#121a23;
+    --panel-2:#0e151d;
+    --border:#223140;
+    --border-soft:#1a2530;
+    --text:#cdd9e5;
+    --muted:#7d8fa1;
+    --faint:#54626f;
+    --accent:#34d3e0;
+    --accent-dim:rgba(52,211,224,.14);
+    --ok:#3fb950;
+    --warn:#e3b341;
+    --crit:#f85149;
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1100px 600px at 82% -8%, rgba(52,211,224,.06), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 56px}
+
+  /* header */
+  header{margin-bottom:22px}
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 10px;display:flex;align-items:center;gap:9px;
+  }
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  h1{
+    font-family:var(--mono);font-weight:600;font-size:clamp(26px,4.4vw,40px);
+    letter-spacing:-.01em;margin:0 0 10px;text-wrap:balance;
+  }
+  .lede{max-width:70ch;color:var(--muted);font-size:15.5px;margin:0}
+  .lede b{color:var(--text);font-weight:600}
+
+  /* layout */
+  .grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:24px}
+  @media(min-width:900px){.grid{grid-template-columns:1.55fr 1fr}}
+
+  .panel{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--border);border-radius:14px;
+  }
+  .stage{position:relative;min-height:420px;overflow:hidden}
+  @media(min-width:900px){.stage{min-height:492px}}
+  canvas#topo{display:block;width:100%;height:100%;position:absolute;inset:0}
+  .stage-min{min-height:420px}
+  @media(min-width:900px){.stage-min{min-height:492px}}
+
+  .legend{
+    position:absolute;left:14px;bottom:12px;display:flex;gap:14px;flex-wrap:wrap;
+    font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.04em;
+    background:rgba(11,16,22,.55);padding:6px 10px;border-radius:8px;border:1px solid var(--border-soft);
+    backdrop-filter:blur(3px);
+  }
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:8px;height:8px;border-radius:2px;display:inline-block}
+
+  .side{display:flex;flex-direction:column;gap:16px}
+
+  /* metrics */
+  .metrics{padding:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border-soft);border-radius:14px;overflow:hidden}
+  .metric{background:var(--panel);padding:13px 14px}
+  .metric .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:0 0 4px}
+  .metric .v{font-family:var(--mono);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .metric .v small{font-size:12px;color:var(--muted);font-weight:400;margin-left:3px}
+  .metric.wide{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .v.ok{color:var(--ok)} .v.warn{color:var(--warn)} .v.crit{color:var(--crit)} .v.accent{color:var(--accent)}
+  .statuspills{display:flex;gap:14px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .statuspills b{font-variant-numeric:tabular-nums;font-weight:600}
+  .statuspills .sp-ok b{color:var(--ok)} .statuspills .sp-warn b{color:var(--warn)} .statuspills .sp-crit b{color:var(--crit)}
+  canvas#spark{width:110px;height:34px;display:block}
+
+  /* coaching */
+  .coach{padding:15px 16px;border:1px solid var(--border);border-radius:14px;background:var(--panel);border-left:3px solid var(--accent)}
+  .coach .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+  .coach p{margin:0;font-size:14px;color:var(--text)}
+
+  /* events */
+  .events{padding:13px 16px;border:1px solid var(--border-soft);border-radius:14px;background:var(--panel-2)}
+  .events .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+  .events ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;min-height:54px}
+  .events li{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;gap:8px;animation:slideIn .3s ease}
+  .events li .ts{color:var(--faint);flex-shrink:0}
+  .events li b{color:var(--text);font-weight:600}
+  .events li b.warn{color:var(--warn)} .events li b.crit{color:var(--crit)} .events li b.ok{color:var(--ok)}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+  /* controls */
+  .controls{grid-column:1/-1;padding:18px;display:flex;flex-wrap:wrap;gap:22px;align-items:flex-end}
+  .ctrl{display:flex;flex-direction:column;gap:8px}
+  .ctrl>label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+  .seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px;flex-wrap:wrap}
+  .seg button{
+    font-family:var(--mono);font-size:12px;color:var(--muted);background:transparent;border:0;
+    padding:7px 11px;border-radius:6px;cursor:pointer;transition:background .12s,color .12s;white-space:nowrap;
+  }
+  .seg button:hover{color:var(--text)}
+  .seg button[aria-pressed="true"]{background:rgba(248,81,73,.16);color:var(--crit);box-shadow:inset 0 0 0 1px rgba(248,81,73,.45)}
+
+  .slider{display:flex;align-items:center;gap:12px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:180px;height:4px;background:var(--border);border-radius:3px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px rgba(52,211,224,.5)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--accent);cursor:pointer}
+  .rps-val{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--accent);min-width:74px;font-variant-numeric:tabular-nums}
+
+  .switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+  .switch input{position:absolute;opacity:0;width:0;height:0}
+  .track{width:42px;height:24px;background:var(--border);border-radius:12px;position:relative;transition:background .16s;flex-shrink:0}
+  .track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--muted);transition:transform .16s,background .16s}
+  .switch input:checked+.track{background:var(--accent-dim);box-shadow:inset 0 0 0 1px var(--accent)}
+  .switch input:checked+.track::after{transform:translateX(18px);background:var(--accent)}
+  .switch .txt{font-family:var(--mono);font-size:12px;color:var(--text)}
+
+  .ghost{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:9px 14px;cursor:pointer;transition:color .12s,border-color .12s}
+  .ghost:hover{color:var(--ok);border-color:var(--ok)}
+
+  /* experiments */
+  .labcard{grid-column:1/-1;padding:20px 22px;border:1px solid var(--border);border-radius:14px;background:
+    linear-gradient(180deg,rgba(52,211,224,.03),transparent),var(--panel)}
+  .labcard h2{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  .labs{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:640px){.labs{grid-template-columns:1fr 1fr}}
+  .lab{display:flex;gap:12px;align-items:flex-start}
+  .lab .n{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(52,211,224,.3);width:24px;height:24px;border-radius:6px;display:grid;place-items:center;flex-shrink:0}
+  .lab p{margin:0;font-size:13.5px;color:var(--muted)}
+  .lab p b{color:var(--text);font-weight:600}
+
+  footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.03em}
+  footer b{color:var(--muted);font-weight:600}
+
+  button:focus-visible,input:focus-visible,.switch input:focus-visible+.track{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+  }
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(11,16,22,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:30}
+  .topnav .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .topnav .navlinks{display:flex;gap:6px;flex-wrap:wrap}
+  .topnav .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;transition:color .12s,background .12s}
+  .topnav .navlinks a:hover{color:var(--accent);background:var(--accent-dim)}
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <a class="brand" href="../index.html">◇ SD Mastery</a>
+  <div class="navlinks">
+    <a href="../index.html">Home</a>
+    <a href="../roadmap-dashboard.html">Roadmap</a>
+    <a href="../modules/13-fault-tolerance-resilience.html">Module 13 notes</a>
+    <a href="load-balancer-simulator.html">Load Balancer</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow"><span class="dot"></span>System Design · Module 13 — Fault Tolerance</p>
+    <h1>Cascading Failure &amp; Circuit Breaker</h1>
+    <p class="lede">A live service dependency graph — <b>Frontend → API → Service B/C → Database</b>. Inject a slowdown into any node and watch what happens with no protection: callers block on the failing dependency, thread pools exhaust, and the failure climbs <b>upstream</b> until the whole system is red. Then flip on <b>Circuit Breaker + Bulkhead</b> and watch the same fault get <b>contained</b> — the blast radius stops, and the rest of the system stays up on fallbacks.</p>
+  </header>
+
+  <div class="grid">
+    <!-- topology -->
+    <div class="panel stage stage-min" aria-label="Live dependency graph: Frontend calls API, API calls Service B and Service C, Service B calls the Database. Node colours show health.">
+      <canvas id="topo"></canvas>
+      <div class="legend" aria-hidden="true">
+        <span><i style="background:#3fb950"></i>healthy</span>
+        <span><i style="background:#e3b341"></i>degraded</span>
+        <span><i style="background:#f85149"></i>failed / exhausted</span>
+        <span><i style="background:#34d3e0"></i>request</span>
+      </div>
+    </div>
+
+    <!-- side -->
+    <div class="side">
+      <div class="metrics" role="group" aria-label="Live metrics">
+        <div class="metric"><p class="k">Success rate</p><p class="v accent" id="m-success" aria-live="polite">100<small>%</small></p></div>
+        <div class="metric"><p class="k">Perceived latency</p><p class="v" id="m-lat">90<small>ms</small></p></div>
+        <div class="metric"><p class="k">Healthy nodes</p><p class="v ok" id="m-healthy">5<small>/5</small></p></div>
+        <div class="metric"><p class="k">Failed nodes</p><p class="v" id="m-failed">0<small>/5</small></p></div>
+        <div class="metric wide">
+          <div class="statuspills">
+            <span class="sp-ok">healthy <b id="p-ok">5</b></span>
+            <span class="sp-warn">degraded <b id="p-warn">0</b></span>
+            <span class="sp-crit">failed <b id="p-crit">0</b></span>
+          </div>
+          <canvas id="spark" aria-hidden="true"></canvas>
+        </div>
+      </div>
+
+      <div class="coach">
+        <p class="lbl">What's happening</p>
+        <p id="coach" aria-live="polite">All five services are healthy. Every request flows Frontend → API → Service B/C → Database and comes back green. Inject a fault below to see how it spreads.</p>
+      </div>
+
+      <div class="events">
+        <p class="lbl">Event log</p>
+        <ul id="events" aria-live="polite"><li><span class="ts">0s</span>Simulator started · 5 services online</li></ul>
+      </div>
+    </div>
+
+    <!-- controls -->
+    <div class="panel controls">
+      <div class="ctrl">
+        <label id="inj-lbl">Inject fault into</label>
+        <div class="seg" role="group" aria-labelledby="inj-lbl" id="inject">
+          <button data-n="db" aria-pressed="false">Database</button>
+          <button data-n="svcB" aria-pressed="false">Service B</button>
+          <button data-n="svcC" aria-pressed="false">Service C</button>
+          <button data-n="api" aria-pressed="false">API</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label for="rps">Traffic</label>
+        <div class="slider">
+          <input type="range" id="rps" min="0" max="300" step="10" value="120">
+          <span class="rps-val" id="rps-out">120 rps</span>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>Circuit Breaker + Bulkhead</label>
+        <label class="switch">
+          <input type="checkbox" id="protect">
+          <span class="track"></span>
+          <span class="txt">off</span>
+        </label>
+      </div>
+
+      <div class="ctrl">
+        <label>&nbsp;</label>
+        <button class="ghost" id="heal">↺ Heal all</button>
+      </div>
+    </div>
+
+    <!-- experiments -->
+    <div class="labcard">
+      <h2>◆ Run these four experiments</h2>
+      <div class="labs">
+        <div class="lab"><span class="n">1</span><p><b>Kill the Database.</b> Protection off, click <b>Database</b>. Watch the red climb <b>upstream</b>: Service B's threads block on the DB and its pool exhausts, then API's, then the Frontend — success rate craters toward 0. Notice <b>Service C stays green</b> but nothing reaches it: a healthy service, stranded.</p></div>
+        <div class="lab"><span class="n">2</span><p><b>Contain it.</b> Leave the DB failing and flip <b>Circuit Breaker + Bulkhead ON</b>. The breaker trips open and calls fail fast; bulkheads keep each dependency in its own pool. The blast radius <b>stops at Service B</b> — API and Frontend recover to ~95% on fallback data.</p></div>
+        <div class="lab"><span class="n">3</span><p><b>The minor dependency trap.</b> Protection off, inject <b>Service C</b> — a non-critical recommendations widget. A thread blocked on C can serve nothing else, so the shared pool fills and the <b>whole site dies for a feature nobody needs</b>. Now flip protection on: contained.</p></div>
+        <div class="lab"><span class="n">4</span><p><b>Faults, not load.</b> With no fault, drag <b>Traffic</b> to max — everything stays green. This is a <b>failure</b> tool, not a capacity tool: the system is provisioned for the load. It's the broken dependency, not the traffic, that triggers the cascade.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>interactive simulator · pairs with Module 13 notes</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ===================================================================
+  //  PURE MODEL  (no DOM / no canvas — verified by node --check harness)
+  //  Backbone: Little's Law  L = λ·W.
+  //    thread occupancy L = arrivalRate λ × hold-time W.
+  //    circuit breaker cuts W (fail-fast instead of blocking on a bad dep);
+  //    bulkhead caps L per dependency (isolated sub-pool).
+  // ===================================================================
+  var TIMEOUT  = 2000;   // ms a thread is held blocking on a slow/failed dep (no breaker)
+  var FAILFAST = 8;      // ms hold when the breaker is open (fail fast)
+  var FALLBACK = 0.95;   // request success when a failed dep is served from a fallback
+
+  var GRAPH = {
+    fe:  {id:"fe",   name:"Frontend",  role:"edge / UI",     pool:80, proc:6,  deps:["api"]},
+    api: {id:"api",  name:"API",       role:"orchestrator",  pool:60, proc:15, deps:["svcB","svcC"]},
+    svcB:{id:"svcB", name:"Service B", role:"profile svc",   pool:40, proc:22, deps:["db"]},
+    svcC:{id:"svcC", name:"Service C", role:"reco svc",      pool:40, proc:22, deps:[]},
+    db:  {id:"db",   name:"Database",  role:"primary store", pool:40, proc:25, deps:[]}
+  };
+  // bottom-up (post-order): every node appears after all of its dependencies
+  var ORDER   = ["db","svcC","svcB","api","fe"];
+  var PARENTS = {db:["svcB"], svcC:["api"], svcB:["api"], api:["fe"], fe:[]};
+
+  function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+
+  function computeModel(st){
+    var rps  = st.rps;
+    var prot = st.protection;
+    var inj  = st.injected;                 // map {nodeId:true}
+
+    var lat={}, util={}, admit={}, degraded={};
+    var edges=[];
+
+    // ---- pass 1: bottom-up latency, pool utilisation, admit fraction ----
+    for(var oi=0; oi<ORDER.length; oi++){
+      var id=ORDER[oi], n=GRAPH[id];
+
+      if(inj[id]){                          // this node is the injected fault
+        lat[id]=TIMEOUT; util[id]=2; admit[id]=0; degraded[id]=false;
+        continue;
+      }
+
+      var localOcc = rps * n.proc / 1000;   // threads busy on local work
+      var downWait = 0, edgeOccSum = 0, edgeList=[], anyDirectFail=false;
+
+      for(var di=0; di<n.deps.length; di++){
+        var dch = n.deps[di];
+        var childFailed    = !!inj[dch];
+        var childSaturated = util[dch] >= 1;
+        var childBad       = childFailed || childSaturated;
+        var brk            = prot && childBad;        // breaker trips on a bad dependency
+        var holdW;
+        if(childFailed){ holdW = brk ? FAILFAST : TIMEOUT; }
+        else           { holdW = brk ? FAILFAST : lat[dch]; }  // wait the dep's presented latency
+        if(childFailed) anyDirectFail = true;
+        var occ = rps * holdW / 1000;                 // Little's Law: L = λ·W
+        edgeList.push({dep:dch, occ:occ, holdW:holdW});
+        edges.push({from:id, to:dch, breaker:brk, blocked:(!prot && childBad)});
+        edgeOccSum += occ;
+        downWait   += holdW;
+      }
+
+      var u;
+      if(prot){
+        // bulkhead: pool split into isolated sub-pools (one per dep + local)
+        var sub = n.pool / (n.deps.length + 1);
+        u = localOcc / sub;
+        for(var ei=0; ei<edgeList.length; ei++) u = Math.max(u, edgeList[ei].occ / sub);
+        admit[id] = Math.min(1, sub / Math.max(localOcc, 1e-9));
+      } else {
+        // shared pool: one slow dep's occupancy steals threads from everything
+        var totalOcc = localOcc + edgeOccSum;
+        u = totalOcc / n.pool;
+        admit[id] = u > 1 ? 1/u : 1;
+      }
+
+      var L = n.proc + downWait;
+      if(u > 1) L += (u - 1) * n.proc * 6;            // queue blow-up past saturation
+      lat[id]=L; util[id]=u; degraded[id]= prot && anyDirectFail;
+    }
+
+    // ---- pass 2: bottom-up request success ----
+    var res={};
+    for(var oj=0; oj<ORDER.length; oj++){
+      var id2=ORDER[oj], n2=GRAPH[id2];
+      if(inj[id2]){ res[id2]=0; continue; }
+      var s = admit[id2];
+      for(var dk=0; dk<n2.deps.length; dk++){
+        var dc = n2.deps[dk];
+        var childFail = !!inj[dc];
+        var depOk;
+        if(prot) depOk = childFail ? FALLBACK : res[dc];   // breaker + fallback covers a failed dep
+        else     depOk = childFail ? 0        : res[dc];   // no fallback: failure propagates
+        s *= depOk;
+      }
+      res[id2] = clamp(s,0,1);
+    }
+
+    // ---- display targets ----
+    var nodes={};
+    for(var k in GRAPH){
+      var isSrc = !!inj[k], uu = util[k], sev;
+      if(isSrc)                 sev = 1;      // injected fault
+      else if(uu >= 1)          sev = 1;      // pool exhausted -> failed
+      else if(degraded[k])      sev = 0.5;    // serving fallback -> degraded
+      else if(uu >= 0.75)       sev = 0.6;
+      else if(uu >= 0.5)        sev = 0.4;
+      else                      sev = 0.1;    // healthy
+      nodes[k] = { sev:sev, util:uu, latency:lat[k], reqSuccess:res[k], source:isSrc, degraded:!!degraded[k] };
+    }
+    return { nodes:nodes, edges:edges, successRate:res.fe, p99:lat.fe };
+  }
+
+  // expose for the verification harness (ignored in the browser)
+  if(typeof module!=="undefined" && module.exports){
+    module.exports={ computeModel:computeModel, GRAPH:GRAPH };
+  }
+
+  // ===================================================================
+  //  APP STATE + EASED DISPLAY
+  // ===================================================================
+  var state = { rps:120, protection:false, injected:{} };
+  var model = computeModel(state);
+
+  var RIPPLE_STEP = reduceMotion ? 0 : 0.55;   // seconds of upstream ripple per hop
+  var cur = {};                                 // eased sev/lat per node
+  for(var gk in GRAPH) cur[gk] = { sev:model.nodes[gk].sev, lat:model.nodes[gk].latency };
+  var successDisp = model.successRate, latDisp = model.p99;
+  var freeze = {}, onset = {}, changeAt = 0, clock = 0;
+
+  function computeOnset(sources){
+    var o={}; for(var k in GRAPH) o[k]=0;
+    if(!sources.length) return o;
+    var dist={}; for(var k2 in GRAPH) dist[k2]=Infinity;
+    var q=[];
+    sources.forEach(function(s){ dist[s]=0; q.push(s); });
+    while(q.length){
+      var nd=q.shift();
+      PARENTS[nd].forEach(function(p){ if(dist[nd]+1<dist[p]){ dist[p]=dist[nd]+1; q.push(p);} });
+    }
+    for(var k3 in GRAPH) o[k3] = isFinite(dist[k3]) ? dist[k3]*RIPPLE_STEP : 0;
+    return o;
+  }
+
+  function recompute(ripple){
+    var prev = model;
+    model = computeModel(state);
+    var sources=[]; for(var id in state.injected) if(state.injected[id]) sources.push(id);
+    onset = computeOnset(ripple ? sources : []);
+    for(var k in GRAPH){ freeze[k]=cur[k].sev; }
+    changeAt = clock;
+    if(reduceMotion){                        // snap straight to target — no ripple
+      for(var k2 in GRAPH){ cur[k2].sev=model.nodes[k2].sev; cur[k2].lat=model.nodes[k2].latency; }
+      successDisp=model.successRate; latDisp=model.p99;
+    }
+    emitDerivedEvents(prev, model);
+    updateCoach();
+  }
+
+  // ===================================================================
+  //  CANVAS
+  // ===================================================================
+  var cv=document.getElementById("topo"), ctx=cv.getContext("2d");
+  var stage=cv.parentElement, W=0,H=0,dpr=1;
+  var LAYOUT={
+    fe:  {nx:0.10, ny:0.50},
+    api: {nx:0.35, ny:0.50},
+    svcB:{nx:0.64, ny:0.29},
+    svcC:{nx:0.64, ny:0.72},
+    db:  {nx:0.90, ny:0.29}
+  };
+  var boxes={};   // pixel box per node
+  function resize(){
+    var r=stage.getBoundingClientRect();
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    cv.width=Math.round(r.width*dpr); cv.height=Math.round(r.height*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    W=r.width; H=r.height; layout();
+  }
+  function layout(){
+    var bw=clamp(W*0.185, 96, 138), bh=clamp(H*0.135, 50, 62);
+    var padX=Math.max(10, bw*0.5+6), padY=bh*0.6+6;
+    for(var k in LAYOUT){
+      var L=LAYOUT[k];
+      var cx=padX + L.nx*(W-2*padX), cy=padY + L.ny*(H-2*padY);
+      boxes[k]={ x:cx-bw/2, y:cy-bh/2, w:bw, h:bh, cx:cx, cy:cy };
+    }
+  }
+  function sevColor(sev){
+    if(sev>=0.7)  return "#f85149";
+    if(sev>=0.33) return "#e3b341";
+    return "#3fb950";
+  }
+  function mono(){ return "ui-monospace,Menlo,Consolas,monospace"; }
+  function rrect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+  function bez(a,b,c,d,t){ var m=1-t; return m*m*m*a+3*m*m*t*b+3*m*t*t*c+t*t*t*d; }
+  function edgeGeom(fromId,toId){
+    var A=boxes[fromId], B=boxes[toId];
+    var x0=A.x+A.w, y0=A.cy, x1=B.x, y1=B.cy, mx=(x0+x1)/2;
+    return {x0:x0,y0:y0,x1:x1,y1:y1,mx:mx};
+  }
+  function edgePoint(g,t){ return { x:bez(g.x0,g.mx,g.mx,g.x1,t), y:bez(g.y0,g.y0,g.y1,g.y1,t) }; }
+
+  function render(){
+    ctx.clearRect(0,0,W,H);
+
+    // ---- edges ----
+    for(var e=0;e<model.edges.length;e++){
+      var ed=model.edges[e], g=edgeGeom(ed.from,ed.to);
+      var stroke, mode;
+      if(ed.breaker){ stroke="rgba(227,179,65,.5)"; mode="trip"; }
+      else if(ed.blocked){ stroke="rgba(248,81,73,.5)"; mode="blocked"; }
+      else { stroke="rgba(52,211,224,.16)"; mode="flow"; }
+      ctx.beginPath();
+      ctx.moveTo(g.x0,g.y0); ctx.bezierCurveTo(g.mx,g.y0,g.mx,g.y1,g.x1,g.y1);
+      ctx.strokeStyle=stroke; ctx.lineWidth=1.5;
+      ctx.setLineDash(mode==="flow"?[]:[5,5]); ctx.stroke(); ctx.setLineDash([]);
+      // breaker glyph
+      if(mode==="trip"){
+        var mp=edgePoint(g,0.5);
+        ctx.fillStyle="rgba(11,16,22,.9)"; ctx.beginPath(); ctx.arc(mp.x,mp.y,10,0,6.2832); ctx.fill();
+        ctx.strokeStyle="#e3b341"; ctx.lineWidth=1.4; ctx.beginPath(); ctx.arc(mp.x,mp.y,10,0,6.2832); ctx.stroke();
+        ctx.fillStyle="#e3b341"; ctx.font="600 9px "+mono(); ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.fillText("CB", mp.x, mp.y+0.5);
+        ctx.textBaseline="alphabetic";
+      }
+      // request particles
+      if(!reduceMotion && state.rps>0){
+        for(var p=0;p<3;p++){
+          var t, col, alpha=1;
+          if(mode==="flow"){ t=(clock*0.35 + p/3)%1; col="#7fe9f1"; }
+          else if(mode==="trip"){ t=((clock*0.7 + p/3)%1)*0.42; col="#e3b341"; alpha=1-(t/0.42)*0.5; }
+          else { t=0.55 + 0.32*(0.5+0.5*Math.sin(clock*2.2 + p*2)); col="#f85149"; alpha=0.85; }
+          var pt=edgePoint(g,t);
+          ctx.globalAlpha=alpha;
+          ctx.beginPath(); ctx.arc(pt.x,pt.y, mode==="flow"?2.4:3, 0,6.2832);
+          ctx.fillStyle=col; ctx.shadowColor=col; ctx.shadowBlur=6; ctx.fill(); ctx.shadowBlur=0;
+          ctx.globalAlpha=1;
+        }
+      }
+    }
+
+    // ---- nodes ----
+    ctx.textBaseline="alphabetic";
+    for(var k in GRAPH){
+      var n=GRAPH[k], b=boxes[k], c=cur[k], col=sevColor(c.sev), u=model.nodes[k].util;
+      var isSrc=model.nodes[k].source;
+      // source pulse ring
+      if(isSrc && !reduceMotion){
+        var pr=1+0.5*(0.5+0.5*Math.sin(clock*4));
+        ctx.strokeStyle="rgba(248,81,73,"+(0.5-0.22*(pr-1))+")"; ctx.lineWidth=2;
+        rrect(b.x-5*pr,b.y-5*pr,b.w+10*pr,b.h+10*pr,12); ctx.stroke();
+      }
+      // box
+      if(c.sev>=0.7){ ctx.shadowColor="#f85149"; ctx.shadowBlur=14; }
+      else if(c.sev>=0.33){ ctx.shadowColor="#e3b341"; ctx.shadowBlur=8; }
+      rrect(b.x,b.y,b.w,b.h,10); ctx.fillStyle="#131c26"; ctx.fill(); ctx.shadowBlur=0;
+      ctx.strokeStyle=col; ctx.lineWidth=1.5; rrect(b.x,b.y,b.w,b.h,10); ctx.stroke();
+
+      // name + role
+      ctx.textAlign="left"; ctx.fillStyle="#cdd9e5"; ctx.font="600 12px "+mono();
+      ctx.fillText(n.name, b.x+11, b.y+18);
+      ctx.fillStyle="#7d8fa1"; ctx.font="9.5px "+mono();
+      ctx.fillText(n.role, b.x+11, b.y+31);
+
+      // pool utilisation bar
+      var barX=b.x+11, barY=b.y+b.h-13, barW=b.w-22;
+      ctx.fillStyle="rgba(255,255,255,.06)"; rrect(barX,barY,barW,4,2); ctx.fill();
+      var fillU = isSrc ? 1 : clamp(u,0,1.3)/1.3;
+      ctx.fillStyle=col; rrect(barX,barY,Math.max(fillU*barW,2),4,2); ctx.fill();
+
+      // state badge
+      ctx.textAlign="right"; ctx.font="600 9px "+mono();
+      var badge, bcol;
+      if(isSrc){ badge="FAILING"; bcol="#f85149"; }
+      else if(c.sev>=0.7){ badge="EXHAUSTED"; bcol="#f85149"; }
+      else if(c.sev>=0.33){ badge="DEGRADED"; bcol="#e3b341"; }
+      else { badge="HEALTHY"; bcol="#3fb950"; }
+      ctx.fillStyle=bcol; ctx.fillText(badge, b.x+b.w-11, b.y+18);
+      // latency
+      ctx.fillStyle="#7d8fa1"; ctx.font="9.5px "+mono();
+      var lms = isSrc ? "timeout" : Math.round(c.lat)+"ms";
+      ctx.fillText(lms, b.x+b.w-11, b.y+31);
+      ctx.textAlign="left";
+    }
+    ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+  }
+
+  // ===================================================================
+  //  TICK / EASING
+  // ===================================================================
+  function approach(a,b,dt,rate){ return a + (b-a)*Math.min(1, dt*rate); }
+  function update(dt){
+    clock += dt;
+    if(reduceMotion) return;
+    var elapsed = clock - changeAt;
+    for(var k in GRAPH){
+      var tgtSev = elapsed>=onset[k] ? model.nodes[k].sev : freeze[k];
+      var tgtLat = elapsed>=onset[k] ? model.nodes[k].latency : cur[k].lat;
+      cur[k].sev = approach(cur[k].sev, tgtSev, dt, 4);
+      cur[k].lat = approach(cur[k].lat, tgtLat, dt, 4);
+    }
+    successDisp = approach(successDisp, model.successRate, dt, 2.6);
+    latDisp     = approach(latDisp,     model.p99,         dt, 3);
+  }
+
+  // ===================================================================
+  //  METRICS DOM
+  // ===================================================================
+  var el=function(id){ return document.getElementById(id); };
+  var sparkData=[], sparkAcc=0;
+  function counts(){
+    var ok=0,warn=0,crit=0;
+    for(var k in GRAPH){ var s=cur[k].sev; if(s>=0.7)crit++; else if(s>=0.33)warn++; else ok++; }
+    return {ok:ok,warn:warn,crit:crit};
+  }
+  function updateMetrics(){
+    var pct=Math.round(successDisp*100);
+    var sEl=el("m-success"); sEl.innerHTML=pct+'<small>%</small>';
+    sEl.className="v "+(pct>=90?"ok":pct>=50?"warn":"crit");
+    var lEl=el("m-lat"); lEl.innerHTML=Math.round(latDisp)+'<small>ms</small>';
+    lEl.className="v "+(latDisp<180?"ok":latDisp<700?"warn":"crit");
+    var c=counts();
+    var hEl=el("m-healthy"); hEl.innerHTML=c.ok+'<small>/5</small>';
+    hEl.className="v "+(c.ok===5?"ok":c.ok>=3?"warn":"crit");
+    var fEl=el("m-failed"); fEl.innerHTML=c.crit+'<small>/5</small>';
+    fEl.className="v "+(c.crit===0?"":c.crit>=3?"crit":"warn");
+    el("p-ok").textContent=c.ok; el("p-warn").textContent=c.warn; el("p-crit").textContent=c.crit;
+    drawSpark();
+  }
+  var sc=el("spark"), sctx=sc.getContext("2d");
+  function drawSpark(){
+    var w=110,h=34,d=Math.min(window.devicePixelRatio||1,2);
+    sc.width=w*d; sc.height=h*d; sctx.setTransform(d,0,0,d,0,0); sctx.clearRect(0,0,w,h);
+    if(sparkData.length<2) return;
+    var n=sparkData.length;
+    sctx.beginPath();
+    for(var i=0;i<n;i++){ var x=i/(n-1)*w, y=h-3-sparkData[i]*(h-6); if(i===0)sctx.moveTo(x,y); else sctx.lineTo(x,y); }
+    var last=sparkData[n-1];
+    var lc = last>=0.9?"#3fb950":last>=0.5?"#e3b341":"#f85149";
+    sctx.strokeStyle=lc; sctx.lineWidth=1.5; sctx.stroke();
+    sctx.lineTo(w,h); sctx.lineTo(0,h); sctx.closePath();
+    sctx.fillStyle="rgba(52,211,224,.08)"; sctx.fill();
+    var lx=w, ly=h-3-last*(h-6);
+    sctx.beginPath(); sctx.arc(lx-1,ly,2,0,6.2832); sctx.fillStyle=lc; sctx.fill();
+  }
+
+  // ===================================================================
+  //  COACHING
+  // ===================================================================
+  function primarySource(){
+    var pri=["db","svcB","svcC","api"];
+    for(var i=0;i<pri.length;i++) if(state.injected[pri[i]]) return pri[i];
+    return null;
+  }
+  function nname(id){ return GRAPH[id].name; }
+  function updateCoach(){
+    var c=el("coach"), src=primarySource(), prot=state.protection, msg;
+    var feFailed = model.nodes.fe.sev>=0.7;
+    if(!src){
+      msg = prot
+        ? "Protected mode is armed: a circuit breaker guards every dependency and each one gets its own bulkheaded thread pool. Inject a fault and watch the breaker trip and contain it."
+        : "All five services are healthy. Every request flows Frontend → API → Service B/C → Database and comes back green. Inject a fault below to watch it spread.";
+    } else if(prot){
+      msg = "Circuit breaker OPEN on the failing "+nname(src)+" — calls fail fast instead of blocking a thread. Bulkheads keep each dependency in its own pool, so the blast radius stops at its direct caller. API and Frontend stay up on fallback data: one outage became a minor degradation, not an outage.";
+    } else if(src==="db"){
+      msg = "The Database is timing out. Service B's threads block waiting on it and its pool exhausts, then API's, then the Frontend — the failure is climbing UPSTREAM. Service C is perfectly healthy, but every API thread is stuck on B, so nothing reaches it. A healthy service, stranded.";
+    } else if(src==="svcC"){
+      msg = "Service C — a non-critical recommendations widget — is hung. But a thread blocked on C is a thread that can serve nothing else: API's shared pool fills and the entire Frontend goes down for a feature nobody needs. The Database is fine, just unreachable.";
+    } else if(src==="svcB"){
+      msg = "Service B is failing. API's threads block on it and, with one shared pool, that starves the calls to healthy Service C too — so API and the Frontend collapse together. Without isolation, one bad dependency takes the whole caller down.";
+    } else {
+      msg = "The API is down. The Frontend's threads block on it until its own pool exhausts — with nothing between them, the failure passes straight through to the user. "+(feFailed?"Success rate has collapsed.":"");
+    }
+    if(c.textContent!==msg) c.textContent=msg;
+  }
+
+  // ===================================================================
+  //  EVENTS
+  // ===================================================================
+  var events=el("events");
+  function pushEvent(html){
+    var li=document.createElement("li");
+    li.innerHTML='<span class="ts">'+Math.round(clock)+'s</span>'+html;
+    events.insertBefore(li, events.firstChild);
+    while(events.children.length>4) events.removeChild(events.lastChild);
+  }
+  function emitDerivedEvents(prev, next){
+    // breaker trips
+    var wasBrk={}, isBrk={};
+    prev.edges.forEach(function(e){ if(e.breaker) wasBrk[e.from+">"+e.to]=true; });
+    next.edges.forEach(function(e){ if(e.breaker) isBrk[e.from+">"+e.to]=true; });
+    for(var key in isBrk){ if(!wasBrk[key]){ var pr=key.split(">"); pushEvent('<b class="warn">Circuit breaker OPEN</b> · '+nname(pr[0])+' ↛ '+nname(pr[1])+' — failing fast'); } }
+    for(var key2 in wasBrk){ if(!isBrk[key2]){ var pr2=key2.split(">"); pushEvent('<b class="ok">Circuit breaker CLOSED</b> · '+nname(pr2[0])+' → '+nname(pr2[1])+' recovered'); } }
+    // cascade reaching the frontend (shared-pool exhaustion)
+    var wasFe=prev.nodes.fe.sev>=1, isFe=next.nodes.fe.sev>=1;
+    if(isFe && !wasFe) pushEvent('<b class="crit">Cascade reached the Frontend</b> — thread pools exhausted end-to-end');
+  }
+
+  // ===================================================================
+  //  INPUT WIRING
+  // ===================================================================
+  var injBtns=document.querySelectorAll("#inject button");
+  function toggleInject(id, on){
+    var was=!!state.injected[id];
+    if(on===undefined) on=!was;
+    if(on===was) return;
+    if(on) state.injected[id]=true; else delete state.injected[id];
+    injBtns.forEach(function(b){ if(b.getAttribute("data-n")===id) b.setAttribute("aria-pressed", on?"true":"false"); });
+    if(on) pushEvent('Injected fault → <b class="crit">'+nname(id)+'</b> '+(id==="db"||id==="svcB"?"timing out":"failing"));
+    else   pushEvent('Recovered <b class="ok">'+nname(id)+'</b>');
+    recompute(true);
+  }
+  injBtns.forEach(function(b){ b.addEventListener("click", function(){ toggleInject(b.getAttribute("data-n")); }); });
+
+  el("rps").addEventListener("input", function(e){
+    state.rps=+e.target.value; el("rps-out").textContent=state.rps+" rps";
+    recompute(false);
+  });
+
+  el("protect").addEventListener("change", function(e){
+    state.protection=e.target.checked;
+    e.target.parentElement.querySelector(".txt").textContent=state.protection?"on":"off";
+    pushEvent(state.protection?'<b class="ok">Circuit Breaker + Bulkhead ENABLED</b>':'Circuit Breaker + Bulkhead <b>disabled</b>');
+    recompute(true);
+  });
+
+  el("heal").addEventListener("click", function(){
+    var had=false; for(var id in state.injected){ if(state.injected[id]){ had=true; delete state.injected[id]; } }
+    injBtns.forEach(function(b){ b.setAttribute("aria-pressed","false"); });
+    if(had) pushEvent('<b class="ok">Healed all services</b> — faults cleared');
+    recompute(true);
+  });
+
+  // canvas click / keyboard enhancement — click a node to inject/heal
+  cv.addEventListener("click", function(e){
+    var r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+    for(var k in GRAPH){
+      var b=boxes[k];
+      if(mx>=b.x&&mx<=b.x+b.w&&my>=b.y&&my<=b.y+b.h){
+        if(k==="fe"){ pushEvent('Frontend is the entry point — inject a <b>downstream</b> dependency'); return; }
+        toggleInject(k); return;
+      }
+    }
+  });
+
+  // ===================================================================
+  //  BOOT
+  // ===================================================================
+  var ro=("ResizeObserver" in window)?new ResizeObserver(resize):null;
+  if(ro) ro.observe(stage); else window.addEventListener("resize", resize);
+  resize(); updateCoach(); updateMetrics();
+
+  var last=0;
+  function frame(ts){
+    if(!last) last=ts; var dt=(ts-last)/1000; last=ts; if(dt>0.05) dt=0.05;
+    update(dt); render();
+    sparkAcc+=dt; if(sparkAcc>=0.5){ sparkAcc=0; sparkData.push(clamp(successDisp,0,1)); if(sparkData.length>48) sparkData.shift(); }
+    updateMetrics();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
