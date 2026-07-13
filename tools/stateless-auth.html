@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stateless Auth: Ticket vs Guest List — System Design</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b1016;
+    --panel:#121a23;
+    --panel-2:#0e151d;
+    --border:#223140;
+    --border-soft:#1a2530;
+    --text:#cdd9e5;
+    --muted:#7d8fa1;
+    --faint:#54626f;
+    --accent:#34d3e0;              /* signed ticket / verified */
+    --accent-dim:rgba(52,211,224,.14);
+    --warn:#e3b341;               /* guest list / DB cost */
+    --warn-dim:rgba(227,179,65,.13);
+    --ok:#3fb950;
+    --crit:#f85149;               /* broken seal */
+    --crit-dim:rgba(248,81,73,.13);
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1100px 600px at 82% -8%, rgba(52,211,224,.06), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:960px;margin:0 auto;padding:28px 20px 64px}
+
+  /* topnav (shared convention) */
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(11,16,22,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:30}
+  .topnav .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;letter-spacing:.02em}
+  .topnav .navlinks{display:flex;gap:6px;flex-wrap:wrap}
+  .topnav .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;transition:color .12s,background .12s}
+  .topnav .navlinks a:hover{color:var(--accent);background:var(--accent-dim)}
+
+  header{margin-bottom:8px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);margin:0 0 10px;display:flex;align-items:center;gap:9px}
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  h1{font-family:var(--mono);font-weight:600;font-size:clamp(25px,4.4vw,38px);letter-spacing:-.01em;margin:0 0 12px;text-wrap:balance}
+  h1 .amber{color:var(--warn)} h1 .cyan{color:var(--accent)}
+  .lede{max-width:68ch;color:var(--muted);font-size:15.5px;margin:0}
+  .lede em{color:var(--text);font-style:normal;font-weight:600}
+
+  section{margin-top:40px}
+  h2.sec{font-size:12px;font-family:var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0 0 6px;display:flex;align-items:baseline;gap:9px}
+  h2.sec .n{color:var(--faint)}
+  .sub{color:var(--muted);margin:0 0 18px;max-width:66ch;font-size:14.5px}
+  .sub em{color:var(--text);font-style:normal}
+  strong.k{color:var(--text)}
+
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);border-radius:14px}
+
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:18px 18px 6px}
+  button{font-family:var(--mono);font-size:12px;font-weight:600;cursor:pointer;border-radius:9px;border:1px solid var(--border);background:var(--panel-2);color:var(--muted);padding:9px 14px;transition:color .12s,background .12s,border-color .12s,transform .06s}
+  button:hover{color:var(--text);border-color:var(--faint)}
+  button:active{transform:translateY(1px)}
+  button.primary{color:var(--accent);background:var(--accent-dim);border-color:rgba(52,211,224,.35)}
+  button.primary:hover{background:rgba(52,211,224,.24);box-shadow:0 0 14px rgba(52,211,224,.2)}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .hint{color:var(--faint);font-size:12px;margin-left:auto;font-family:var(--mono)}
+
+  .lanes{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:12px}
+  @media (max-width:720px){.lanes{grid-template-columns:1fr}}
+  .lane{border:1px solid var(--border);border-radius:11px;padding:16px;background:var(--panel)}
+  .lane.amber{border-color:color-mix(in srgb,var(--warn) 34%,var(--border))}
+  .lane.teal{border-color:color-mix(in srgb,var(--accent) 34%,var(--border))}
+  .lane-head{display:flex;align-items:center;gap:9px;margin-bottom:2px}
+  .dot2{width:9px;height:9px;border-radius:50%;flex:none}
+  .amber .dot2{background:var(--warn)} .teal .dot2{background:var(--accent)}
+  .lane-title{font-weight:600;font-size:15px;color:var(--text)}
+  .lane-kind{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .flow{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:16px 0 12px}
+  .node{font-family:var(--mono);font-size:10.5px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:8px;padding:8px 6px;min-width:52px;background:var(--panel-2)}
+  .node .ic{font-size:16px;display:block;margin-bottom:2px}
+  .node.db{border-style:solid}
+  .node.db.ping{animation:ping .5s ease}
+  .amber .node.db.ping{border-color:var(--warn);background:var(--warn-dim)}
+  .teal .node.verify.ping{border-color:var(--accent);background:var(--accent-dim)}
+  .arrow{color:var(--faint);font-family:var(--mono);font-size:13px}
+  @keyframes ping{0%{transform:scale(1)}35%{transform:scale(1.13)}100%{transform:scale(1)}}
+  @media (prefers-reduced-motion:reduce){.node.db.ping,.node.verify.ping{animation:none}}
+
+  .meter{margin-top:6px}
+  .meter .lbl{font-family:var(--mono);font-size:10.5px;color:var(--muted);display:flex;justify-content:space-between;text-transform:uppercase;letter-spacing:.08em}
+  .track{height:12px;border-radius:6px;background:var(--border-soft);overflow:hidden;margin-top:5px}
+  .fill{height:100%;width:0%;border-radius:6px;transition:width .35s cubic-bezier(.2,.7,.2,1)}
+  .amber .fill{background:var(--warn)} .teal .fill{background:var(--accent)}
+  .big{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:30px;font-weight:600;margin-top:12px}
+  .amber .big{color:var(--warn)} .teal .big{color:var(--accent)}
+  .big small{font-size:11px;color:var(--faint);font-weight:400;letter-spacing:.08em;text-transform:uppercase;margin-left:6px}
+
+  .tally{display:flex;gap:16px;align-items:baseline;padding:6px 18px 18px;font-family:var(--mono);font-size:12.5px;color:var(--muted);flex-wrap:wrap}
+  .tally b{color:var(--text);font-variant-numeric:tabular-nums}
+
+  .token{font-family:var(--mono);font-size:12.5px;word-break:break-all;line-height:1.7;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:14px}
+  .token .h{color:var(--warn)} .token .p{color:var(--accent)} .token .s{color:var(--muted)}
+  .decoded{display:grid;grid-template-columns:1fr;gap:14px;margin-top:16px}
+  @media (min-width:640px){.decoded{grid-template-columns:1.1fr .9fr}}
+  .kv{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:14px}
+  .kv .row{display:flex;justify-content:space-between;gap:12px;padding:3px 0}
+  .kv .k{color:var(--faint)} .kv .v{color:var(--text)}
+  select{font-family:var(--mono);font-size:12.5px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:4px 8px}
+  .verdict{display:flex;align-items:center;gap:10px;padding:14px;border-radius:10px;font-weight:600;border:1px solid var(--border);font-size:13.5px}
+  .verdict.ok{background:var(--accent-dim);border-color:rgba(52,211,224,.4);color:var(--accent)}
+  .verdict.bad{background:var(--crit-dim);border-color:rgba(248,81,73,.4);color:var(--crit)}
+  .seal{font-size:20px}
+
+  .stale-grid{display:grid;grid-template-columns:1fr;gap:12px}
+  @media (min-width:640px){.stale-grid{grid-template-columns:1fr 1fr}}
+  .badge{font-family:var(--mono);font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--border)}
+  .badge.user{color:var(--muted)}
+  .badge.admin{color:var(--accent);border-color:rgba(52,211,224,.45);background:var(--accent-dim)}
+  .access{margin-top:10px;font-weight:600;font-size:13.5px}
+  .access.grant{color:var(--ok)} .access.deny{color:var(--crit)}
+  .verdict-line{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-top:8px;text-align:center}
+
+  .scale-toggle{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden;margin-bottom:16px}
+  .scale-toggle button{border:none;border-radius:0;background:var(--panel-2)}
+  .scale-toggle button.on{background:var(--accent-dim);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(52,211,224,.35)}
+  .rack{display:flex;align-items:center;justify-content:center;gap:26px;padding:22px 10px;flex-wrap:wrap}
+  .servers{display:flex;flex-direction:column;gap:10px}
+  .srv{font-family:var(--mono);font-size:12px;border:1px solid var(--border);border-radius:8px;padding:8px 12px;background:var(--panel-2);display:flex;align-items:center;gap:8px;color:var(--text)}
+  .srv .tag{color:var(--faint)}
+  .srv.self::after{content:"✓ local";color:var(--accent);font-size:11px}
+  .dbbox{font-family:var(--mono);font-size:12px;border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--panel-2);text-align:center;transition:all .3s ease;color:var(--muted)}
+  .dbbox.hot{border-color:var(--crit);background:var(--crit-dim);color:var(--crit)}
+  .dbbox.calm{border-color:rgba(52,211,224,.4);color:var(--accent)}
+  .rack .link{color:var(--faint);font-family:var(--mono)}
+  .rack .link.hot{color:var(--crit)}
+
+  .callout{margin-top:40px;border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:12px;background:var(--panel);padding:14px 18px}
+  .callout code{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);padding:1px 6px;border-radius:5px;border:1px solid var(--border);color:var(--text)}
+  .callout p{margin:0}
+  .callout .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+
+  footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.03em}
+  footer b{color:var(--muted);font-weight:600}
+  footer a{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--border)}
+  footer a:hover{color:var(--accent)}
+
+  @media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <a class="brand" href="../index.html">◇ SD Mastery</a>
+  <div class="navlinks">
+    <a href="../index.html">Home</a>
+    <a href="../roadmap-dashboard.html">Roadmap</a>
+    <a href="../modules/02-scalability-load-balancing.html">← Module 2</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow"><span class="dot"></span> Module 2 · Stateless architecture</p>
+    <h1>The <span class="amber">guest list</span> vs. the <span class="cyan">signed ticket</span></h1>
+    <p class="lede">Every request has to answer one question: <em>who are you?</em> There are two ways to answer it — and the difference only becomes obvious once it happens a few hundred times. So make it happen. Click things.</p>
+  </header>
+
+  <section>
+    <h2 class="sec"><span class="n">01</span> Send some traffic</h2>
+    <p class="sub">Each request must be authenticated before it does anything. Watch what each approach <em>costs</em> the database. Hit “Send ×20” a few times and watch the two paths diverge.</p>
+    <div class="card">
+      <div class="controls">
+        <button class="primary" id="send1">Send a request →</button>
+        <button id="send20">Send ×20</button>
+        <button id="reset">Reset</button>
+        <span class="hint" id="reqcount">0 requests sent</span>
+      </div>
+      <div class="lanes">
+        <div class="lane amber" id="laneA">
+          <div class="lane-head"><span class="dot2"></span><span class="lane-title">Guest list</span><span class="lane-kind">stateful · sessions</span></div>
+          <div class="flow">
+            <div class="node"><span class="ic">🧑</span>client</div><span class="arrow">→</span>
+            <div class="node"><span class="ic">🖥️</span>server</div><span class="arrow">→</span>
+            <div class="node db" id="dbA"><span class="ic">🗄️</span>look&nbsp;up</div>
+          </div>
+          <div class="meter">
+            <div class="lbl"><span>database lookups</span><span id="hitsAlbl">0</span></div>
+            <div class="track"><div class="fill" id="fillA"></div></div>
+          </div>
+          <div class="big"><span id="hitsA">0</span><small>DB hits</small></div>
+        </div>
+        <div class="lane teal" id="laneB">
+          <div class="lane-head"><span class="dot2"></span><span class="lane-title">Signed ticket</span><span class="lane-kind">stateless · JWT</span></div>
+          <div class="flow">
+            <div class="node"><span class="ic">🧑</span>client</div><span class="arrow">→</span>
+            <div class="node verify" id="verB"><span class="ic">🔏</span>check&nbsp;seal</div><span class="arrow" style="opacity:.35">→</span>
+            <div class="node" style="opacity:.4"><span class="ic">🗄️</span>—</div>
+          </div>
+          <div class="meter">
+            <div class="lbl"><span>database lookups</span><span id="hitsBlbl">0</span></div>
+            <div class="track"><div class="fill" id="fillB"></div></div>
+          </div>
+          <div class="big"><span id="hitsB">0</span><small>DB hits</small></div>
+        </div>
+      </div>
+      <div class="tally">
+        <span>after <b id="t_req">0</b> requests:</span>
+        <span>guest list queried the DB <b id="t_a">0</b> times</span><span>·</span>
+        <span>signed ticket: <b id="t_b">0</b> times</span>
+      </div>
+    </div>
+    <p class="sub" style="margin-top:16px">The guest-list server keeps <em>no memory</em> of you between requests, so it re-looks-you-up every time — twice on a role-protected route (once for “who are you”, once for “what may you do”). That’s the <strong class="k">2</strong> measured in the AksharShruti code. The ticket carries the answers, so the server just checks the seal — <strong class="k">0</strong> lookups.</p>
+  </section>
+
+  <section>
+    <h2 class="sec"><span class="n">02</span> Why can’t you just fake the ticket?</h2>
+    <p class="sub">A signed ticket (a JWT) is three parts joined by dots: <span style="font-family:var(--mono)"><span style="color:var(--warn)">header</span>.<span style="color:var(--accent)">payload</span>.<span style="color:var(--muted)">signature</span></span>. The payload literally states who you are — so why not change <code style="font-family:var(--mono)">"user"</code> to <code style="font-family:var(--mono)">"superuser"</code>? Try it.</p>
+    <div class="card" style="padding:18px">
+      <div class="token" id="tokenStr"></div>
+      <div class="decoded">
+        <div class="kv">
+          <div class="row"><span class="k">"sub"</span><span class="v">"user_42"</span></div>
+          <div class="row"><span class="k">"username"</span><span class="v">"ravi"</span></div>
+          <div class="row"><span class="k">"role"</span><span class="v"><select id="roleSel"><option value="user">"user"</option><option value="superuser">"superuser"</option></select></span></div>
+          <div class="row"><span class="k">"exp"</span><span class="v">in 15 min</span></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="verdict ok" id="verdict"><span class="seal">🔒</span><span id="verdictTxt">Seal valid — server trusts this ticket.</span></div>
+          <button id="resign">Server re-issues the ticket (re-sign)</button>
+        </div>
+      </div>
+    </div>
+    <p class="sub" style="margin-top:16px">Change the role and the <em>seal breaks</em> — the signature no longer matches the contents, and the server throws the ticket out. Only the server (which holds the secret key) can make a valid seal, so you can’t promote yourself. That’s what makes it safe to <em>trust the ticket without asking the database.</em></p>
+  </section>
+
+  <section>
+    <h2 class="sec"><span class="n">03</span> The catch: nothing is free</h2>
+    <p class="sub">Trusting the ticket means the server stops checking the database — so a change made <em>after</em> the ticket was issued doesn’t apply until a new ticket is issued. Promote Ravi and watch the two worlds disagree.</p>
+    <div class="card" style="padding:18px">
+      <div class="controls" style="padding:0 0 16px">
+        <button class="primary" id="promote">Promote Ravi to admin — in the database</button>
+        <button id="relogin">Ravi logs in again (new ticket)</button>
+      </div>
+      <div class="stale-grid">
+        <div class="lane amber">
+          <div class="lane-head"><span class="dot2"></span><span class="lane-title">Guest list</span><span class="lane-kind">reads the DB live</span></div>
+          <div style="margin-top:10px;font-family:var(--mono);font-size:12.5px;color:var(--muted)">DB says: <span class="badge user" id="dbRole">user</span></div>
+          <div class="access deny" id="accessA">🚫 admin panel: denied</div>
+        </div>
+        <div class="lane teal">
+          <div class="lane-head"><span class="dot2"></span><span class="lane-title">Signed ticket</span><span class="lane-kind">reads the ticket</span></div>
+          <div style="margin-top:10px;font-family:var(--mono);font-size:12.5px;color:var(--muted)">ticket says: <span class="badge user" id="tkRole">user</span></div>
+          <div class="access deny" id="accessB">🚫 admin panel: denied</div>
+        </div>
+      </div>
+      <p class="verdict-line" id="staleNote">Both say “user”. Now promote him.</p>
+    </div>
+    <p class="sub" style="margin-top:16px">The guest list updates instantly; the ticket stays <em>stale</em> until Ravi gets a fresh one. The fix isn’t to go back to lookups — it’s to keep tickets <strong class="k">short-lived</strong> (yours last 15 minutes), so stale info self-corrects fast. That’s the trade: speed &amp; scale, in exchange for changes that apply on a short delay.</p>
+  </section>
+
+  <section>
+    <h2 class="sec"><span class="n">04</span> Why any of this matters</h2>
+    <p class="sub">The real payoff. You want more traffic capacity, so you add servers behind a load balancer. Flip between the two worlds.</p>
+    <div class="card" style="padding:18px">
+      <div class="scale-toggle" role="group" aria-label="model">
+        <button id="scaleStateful" class="on">Guest list</button>
+        <button id="scaleStateless">Signed ticket</button>
+      </div>
+      <div class="rack">
+        <div class="servers">
+          <div class="srv"><span class="tag">app</span> server 1</div>
+          <div class="srv"><span class="tag">app</span> server 2</div>
+          <div class="srv"><span class="tag">app</span> server 3</div>
+        </div>
+        <div class="link" id="rackLink">═══▶</div>
+        <div class="dbbox" id="dbbox">🗄️ one database</div>
+      </div>
+      <p class="verdict-line" id="scaleNote"></p>
+    </div>
+  </section>
+
+  <div class="callout">
+    <p class="lbl">Back in the real code</p>
+    <p><code>get_current_user</code> used to run <code>db.users.find_one(...)</code> on every request, and <code>RoleChecker</code> ran another. Now both read the signed token instead. Measured cost to authenticate one request: <span style="color:var(--warn)">2 DB hits</span> → <span style="color:var(--accent)">0 DB hits</span>.</p>
+  </div>
+
+  <footer>
+    <b>Module 2 · Stateless architecture</b> — statelessness is the prerequisite for horizontal scaling. Related: <a href="oauth-flow.html">OAuth 2.0 Flow</a> · <a href="load-balancer-simulator.html">Load Balancer Playground</a> · <a href="../modules/02-scalability-load-balancing.html">back to the module</a>.
+  </footer>
+</div>
+
+<script>
+  (function () {
+    "use strict";
+    var reqs = 0, hitsA = 0, hitsB = 0;
+    var MAXBAR = 60;
+    function $(id){ return document.getElementById(id); }
+
+    function paint() {
+      $("reqcount").textContent = reqs + (reqs === 1 ? " request sent" : " requests sent");
+      $("hitsA").textContent = hitsA; $("hitsB").textContent = hitsB;
+      $("hitsAlbl").textContent = hitsA; $("hitsBlbl").textContent = hitsB;
+      $("t_req").textContent = reqs; $("t_a").textContent = hitsA; $("t_b").textContent = hitsB;
+      $("fillA").style.width = Math.min(100, hitsA / MAXBAR * 100) + "%";
+      $("fillB").style.width = Math.min(100, hitsB / MAXBAR * 100) + "%";
+    }
+    function pulse(el){ if(!el) return; el.classList.remove("ping"); void el.offsetWidth; el.classList.add("ping"); }
+
+    function oneRequest(animate) {
+      reqs += 1; hitsA += 2; hitsB += 0;
+      if (animate) { pulse($("dbA")); pulse($("verB")); }
+      paint();
+    }
+    $("send1").addEventListener("click", function(){ oneRequest(true); });
+    $("send20").addEventListener("click", function(){
+      for (var i = 0; i < 20; i++) oneRequest(false);
+      pulse($("dbA")); pulse($("verB")); paint();
+    });
+    $("reset").addEventListener("click", function(){ reqs = 0; hitsA = 0; hitsB = 0; paint(); });
+    paint();
+
+    var SECRET = "aksharshruti-server-secret";
+    function b64(s){ try { return btoa(s).replace(/=+$/,""); } catch(e){ return s; } }
+    function sign(payloadStr){
+      var h = 5381, str = payloadStr + "|" + SECRET;
+      for (var i = 0; i < str.length; i++){ h = ((h << 5) + h + str.charCodeAt(i)) >>> 0; }
+      return h.toString(16).padStart(8, "0") + (h * 2654435761 >>> 0).toString(16).padStart(8, "0");
+    }
+    var headerStr = '{"alg":"HS256","typ":"JWT"}';
+    var signedRole = "user";
+    function payloadFor(role){ return '{"sub":"user_42","username":"ravi","role":"' + role + '","exp":9999}'; }
+    var displayedSig = sign(payloadFor(signedRole));
+
+    function renderToken(){
+      var role = $("roleSel").value;
+      var p = payloadFor(role);
+      $("tokenStr").innerHTML =
+        '<span class="h">' + b64(headerStr) + '</span>.' +
+        '<span class="p">' + b64(p) + '</span>.' +
+        '<span class="s">' + displayedSig + '</span>';
+      var valid = (role === signedRole);
+      var v = $("verdict");
+      if (valid) {
+        v.className = "verdict ok";
+        v.querySelector(".seal").textContent = "🔒";
+        $("verdictTxt").textContent = "Seal valid — server trusts this ticket.";
+      } else {
+        v.className = "verdict bad";
+        v.querySelector(".seal").textContent = "🚫";
+        $("verdictTxt").textContent = "Seal BROKEN — payload was altered. Server rejects it (401).";
+      }
+    }
+    $("roleSel").addEventListener("change", renderToken);
+    $("resign").addEventListener("click", function(){
+      signedRole = $("roleSel").value;
+      displayedSig = sign(payloadFor(signedRole));
+      renderToken();
+    });
+    renderToken();
+
+    var dbRole = "user", ticketRole = "user";
+    function renderStale(note){
+      function set(id, role){ var el = $(id); el.textContent = role; el.className = "badge " + (role === "user" ? "user" : "admin"); }
+      set("dbRole", dbRole); set("tkRole", ticketRole);
+      var a = $("accessA"), b = $("accessB");
+      a.textContent = dbRole === "user" ? "🚫 admin panel: denied" : "✅ admin panel: granted";
+      a.className = "access " + (dbRole === "user" ? "deny" : "grant");
+      b.textContent = ticketRole === "user" ? "🚫 admin panel: denied" : "✅ admin panel: granted";
+      b.className = "access " + (ticketRole === "user" ? "deny" : "grant");
+      if (note) $("staleNote").textContent = note;
+    }
+    $("promote").addEventListener("click", function(){
+      dbRole = "admin";
+      renderStale("DB updated instantly. But Ravi’s ticket still says “user” — stale until he re-logs.");
+    });
+    $("relogin").addEventListener("click", function(){
+      ticketRole = dbRole;
+      renderStale(dbRole === "admin" ? "Fresh ticket issued — it now carries “admin”. Both agree again." : "Re-logged in. Promote him first to see a change.");
+    });
+    renderStale();
+
+    function setScale(stateful){
+      $("scaleStateful").classList.toggle("on", stateful);
+      $("scaleStateless").classList.toggle("on", !stateful);
+      var box = $("dbbox"), link = $("rackLink"), note = $("scaleNote");
+      document.querySelectorAll(".srv").forEach(function(s){ s.classList.toggle("self", !stateful); });
+      if (stateful) {
+        box.className = "dbbox hot"; box.innerHTML = "🗄️ one database<br><small>🔥 3× the auth load</small>";
+        link.className = "link hot"; link.textContent = "═══▶";
+        note.textContent = "Every request on every server hits the one database just to log you in. Add servers → the DB melts. It’s the bottleneck.";
+      } else {
+        box.className = "dbbox calm"; box.innerHTML = "🗄️ one database<br><small>only real data</small>";
+        link.className = "link"; link.textContent = "· · ·";
+        note.textContent = "Each server checks the seal on its own — no shared lookup. Add as many servers as you like. This is what statelessness buys you.";
+      }
+    }
+    $("scaleStateful").addEventListener("click", function(){ setScale(true); });
+    $("scaleStateless").addEventListener("click", function(){ setScale(false); });
+    setScale(true);
+  })();
+</script>
+</body>
+</html>

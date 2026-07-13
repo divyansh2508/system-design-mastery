@@ -118,6 +118,7 @@
       <a href="../roadmap-dashboard.html">Roadmap</a>
       <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
       <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
+      <a href="../tools/stateless-auth.html">🎟️ Stateless Auth</a>
     </div>
   </nav>
 
@@ -192,6 +193,11 @@ next request -> ANY server -> read token / Redis -> authorized</code></pre>
       <div class="callout tip">
         <p class="lbl">Interview tip</p>
         <p>"Where does the state live?" is the question that separates a design that scales from one that doesn't. Push every piece of state <em>out</em> of your app servers — into a database, a cache, or the request itself — and say so explicitly. It signals you understand <em>why</em> horizontal scaling works, not just that it does.</p>
+      </div>
+
+      <div class="callout tip">
+        <p class="lbl">Play it</p>
+        <p>Open the <a href="../tools/stateless-auth.html">🎟️ Stateless Auth</a> simulator and spam requests at both models: the stateful "guest list" hammers the database on every request while the stateless "signed ticket" never touches it. Then tamper a token to watch its seal break, and feel the one real trade-off — stale tokens. This whole section, on one screen.</p>
       </div>
     </section>
 
