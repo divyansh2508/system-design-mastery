@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scaling a Chat Server: The Backplane — System Design</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0b1016; --panel:#121a23; --panel-2:#0e151d; --border:#223140; --border-soft:#1a2530;
+    --text:#cdd9e5; --muted:#7d8fa1; --faint:#54626f;
+    --accent:#34d3e0; --accent-dim:rgba(52,211,224,.14);   /* redis / backplane / bridged */
+    --warn:#e3b341; --warn-dim:rgba(227,179,65,.13);        /* the sender */
+    --ok:#3fb950; --ok-dim:rgba(63,185,80,.13);             /* delivered */
+    --crit:#f85149; --crit-dim:rgba(248,81,73,.13);         /* lost */
+    --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1100px 600px at 82% -8%, rgba(52,211,224,.06), transparent 60%),var(--bg);
+    color:var(--text);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px;margin:0 auto;padding:28px 20px 64px}
+
+  .topnav{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(11,16,22,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:30}
+  .topnav .brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);text-decoration:none}
+  .topnav .navlinks{display:flex;gap:6px;flex-wrap:wrap}
+  .topnav .navlinks a{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;transition:color .12s,background .12s}
+  .topnav .navlinks a:hover{color:var(--accent);background:var(--accent-dim)}
+
+  header{margin-bottom:6px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);margin:0 0 10px;display:flex;align-items:center;gap:9px}
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  h1{font-family:var(--mono);font-weight:600;font-size:clamp(24px,4.4vw,37px);letter-spacing:-.01em;margin:0 0 12px;text-wrap:balance}
+  .lede{max-width:68ch;color:var(--muted);font-size:15.5px;margin:0}
+  .lede em{color:var(--text);font-style:normal;font-weight:600}
+
+  section{margin-top:38px}
+  h2.sec{font-size:12px;font-family:var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0 0 6px;display:flex;gap:9px;align-items:baseline}
+  h2.sec .n{color:var(--faint)}
+  .sub{color:var(--muted);margin:0 0 18px;max-width:66ch;font-size:14.5px}
+  .sub em{color:var(--text);font-style:normal}
+  strong.k{color:var(--text)}
+
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);border-radius:14px;padding:18px}
+
+  /* toggle */
+  .toggle{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden;margin-bottom:6px}
+  .toggle button{border:none;border-radius:0;background:var(--panel-2);font-family:var(--mono);font-size:12.5px;color:var(--muted);padding:9px 15px;cursor:pointer;transition:background .12s,color .12s}
+  .toggle button.on{background:var(--accent-dim);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(52,211,224,.4)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .ghost{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:8px 13px;cursor:pointer}
+  .ghost:hover{color:var(--text);border-color:var(--faint)}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* backplane strip */
+  .backplane{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px;border-radius:12px;border:1px dashed var(--border);background:var(--panel-2);font-family:var(--mono);font-size:13px;color:var(--faint);transition:all .25s ease}
+  .backplane.on{border-style:solid;border-color:rgba(52,211,224,.5);color:var(--accent);background:var(--accent-dim)}
+  .backplane.flash{box-shadow:0 0 22px rgba(52,211,224,.5)}
+  .backplane .tag{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:inherit;opacity:.8}
+
+  .bus{height:22px;position:relative;margin:2px 0}
+  .bus::before{content:"";position:absolute;left:8%;right:8%;top:50%;height:2px;background:repeating-linear-gradient(90deg,var(--border) 0 8px,transparent 8px 14px)}
+  .bus.on::before{background:var(--accent);opacity:.55}
+
+  .servers{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+  .server{border:1px solid var(--border);border-radius:12px;background:var(--panel);padding:14px;position:relative}
+  .server::before{content:"▲";position:absolute;top:-13px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--faint)}
+  .server.on::before{color:var(--accent)}
+  .server.lit{border-color:rgba(52,211,224,.45)}
+  .server-head{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;justify-content:space-between}
+  .server-head .port{color:var(--faint)}
+  .sockets{display:flex;flex-direction:column;gap:8px}
+  .user{font-family:var(--sans);font-size:14px;text-align:left;display:flex;align-items:center;gap:8px;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;color:var(--text);cursor:pointer;transition:border-color .15s,background .15s,transform .06s}
+  .user:hover{border-color:var(--faint)}
+  .user:active{transform:translateY(1px)}
+  .user .status{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--faint)}
+  .user .who{font-size:11px;color:var(--faint);font-family:var(--mono)}
+  .user.sender{border-color:var(--warn);background:var(--warn-dim)}
+  .user.sender .status{color:var(--warn)}
+  .user.received{border-color:var(--ok);background:var(--ok-dim)}
+  .user.received .status{color:var(--ok)}
+  .user.missed{border-color:var(--crit);background:var(--crit-dim)}
+  .user.missed .status{color:var(--crit)}
+  @keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.05)}100%{transform:scale(1)}}
+  .user.received,.user.missed,.user.sender{animation:pop .3s ease}
+  @media (prefers-reduced-motion:reduce){.user.received,.user.missed,.user.sender,.backplane.flash{animation:none}}
+
+  .log{margin-top:14px;font-family:var(--mono);font-size:13px;color:var(--muted);border-left:3px solid var(--border);padding:8px 0 8px 14px;min-height:20px}
+  .log b{color:var(--text)} .log .ok{color:var(--ok)} .log .bad{color:var(--crit)}
+  .hint{font-family:var(--mono);font-size:12px;color:var(--faint);margin-top:6px}
+
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:16px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:9px;height:9px;border-radius:3px;display:inline-block}
+
+  .callout{margin-top:38px;border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:12px;background:var(--panel);padding:14px 18px}
+  .callout .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+  .callout p{margin:0}
+  .callout code{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);padding:1px 6px;border-radius:5px;border:1px solid var(--border);color:var(--text)}
+
+  footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--border-soft);font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+  footer a{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--border)}
+  footer a:hover{color:var(--accent)}
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <a class="brand" href="../index.html">◇ SD Mastery</a>
+  <div class="navlinks">
+    <a href="../index.html">Home</a>
+    <a href="../roadmap-dashboard.html">Roadmap</a>
+    <a href="../modules/10-realtime-async-apis.html">← Module 10</a>
+    <a href="realtime-transport.html">📡 Transport</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow"><span class="dot"></span> Module 10 · WebSockets &amp; scaling them</p>
+    <h1>Scaling a chat server: the <span style="color:var(--accent)">backplane</span></h1>
+    <p class="lede">A websocket is a <em>live connection held in one server's memory</em>. That's fine on one server — but the moment you run two, they become islands that can't see each other's users. Click a person to send a message, and flip the backplane on and off to watch the wall appear and vanish.</p>
+  </header>
+
+  <section>
+    <h2 class="sec"><span class="n">01</span> Send a message across two servers</h2>
+    <p class="sub">Ravi and Aditi are connected to <strong class="k">Server 1</strong>; Meera is on <strong class="k">Server 2</strong> (a load balancer put her there). <em>Click a person</em> to have them send — then toggle the backplane.</p>
+    <div class="card">
+      <div class="row">
+        <div class="toggle" role="group" aria-label="backplane">
+          <button id="offBtn" class="on">Backplane OFF</button>
+          <button id="onBtn">Backplane ON (Redis)</button>
+        </div>
+        <button class="ghost" id="addServer">+ Add a server</button>
+        <button class="ghost" id="reset">Reset</button>
+      </div>
+
+      <div class="backplane" id="backplane">
+        <span id="backplaneText">🧠 Redis pub/sub — bypassed</span>
+        <span class="tag" id="backplaneTag">not connected</span>
+      </div>
+      <div class="bus" id="bus"></div>
+      <div class="servers" id="servers"></div>
+
+      <div class="log" id="log">Pick someone and click them to send a message.</div>
+      <p class="hint" id="hint"></p>
+
+      <div class="legend">
+        <span><i style="background:var(--warn)"></i> sender</span>
+        <span><i style="background:var(--ok)"></i> got the message</span>
+        <span><i style="background:var(--crit)"></i> never arrived</span>
+        <span><i style="background:var(--accent)"></i> backplane active</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="sec"><span class="n">02</span> What you're seeing</h2>
+    <p class="sub"><strong class="k">Backplane OFF</strong> — each server only knows about the sockets connected to <em>itself</em>. A message reaches people on the <em>same</em> server and simply vanishes for everyone on another server. Add a third server and it gets worse: three islands.</p>
+    <p class="sub"><strong class="k">Backplane ON</strong> — every server publishes each message to a shared Redis channel that <em>all</em> servers subscribe to. The message goes <em>up</em> to Redis and <em>back down</em> to whichever server holds each recipient. Now anyone reaches anyone, and you can add as many servers as you like.</p>
+    <div class="callout">
+      <p class="lbl">In the AksharShruti code</p>
+      <p>The "islands" were a plain dict — <code>connected_rooms = {}</code> — living in one process. The fix: the socket now <code>await _redis.publish("chat:{conv}", …)</code>, and a <code>redis_subscriber()</code> on every server delivers incoming messages to its local sockets. Verified live: message from a user on <code>:8001</code> reached a user on <code>:8002</code>. Wall gone.</p>
+    </div>
+  </section>
+
+  <footer>
+    <b>Module 10 · WebSockets &amp; scaling them</b> — a live socket is stateful; scaling it needs a pub/sub bridge.
+    Related: <a href="realtime-transport.html">Real-Time Transport</a> · <a href="load-balancer-simulator.html">Load Balancer</a> · <a href="stateless-auth.html">Stateless Auth</a> · <a href="../modules/10-realtime-async-apis.html">back to the module</a>.
+  </footer>
+</div>
+
+<script>
+  (function () {
+    "use strict";
+    function $(id){ return document.getElementById(id); }
+
+    var nextServer = 3;
+    var state = {
+      backplane: false,
+      users: [
+        { name: "Ravi",  server: 1 },
+        { name: "Aditi", server: 1 },
+        { name: "Meera", server: 2 },
+      ],
+      servers: [1, 2],
+    };
+    var PORTS = { 1: ":8001", 2: ":8002", 3: ":8003", 4: ":8004" };
+
+    function render() {
+      var box = $("servers");
+      box.innerHTML = "";
+      state.servers.forEach(function (s) {
+        var el = document.createElement("div");
+        el.className = "server" + (state.backplane ? " on" : "");
+        el.dataset.server = s;
+        var members = state.users.map(function (u, i) { return { u: u, i: i }; })
+                                 .filter(function (m) { return m.u.server === s; });
+        el.innerHTML = '<div class="server-head"><span>Server ' + s + '</span><span class="port">' + (PORTS[s] || "") + '</span></div>';
+        var sockets = document.createElement("div");
+        sockets.className = "sockets";
+        members.forEach(function (m) {
+          var b = document.createElement("button");
+          b.className = "user";
+          b.dataset.user = m.i;
+          b.innerHTML = '<span>' + m.u.name + '</span><span class="who">socket</span><span class="status">·</span>';
+          b.addEventListener("click", function () { send(m.i); });
+          sockets.appendChild(b);
+        });
+        el.appendChild(sockets);
+        box.appendChild(el);
+      });
+      paintBackplane();
+    }
+
+    function paintBackplane() {
+      var bp = $("backplane"), bus = $("bus");
+      bp.classList.toggle("on", state.backplane);
+      bus.classList.toggle("on", state.backplane);
+      $("backplaneText").textContent = state.backplane ? "🧠 Redis pub/sub — connected" : "🧠 Redis pub/sub — bypassed";
+      $("backplaneTag").textContent = state.backplane ? "all servers subscribed" : "not connected";
+      $("offBtn").classList.toggle("on", !state.backplane);
+      $("onBtn").classList.toggle("on", state.backplane);
+      document.querySelectorAll(".server").forEach(function (el) { el.classList.toggle("on", state.backplane); });
+    }
+
+    function clearStatuses() {
+      document.querySelectorAll(".user").forEach(function (b) {
+        b.classList.remove("sender", "received", "missed");
+        b.querySelector(".status").textContent = "·";
+      });
+      document.querySelectorAll(".server").forEach(function (el) { el.classList.remove("lit"); });
+    }
+
+    function chip(idx) { return document.querySelector('.user[data-user="' + idx + '"]'); }
+
+    function send(senderIdx) {
+      clearStatuses();
+      var sender = state.users[senderIdx];
+      var sc = chip(senderIdx);
+      sc.classList.add("sender");
+      sc.querySelector(".status").textContent = "📤";
+
+      if (state.backplane) { $("backplane").classList.add("flash"); }
+
+      setTimeout(function () {
+        $("backplane").classList.remove("flash");
+        var got = [], lost = [];
+        state.users.forEach(function (u, i) {
+          if (i === senderIdx) return;
+          var delivered = state.backplane ? true : (u.server === sender.server);
+          var b = chip(i);
+          if (delivered) {
+            b.classList.add("received");
+            b.querySelector(".status").textContent = "✓";
+            b.closest(".server").classList.add("lit");
+            got.push(u.name);
+          } else {
+            b.classList.add("missed");
+            b.querySelector(".status").textContent = "✗";
+            lost.push(u.name);
+          }
+        });
+        var parts = [];
+        parts.push('<b>' + sender.name + '</b> (Server ' + sender.server + ') sent a message → ');
+        parts.push(got.length ? '<span class="ok">' + got.join(", ") + ' ✓</span>' : "");
+        if (got.length && lost.length) parts.push(" · ");
+        parts.push(lost.length ? '<span class="bad">' + lost.join(", ") + ' ✗ never arrived</span>' : "");
+        $("log").innerHTML = parts.join("");
+        $("hint").textContent = state.backplane
+          ? "Redis carried it to every server — even users on other servers received it."
+          : (lost.length ? "The message never left Server " + sender.server + ". Other servers never heard about it." : "Everyone here happens to share a server — turn on a 2nd server's user or add a server to see the wall.");
+      }, state.backplane ? 380 : 260);
+    }
+
+    $("offBtn").addEventListener("click", function () { state.backplane = false; clearStatuses(); render(); $("log").innerHTML = "Backplane OFF — servers are islands. Click someone to send."; $("hint").textContent = ""; });
+    $("onBtn").addEventListener("click", function () { state.backplane = true; clearStatuses(); render(); $("log").innerHTML = "Backplane ON — Redis bridges every server. Click someone to send."; $("hint").textContent = ""; });
+    $("addServer").addEventListener("click", function () {
+      if (state.servers.length >= 4) return;
+      var s = nextServer++;
+      state.servers.push(s);
+      var names = ["Kabir", "Diya", "Arjun"];
+      state.users.push({ name: names[(s - 3) % names.length] || ("User" + s), server: s });
+      clearStatuses(); render();
+      $("log").innerHTML = "Added Server " + s + " with a new user. " + (state.backplane ? "Redis still reaches them." : "With the backplane OFF, they're a fresh island.");
+    });
+    $("reset").addEventListener("click", function () {
+      nextServer = 3;
+      state.servers = [1, 2];
+      state.users = [{ name: "Ravi", server: 1 }, { name: "Aditi", server: 1 }, { name: "Meera", server: 2 }];
+      clearStatuses(); render();
+      $("log").innerHTML = "Reset. Pick someone and click them to send a message.";
+      $("hint").textContent = "";
+    });
+
+    render();
+  })();
+</script>
+</body>
+</html>

@@ -119,6 +119,7 @@
       <a href="../tools/capacity-estimator.html">🧮 Estimator</a>
       <a href="../tools/load-balancer-simulator.html">🚦 Load Balancer</a>
       <a href="../tools/realtime-transport.html">📡 Real-time Transport</a>
+      <a href="../tools/chat-backplane.html">🌉 Chat Backplane</a>
     </div>
   </nav>
 
@@ -227,6 +228,11 @@ Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
       <div class="callout tip">
         <p class="lbl">Interview tip</p>
         <p>Don't open an interview by drawing WebSockets. Say: <em>"This feed is one-directional, so I'd start with SSE; I'd only move to WebSockets for the parts that need the client pushing too — and then I owe you a pub/sub backplane and sticky routing."</em> Naming the cost <em>before</em> you're asked is what reads as senior.</p>
+      </div>
+
+      <div class="callout tip">
+        <p class="lbl">Play it</p>
+        <p>Open the <a href="../tools/chat-backplane.html">🌉 Chat Backplane</a> simulator: put users on two servers, send a message with the backplane OFF, and watch it vanish for anyone on the other server. Flip the backplane ON and Redis bridges them — then add a third server. It's this section's "cross-node delivery needs a backplane," made clickable.</p>
       </div>
     </section>
 
